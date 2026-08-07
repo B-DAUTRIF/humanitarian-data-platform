@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Humanitarian Data Platform</title>
+  <style>
+    :root { color-scheme: dark; --bg:#08111f; --panel:#111e31; --line:#263750; --text:#eef5ff; --muted:#9fb0c7; --accent:#38bdf8; --ok:#34d399; --danger:#fb7185; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Segoe UI,Arial,sans-serif; background:linear-gradient(135deg,#07101e,#10233b); color:var(--text); min-height:100vh; }
+    main { width:min(1120px,calc(100% - 32px)); margin:0 auto; padding:38px 0 60px; }
+    header { display:flex; justify-content:space-between; align-items:flex-start; gap:24px; margin-bottom:28px; }
+    h1 { margin:0 0 8px; font-size:clamp(28px,4vw,44px); letter-spacing:-.04em; }
+    h2 { margin:0 0 18px; font-size:19px; }
+    p { color:var(--muted); }
+    .badge { border:1px solid var(--line); border-radius:999px; padding:8px 12px; color:var(--ok); background:#0b1828; white-space:nowrap; }
+    .grid { display:grid; grid-template-columns:360px 1fr; gap:20px; }
+    .card { background:rgba(17,30,49,.94); border:1px solid var(--line); border-radius:16px; padding:22px; box-shadow:0 20px 50px #0005; }
+    label { display:block; color:var(--muted); font-size:13px; margin:15px 0 7px; }
+    input,select,button { width:100%; border-radius:9px; border:1px solid var(--line); padding:11px 12px; font:inherit; }
+    input,select { background:#091526; color:var(--text); }
+    button { margin-top:18px; background:var(--accent); color:#03202e; border:0; font-weight:700; cursor:pointer; }
+    button:disabled { opacity:.55; cursor:wait; }
+    .meta { margin-top:18px; padding-top:17px; border-top:1px solid var(--line); font-size:13px; color:var(--muted); word-break:break-all; }
+    .results { display:grid; gap:11px; max-height:540px; overflow:auto; padding-right:4px; }
+    .result { display:block; color:var(--text); text-decoration:none; border:1px solid var(--line); background:#0a1728; padding:14px; border-radius:11px; }
+    .result:hover { border-color:var(--accent); }
+    .result small { color:var(--muted); display:block; margin-top:6px; }
+    .empty { min-height:220px; display:grid; place-items:center; color:var(--muted); text-align:center; }
+    .error { color:var(--danger); white-space:pre-wrap; }
+    code { color:#bae6fd; }
+    @media (max-width:800px) { .grid { grid-template-columns:1fr; } header { flex-direction:column; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div><h1>Humanitarian Data Platform</h1><p>Acquisition traçable de données humanitaires publiques.</p></div>
+    <div id="health" class="badge">Vérification…</div>
+  </header>
+  <div class="grid">
+    <section class="card">
+      <h2>Nouvelle recherche</h2>
+      <form id="search-form">
+        <label for="source">Source publique</label>
+        <select id="source"><option value="reliefweb">ReliefWeb (appname pré-approuvé requis)</option><option value="hdx">HDX / CKAN</option></select>
+        <label for="query">Mots-clés</label>
+        <input id="query" minlength="2" maxlength="200" placeholder="Ex. choléra Mozambique" required>
+        <label for="limit">Nombre maximal de résultats</label>
+        <input id="limit" type="number" min="1" max="100" value="25">
+        <button id="submit" type="submit">Rechercher et archiver</button>
+      </form>
+      <div id="meta" class="meta">Chaque réponse brute est enregistrée avec sa provenance et son empreinte SHA-256.</div>
+    </section>
+    <section class="card">
+      <h2>Résultats</h2>
+      <div id="results" class="empty">Lancez une recherche pour interroger une source.</div>
+    </section>
+  </div>
+</main>
+<script>
+  const health = document.querySelector('#health');
+  const form = document.querySelector('#search-form');
+  const submit = document.querySelector('#submit');
+  const results = document.querySelector('#results');
+  const meta = document.querySelector('#meta');
+  fetch('/api/health').then(r => r.json()).then(d => { health.textContent = `Opérationnel · v${d.version}`; }).catch(() => { health.textContent = 'Service indisponible'; health.style.color='var(--danger)'; });
+  form.addEventListener('submit', async event => {
+    event.preventDefault(); submit.disabled = true; submit.textContent = 'Acquisition en cours…';
+    results.className='empty'; results.textContent='Interrogation de la source et archivage de la réponse…';
+    const source=document.querySelector('#source').value, query=document.querySelector('#query').value, limit=document.querySelector('#limit').value;
+    try {
+      const response=await fetch(`/api/search?source=${encodeURIComponent(source)}&query=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`);
+      const data=await response.json(); if(!response.ok) throw new Error(data.detail || `Erreur HTTP ${response.status}`);
+      results.className='results'; results.innerHTML='';
+      if(!data.items.length){ results.className='empty'; results.textContent='Aucun résultat.'; }
+      for(const item of data.items){ const a=document.createElement('a'); a.className='result'; a.href=item.url || '#'; a.target='_blank'; a.rel='noopener'; a.textContent=item.title || item.id || 'Résultat sans titre'; const s=document.createElement('small'); s.textContent=`${item.source}${item.date ? ' · '+item.date : ''}`; a.appendChild(s); results.appendChild(a); }
+      meta.innerHTML=`Acquisition <code>${data.acquisition_id}</code><br>${data.item_count} élément(s) · SHA-256 <code>${data.sha256}</code>`;
+    } catch(error) { results.className='error'; results.textContent=error.message; }
+    finally { submit.disabled=false; submit.textContent='Rechercher et archiver'; }
+  });
+</script>
+</body>
+</html>

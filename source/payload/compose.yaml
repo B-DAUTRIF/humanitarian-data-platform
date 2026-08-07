@@ -1,0 +1,53 @@
+name: humanitarian-data-platform
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: humanitarian
+      POSTGRES_USER: humanitarian
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U humanitarian -d humanitarian"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  r-service:
+    build: ./r-service
+    restart: unless-stopped
+    profiles: ["analytics"]
+    expose:
+      - "8001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://humanitarian:${POSTGRES_PASSWORD}@db:5432/humanitarian
+      DATA_DIR: /app/data
+      R_SERVICE_URL: http://r-service:8001
+      RELIEFWEB_APPNAME: ${RELIEFWEB_APPNAME:-}
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "127.0.0.1:${HDP_PORT:-8080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/api/health', timeout=3)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres_data:

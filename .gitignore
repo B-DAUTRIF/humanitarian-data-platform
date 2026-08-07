@@ -1,0 +1,22 @@
+# Local configuration and runtime data
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.Rhistory
+.RData
+
+# Local build output
+build/
+*.o
+*.obj
+*.res
+
+# Logs and editor files
+*.log
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
