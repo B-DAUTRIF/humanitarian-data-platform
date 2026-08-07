@@ -33,7 +33,7 @@ docker compose up -d --build db api
 
 ```bash
 python -m compileall -q source/payload/api/app
-python -m unittest discover -s source/tests -p 'test_v23_helpers.py' -v
+python -m unittest discover -s source/tests -p 'test_v24_helpers.py' -v
 node source/scripts/generate_payload.mjs source/payload source/src/payload_generated.h
 ```
 
@@ -47,8 +47,12 @@ Depuis `source/` :
 bash build.sh /chemin/vers/zig /chemin/vers/cache
 ```
 
-Le résultat est `HumanitarianDataPlatform_Setup_Native_GUI_v2.3.2.exe`. La compilation cible `x86_64-windows-gnu`, le sous-système GUI et traite les avertissements comme erreurs.
+Le résultat est `HumanitarianDataPlatform_Setup_Native_GUI_v2.4.0.exe`. La compilation cible `x86_64-windows-gnu`, le sous-système GUI et traite les avertissements comme erreurs.
 
 ## Validation non disponible dans un environnement sans Docker
 
-La compilation Python, les tests unitaires, la syntaxe JavaScript, le roundtrip du payload, le format PE, les archives et les empreintes peuvent être validés sans Docker. La migration PostgreSQL/PostGIS et le parcours navigateur complet nécessitent un moteur Docker opérationnel et doivent être exécutés sur la machine Windows de recette.
+La compilation Python, les 29 tests unitaires, la syntaxe JavaScript, la recette
+publique HDX, le roundtrip du payload, le format PE, les archives et les
+empreintes peuvent être validés sans Docker. La migration PostgreSQL/PostGIS et
+le parcours navigateur complet nécessitent un moteur Docker opérationnel et
+doivent être exécutés sur la machine Windows de recette.

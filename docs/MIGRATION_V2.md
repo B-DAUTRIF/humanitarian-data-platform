@@ -1,4 +1,4 @@
-# Migration de 1.5, 2.0, 2.3.0 ou 2.3.1 vers 2.3.2
+# Migration de 1.5, 2.0 ou 2.3.x vers 2.4.0
 
 ## Garanties
 
@@ -11,13 +11,14 @@ La migration est déclenchée au démarrage et peut être rejouée. Elle ne supp
 5. activation de la contrainte `NOT NULL` sur `acquisitions.project_id`.
 6. création idempotente de `project_github_settings` et `project_geodata_settings`, puis ajout d'une ligne par projet existant ;
 7. ajout idempotent de `m49_scope_code`, `official_policy` et `migration_required` ;
-8. conversion d'un ancien profil `world` en périmètre ONU M49 `001` ;
-9. suspension d'un ancien profil plus étroit jusqu'au choix explicite d'une entité M49, sans déduction arbitraire ;
-10. ajout de la provenance M49, ISO3, COD, éditeur, licence et date HDX aux ressources locales.
+8. ajout de `cod_families`, initialisé à `["cod-ab"]` pour les profils existants ;
+9. conservation des profils déjà limités à un pays ou une zone M49 ;
+10. suspension des profils monde/région et du téléchargement automatique jusqu'au choix explicite d'une option ONU M49 × HDX ;
+11. ajout de `cod_family` à la provenance des ressources locales, sans réécriture des anciennes lignes.
 
-La mise à niveau depuis 2.3.1 ne modifie pas le schéma. Elle remplace le filtre
-de catalogue HDX et invalide un résultat géographique uniquement lors du prochain
-enregistrement d'un profil dont le périmètre, la politique ou le format change.
+Une ancienne ligne de ressource garde `cod_family = NULL` si elle précède 2.4.0 ;
+son niveau COD et ses autres métadonnées restent intacts. Toute nouvelle
+ressource officielle reçoit `cod-ab` ou `cod-ps`.
 
 Les anciens fichiers restent à leur emplacement `data/raw/<source>`. Leur colonne `raw_path` n'est pas réécrite. Les nouvelles acquisitions utilisent `data/raw/<project_uuid>/<source>`.
 

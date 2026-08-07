@@ -2,7 +2,7 @@
 
 ## Périmètre
 
-HDP 2.3.2 est une application locale mono-utilisateur. Elle n'a ni authentification, ni TLS local, ni séparation des rôles. Ne publiez pas son port sur le réseau et ne l'exposez pas à Internet.
+HDP 2.4.0 est une application locale mono-utilisateur. Elle n'a ni authentification, ni TLS local, ni séparation des rôles. Ne publiez pas son port sur le réseau et ne l'exposez pas à Internet.
 
 ## Protections présentes
 
@@ -19,7 +19,9 @@ HDP 2.3.2 est une application locale mono-utilisateur. Elle n'a ni authentificat
 - aucun moteur d'exécution des scripts stockés ;
 - jeton GitHub lu depuis l'environnement, jamais retourné par l'API ni enregistré dans les paramètres de projet ;
 - dépôt GitHub privé par défaut et création précédée d'une confirmation côté interface ;
-- aucune saisie libre d'identifiant HDX dans le module géographique ; filtre strict sur l'identifiant canonique `cod-ab-<iso3>`, le niveau COD et l'unique groupe ISO3 M49 ;
+- aucune saisie libre d'identifiant HDX dans le module géographique ; filtres stricts sur `cod-ab-<iso3>`/`cod-ps-<iso3>`, les séries officielles et l'unique groupe ISO3 M49 ;
+- COD-CS désactivé lorsque le registre vérifié est vide et COD-HP impossible à sélectionner ;
+- absence d'une famille traitée atomiquement, sans téléchargement silencieux d'un sous-ensemble ;
 - suppressions de ressources confirmées dans l'interface et provenance conservée.
 
 ## Limites connues
@@ -37,7 +39,7 @@ HDP 2.3.2 est une application locale mono-utilisateur. Elle n'a ni authentificat
 
 `%USERPROFILE%\HumanitarianDataPlatform\.env` contient le secret PostgreSQL, éventuellement l'appname ReliefWeb et `GITHUB_TOKEN`. Ne publiez jamais ce fichier. Utilisez un jeton à droits minimaux, limitez les organisations accessibles et révoquez-le lorsqu'il n'est plus nécessaire.
 
-Le diagnostic `HDP_Diagnostic_v2.3.2.cmd` n'affiche que `HDP_PORT` depuis `.env` : ni le jeton GitHub, ni le mot de passe PostgreSQL, ni l'appname ReliefWeb. Relisez néanmoins tout journal avant de le partager : il peut contenir le nom de la machine, l'utilisateur, des chemins ou des informations Docker.
+Le diagnostic `HDP_Diagnostic_v2.4.0.cmd` n'affiche que `HDP_PORT` depuis `.env` : ni le jeton GitHub, ni le mot de passe PostgreSQL, ni l'appname ReliefWeb. Relisez néanmoins tout journal avant de le partager : il peut contenir le nom de la machine, l'utilisateur, des chemins ou des informations Docker.
 
 ## Données humanitaires
 

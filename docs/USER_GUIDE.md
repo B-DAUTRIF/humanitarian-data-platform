@@ -1,4 +1,4 @@
-# Guide utilisateur 2.3.2
+# Guide utilisateur 2.4.0
 
 ## Projet actif
 
@@ -36,21 +36,36 @@ Le jeton n'est pas un paramètre de projet : il est lu depuis `.env`, masqué da
 
 ## Géodonnées ONU M49 et HDX
 
-Le module géographique ne demande plus d'identifiant HDX libre. Choisissez :
+Le module présente quatre familles sous forme de liste :
 
-- un format : GeoJSON, GeoPackage, Shapefile ou File Geodatabase ;
-- un périmètre ONU M49 : monde, région, sous-région, région intermédiaire, pays ou zone ;
-- une politique : COD amélioré uniquement, ou COD amélioré avec standard officiel en repli ;
+- **COD-AB**, sélectionnable, pour les limites administratives ;
+- **COD-PS**, sélectionnable, pour les statistiques de population infranationales ;
+- **COD-CS**, visible mais désactivé tant que le registre vérifié embarqué est vide ;
+- **COD-HP**, visible mais désactivé, car cette famille a été retirée par OCHA.
+
+Choisissez ensuite :
+
+- une ou plusieurs familles disponibles ;
+- un pays ou une zone dans la liste commune à ONU M49 et aux groupes HDX
+  canoniques de toutes ces familles ;
+- une politique de qualité COD-AB : amélioré uniquement, ou amélioré avec
+  standard officiel en repli ;
+- le format géospatial COD-AB : GeoJSON, GeoPackage, Shapefile ou File Geodatabase ;
 - un intervalle d'actualisation entre 60 minutes et 30 jours ;
 - la synchronisation automatique, ou **Synchroniser maintenant**.
 
-Chaque passage interroge les identifiants canoniques `cod-ab-*`, vérifie le
-niveau COD, l'identifiant exact `cod-ab-<iso3>` et l'appartenance de l'unique
-groupe ISO3 au périmètre M49, puis archive la réponse CKAN et sa décision. Les
-codes M49, ISO3, niveau COD, éditeur et licence restent associés aux ressources
-locales.
+Chaque passage interroge `cod-ab-*` et/ou `cod-ps-*`, exige l'identifiant exact
+`<famille>-<iso3>` ou la série officielle correspondante, puis vérifie l'unique
+groupe ISO3 contre le pays M49 choisi. COD-AB utilise le format demandé ; COD-PS
+retient ses ressources CSV/XLSX. Les codes M49, ISO3, famille, niveau COD publié,
+éditeur et licence restent associés aux ressources locales.
 
-Après modification du périmètre, de la politique ou du format, le dernier état
+Le profil est atomique : si le pays n'est plus admissible dans une famille,
+HDP archive les réponses CKAN et le motif, mais ne télécharge pas uniquement les
+autres familles. Choisissez une nouvelle option ou retirez explicitement la
+famille devenue indisponible.
+
+Après modification des familles, du pays, de la politique ou du format, le dernier état
 devient « synchronisation requise ». L'ancienne erreur disparaît ; utilisez
 ensuite **Synchroniser maintenant** ou laissez le planificateur exécuter le profil
 si le téléchargement automatique est actif.
@@ -65,7 +80,7 @@ La rubrique **Données locales** présente les compteurs, la taille totale et ch
 
 ## Scripts
 
-Un script possède un nom, un langage, une description et un contenu. Il peut être créé, modifié ou archivé dans son projet. HDP 2.3.2 n'exécute aucun script : n'utilisez pas cette bibliothèque comme moteur de traitement.
+Un script possède un nom, un langage, une description et un contenu. Il peut être créé, modifié ou archivé dans son projet. HDP 2.4.0 n'exécute aucun script : n'utilisez pas cette bibliothèque comme moteur de traitement.
 
 ## Planifications
 

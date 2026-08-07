@@ -21,18 +21,21 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
 from .project_integrations import (
-    OFFICIAL_COD_CATALOG_QUERY,
-    OFFICIAL_COD_SERIES,
+    OFFICIAL_COD_CATALOG_QUERIES,
+    OFFICIAL_COD_FAMILIES,
     UN_M49_SOURCE,
     geodata_profile_changed,
     github_repository_endpoint,
     m49_scope,
-    select_geodata_resources,
+    official_cod_availability,
+    official_cod_family_catalog,
+    select_cod_resources,
     select_official_cod_datasets,
     un_m49_catalog,
+    validate_cod_families,
     validate_github_owner,
     validate_hdx_dataset_id,
-    validate_m49_code,
+    validate_m49_country_code,
     validate_official_cod_policy,
     validate_repository_name,
 )
@@ -48,7 +51,7 @@ from .security import (
 
 
 APP_NAME = "Humanitarian Data Platform"
-APP_VERSION = "2.3.2"
+APP_VERSION = "2.4.0"
 DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
 DATABASE_URL = os.environ["DATABASE_URL"]
 R_SERVICE_URL = os.getenv("R_SERVICE_URL", "http://r-service:8001")
@@ -64,6 +67,8 @@ DEFAULT_PREFERENCES: dict[str, Any] = {
 }
 SCHEDULER_POLL_SECONDS = 20
 DEFAULT_GEODATA_INTERVAL_MINUTES = 10_080
+COD_CATALOG_CACHE_SECONDS = 1_800
+cod_catalog_cache: dict[str, tuple[float, dict[str, Any], list[dict[str, Any]]]] = {}
 
 app = FastAPI(
     title=APP_NAME,
@@ -99,7 +104,8 @@ class GitHubSettingsUpdate(BaseModel):
 
 class GeodataSettingsUpdate(BaseModel):
     auto_download: bool = False
-    m49_scope_code: str = Field(default="001", pattern=r"^\d{3}$")
+    cod_families: list[str] = Field(default_factory=lambda: ["cod-ab"], min_length=1, max_length=3)
+    m49_scope_code: str = Field(pattern=r"^\d{3}$")
     official_policy: str = Field(
         default="enhanced_preferred", pattern="^(enhanced_only|enhanced_preferred)$"
     )
@@ -235,8 +241,9 @@ def initialize_database() -> None:
                         preferred_format TEXT NOT NULL DEFAULT 'geojson',
                         max_scale TEXT NOT NULL DEFAULT 'world',
                         m49_scope_code TEXT,
+                        cod_families JSONB NOT NULL DEFAULT '["cod-ab"]'::jsonb,
                         official_policy TEXT NOT NULL DEFAULT 'enhanced_preferred',
-                        migration_required BOOLEAN NOT NULL DEFAULT FALSE,
+                        migration_required BOOLEAN NOT NULL DEFAULT TRUE,
                         refresh_interval_minutes INTEGER NOT NULL DEFAULT 10080,
                         next_sync_at TIMESTAMPTZ NOT NULL,
                         last_sync_at TIMESTAMPTZ,
@@ -249,6 +256,12 @@ def initialize_database() -> None:
                 )
                 connection.execute(
                     "ALTER TABLE project_geodata_settings ADD COLUMN IF NOT EXISTS m49_scope_code TEXT"
+                )
+                connection.execute(
+                    """
+                    ALTER TABLE project_geodata_settings
+                    ADD COLUMN IF NOT EXISTS cod_families JSONB NOT NULL DEFAULT '["cod-ab"]'::jsonb
+                    """
                 )
                 connection.execute(
                     """
@@ -279,7 +292,25 @@ def initialize_database() -> None:
                     """
                 )
                 connection.execute(
-                    "ALTER TABLE project_geodata_settings ALTER COLUMN m49_scope_code SET DEFAULT '001'"
+                    "ALTER TABLE project_geodata_settings ALTER COLUMN m49_scope_code DROP DEFAULT"
+                )
+                connection.execute(
+                    "ALTER TABLE project_geodata_settings ALTER COLUMN migration_required SET DEFAULT TRUE"
+                )
+                country_codes = [
+                    str(entity["code"])
+                    for entity in un_m49_catalog()
+                    if int(entity["type"]) == 4 and entity.get("iso3")
+                ]
+                connection.execute(
+                    """
+                    UPDATE project_geodata_settings
+                    SET migration_required = TRUE, auto_download = FALSE,
+                        last_status = 'migration_required',
+                        last_error = 'Choisissez un pays ou une zone dans la liste ONU M49 × HDX COD.'
+                    WHERE m49_scope_code IS NULL OR NOT (m49_scope_code = ANY(%s))
+                    """,
+                    (country_codes,),
                 )
                 connection.execute(
                     """
@@ -368,6 +399,7 @@ def initialize_database() -> None:
                         content_type TEXT,
                         m49_code TEXT,
                         iso3_code TEXT,
+                        cod_family TEXT,
                         cod_level TEXT,
                         publisher TEXT,
                         license_id TEXT,
@@ -383,6 +415,7 @@ def initialize_database() -> None:
                 for column in (
                     "m49_code TEXT",
                     "iso3_code TEXT",
+                    "cod_family TEXT",
                     "cod_level TEXT",
                     "publisher TEXT",
                     "license_id TEXT",
@@ -494,7 +527,7 @@ def get_geodata_settings(project_id: uuid.UUID) -> dict[str, Any]:
             SELECT auto_download, preferred_format, refresh_interval_minutes,
                    next_sync_at, last_sync_at, last_status, last_error,
                    last_acquisition_id, updated_at, m49_scope_code,
-                   official_policy, migration_required
+                   official_policy, migration_required, cod_families
             FROM project_geodata_settings WHERE project_id = %s
             """,
             (project_id,),
@@ -511,9 +544,10 @@ def get_geodata_settings(project_id: uuid.UUID) -> dict[str, Any]:
             "last_error": None,
             "last_acquisition_id": None,
             "updated_at": now,
-            "m49_scope_code": "001",
+            "m49_scope_code": None,
             "official_policy": "enhanced_preferred",
-            "migration_required": False,
+            "migration_required": True,
+            "cod_families": ["cod-ab"],
         }
     keys = [
         "auto_download",
@@ -528,6 +562,7 @@ def get_geodata_settings(project_id: uuid.UUID) -> dict[str, Any]:
         "m49_scope_code",
         "official_policy",
         "migration_required",
+        "cod_families",
     ]
     values = list(row)
     if values[7]:
@@ -689,9 +724,16 @@ async def fetch_hdx_dataset(dataset_id: str) -> tuple[dict[str, Any], dict[str, 
     return payload, payload["result"]
 
 
-async def fetch_hdx_official_cod_catalog() -> tuple[dict[str, Any], list[dict[str, Any]]]:
+async def fetch_hdx_official_cod_catalog(
+    family: str, *, use_cache: bool = True
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    if family not in OFFICIAL_COD_CATALOG_QUERIES:
+        raise ValueError(f"Catalogue HDX indisponible pour {family}")
+    cached = cod_catalog_cache.get(family)
+    if use_cache and cached and time.monotonic() - cached[0] < COD_CATALOG_CACHE_SECONDS:
+        return cached[1], cached[2]
     params = {
-        "q": OFFICIAL_COD_CATALOG_QUERY,
+        "q": OFFICIAL_COD_CATALOG_QUERIES[family],
         "rows": 1000,
         "sort": "metadata_modified desc",
     }
@@ -711,7 +753,9 @@ async def fetch_hdx_official_cod_catalog() -> tuple[dict[str, Any], list[dict[st
         raise httpx.HTTPStatusError(
             "Catalogue CKAN invalide", request=response.request, response=response
         )
-    return payload, [dataset for dataset in datasets if isinstance(dataset, dict)]
+    catalog = [dataset for dataset in datasets if isinstance(dataset, dict)]
+    cod_catalog_cache[family] = (time.monotonic(), payload, catalog)
+    return payload, catalog
 
 
 def format_allowed(resource_format: str | None, allowed: list[str]) -> bool:
@@ -749,7 +793,7 @@ def reserve_resource(
                     UPDATE local_resources
                     SET acquisition_id = %s, source = %s, dataset_id = %s,
                         m49_code = %s, iso3_code = %s, cod_level = %s,
-                        publisher = %s, license_id = %s, dataset_modified_at = %s,
+                        cod_family = %s, publisher = %s, license_id = %s, dataset_modified_at = %s,
                         updated_at = %s
                     WHERE id = %s
                     """,
@@ -760,6 +804,7 @@ def reserve_resource(
                         official.get("m49_code"),
                         official.get("iso3"),
                         official.get("cod_level"),
+                        official.get("cod_family"),
                         official.get("publisher"),
                         official.get("license_id"),
                         official.get("metadata_modified"),
@@ -775,8 +820,8 @@ def reserve_resource(
             INSERT INTO local_resources
                 (id, project_id, acquisition_id, resource_key, source, dataset_id, resource_id,
                  title, url, format, m49_code, iso3_code, cod_level, publisher, license_id,
-                 dataset_modified_at, status, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                 cod_family, dataset_modified_at, status, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     'queued', %s, %s)
             """,
             (
@@ -795,6 +840,7 @@ def reserve_resource(
                 official.get("cod_level"),
                 official.get("publisher"),
                 official.get("license_id"),
+                official.get("cod_family"),
                 official.get("metadata_modified"),
                 now,
                 now,
@@ -998,34 +1044,62 @@ async def execute_geodata_sync(
             status_code=409,
             detail="Sélectionnez et enregistrez un territoire ONU M49 avant la synchronisation.",
         )
-    scope_code = validate_m49_code(str(profile["m49_scope_code"]))
-    policy = validate_official_cod_policy(str(profile["official_policy"]))
+    try:
+        scope_code = validate_m49_country_code(str(profile["m49_scope_code"]))
+        policy = validate_official_cod_policy(str(profile["official_policy"]))
+        selected_families = validate_cod_families(list(profile.get("cod_families") or ["cod-ab"]))
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     preferred_format = str(profile["preferred_format"])
     try:
-        hdx_payload, catalog = await fetch_hdx_official_cod_catalog()
+        fetched = await asyncio.gather(
+            *(fetch_hdx_official_cod_catalog(family) for family in selected_families)
+        )
     except httpx.HTTPError as exc:
         finish_geodata_sync(project_id, "failed", error=f"Source HDX indisponible: {exc}"[:2000])
         raise HTTPException(status_code=502, detail=f"Source HDX indisponible: {exc}") from exc
 
-    datasets, missing = select_official_cod_datasets(catalog, scope_code, policy)
+    hdx_payloads = {
+        family: result[0] for family, result in zip(selected_families, fetched)
+    }
+    catalogs = {family: result[1] for family, result in zip(selected_families, fetched)}
+    candidates_by_family: dict[str, list[dict[str, Any]]] = {}
+    missing_by_family: dict[str, list[dict[str, Any]]] = {}
+    for family in selected_families:
+        candidates, missing = select_official_cod_datasets(
+            catalogs[family], scope_code, policy, family
+        )
+        candidates_by_family[family] = candidates
+        if missing:
+            missing_by_family[family] = missing
+
+    # The geographic list represents an intersection: do not silently download a partial family set.
+    datasets = [] if missing_by_family else [
+        dataset
+        for family in selected_families
+        for dataset in candidates_by_family[family]
+    ]
     items: list[dict[str, Any]] = []
-    no_matching_format: list[dict[str, Any]] = []
+    no_matching_resources: list[dict[str, Any]] = []
     for dataset in datasets:
         official = dict(dataset["_hdp_official"])
+        family = str(official["cod_family"])
         selected = []
-        for resource in select_geodata_resources(dataset.get("resources", []), preferred_format):
+        for resource in select_cod_resources(
+            dataset.get("resources", []), family, preferred_format
+        ):
             annotated = dict(resource)
             annotated["_hdp_official"] = official
             selected.append(annotated)
         if not selected:
-            no_matching_format.append(official)
+            no_matching_resources.append(official)
         items.append(
             {
                 "id": official["dataset_id"],
                 "title": dataset.get("title") or official["dataset_id"],
                 "date": dataset.get("metadata_modified"),
                 "url": f"https://data.humdata.org/dataset/{official['dataset_id']}",
-                "source": "HDX/CKAN — COD-AB officiel",
+                "source": f"HDX/CKAN — {OFFICIAL_COD_FAMILIES[family]['label']} officiel",
                 "official": official,
                 "resources": selected,
             }
@@ -1033,26 +1107,34 @@ async def execute_geodata_sync(
 
     scope = m49_scope(scope_code)
     archived_payload = {
-        "hdx_catalog_response": hdx_payload,
+        "hdx_catalog_responses": hdx_payloads,
         "hdp_geographic_profile": {
-            "profile": "ONU M49 + COD-AB officiel OCHA/HDX",
+            "profile": "ONU M49 × familles COD officielles OCHA/HDX",
             "m49_scope": scope,
+            "cod_families": selected_families,
             "official_policy": policy,
             "preferred_format": preferred_format,
-            "official_data_series": OFFICIAL_COD_SERIES,
+            "official_data_series": {
+                family: OFFICIAL_COD_FAMILIES[family]["data_series"]
+                for family in selected_families
+            },
             "accepted_cod_levels": ["cod-enhanced"]
             if policy == "enhanced_only"
             else ["cod-enhanced", "cod-standard"],
             "un_m49_source": UN_M49_SOURCE,
             "selected_datasets": [item["official"] for item in items],
-            "missing_m49_entities": missing,
-            "datasets_without_preferred_format": no_matching_format,
+            "candidate_datasets_by_family": {
+                family: [dataset["_hdp_official"] for dataset in candidates]
+                for family, candidates in candidates_by_family.items()
+            },
+            "missing_m49_entities_by_family": missing_by_family,
+            "datasets_without_matching_resource": no_matching_resources,
         },
     }
     provenance = persist_raw(
         project_id,
         "hdx-geodata",
-        f"m49-{scope_code}-{policy}-{preferred_format}",
+        f"m49-{scope_code}-{'-'.join(selected_families)}-{policy}-{preferred_format}",
         archived_payload,
         len(datasets),
         None,
@@ -1073,18 +1155,26 @@ async def execute_geodata_sync(
             warnings.append(
                 f"{downloads['deferred']} ressource(s) reportée(s) au prochain passage par la limite du projet."
             )
-    if missing:
+    for family, missing in missing_by_family.items():
         examples = ", ".join(str(entity["name"]) for entity in missing[:5])
         suffix = "…" if len(missing) > 5 else ""
         warnings.append(
-            f"Aucun COD-AB officiel admissible pour {len(missing)} pays ou zone(s) M49 : {examples}{suffix}"
+            f"Aucun {OFFICIAL_COD_FAMILIES[family]['label']} officiel admissible pour "
+            f"{len(missing)} pays ou zone(s) M49 : {examples}{suffix}"
         )
-    if no_matching_format:
+    if no_matching_resources:
+        ab_count = sum(item["cod_family"] == "cod-ab" for item in no_matching_resources)
+        ps_count = sum(item["cod_family"] == "cod-ps" for item in no_matching_resources)
+        details = []
+        if ab_count:
+            details.append(f"{ab_count} COD-AB sans format {preferred_format}")
+        if ps_count:
+            details.append(f"{ps_count} COD-PS sans ressource CSV/XLSX")
         warnings.append(
-            f"{len(no_matching_format)} jeu(x) officiel(s) ne publient pas le format {preferred_format}."
+            "Ressource compatible absente : " + ", ".join(details) + "."
         )
 
-    if not datasets:
+    if missing_by_family:
         status = "no_official_dataset"
     elif not resource_count:
         status = "no_matching_resource"
@@ -1100,13 +1190,18 @@ async def execute_geodata_sync(
     return {
         "project_id": str(project_id),
         "m49_scope": scope,
+        "cod_families": selected_families,
         "official_policy": policy,
         "preferred_format": preferred_format,
         "acquisition_id": str(acquisition_id),
         "raw_path": provenance["raw_path"],
         "sha256": provenance["sha256"],
         "dataset_count": len(datasets),
-        "missing_dataset_count": len(missing),
+        "dataset_counts": {
+            family: len(candidates_by_family[family]) if not missing_by_family else 0
+            for family in selected_families
+        },
+        "missing_dataset_count": len(missing_by_family),
         "resource_count": resource_count,
         "downloads": downloads,
         "status": status,
@@ -1198,7 +1293,8 @@ def claim_due_geodata() -> dict[str, Any] | None:
         row = connection.execute(
             """
             SELECT g.project_id, g.m49_scope_code, g.official_policy,
-                   g.preferred_format, g.refresh_interval_minutes, g.migration_required
+                   g.preferred_format, g.refresh_interval_minutes, g.migration_required,
+                   g.cod_families
             FROM project_geodata_settings g
             JOIN projects p ON p.id = g.project_id
             WHERE g.auto_download = TRUE AND g.migration_required = FALSE
@@ -1226,6 +1322,7 @@ def claim_due_geodata() -> dict[str, Any] | None:
         "preferred_format": row[3],
         "refresh_interval_minutes": row[4],
         "migration_required": row[5],
+        "cod_families": row[6],
     }
 
 
@@ -1284,6 +1381,38 @@ def sources() -> list[dict[str, str]]:
 @app.get("/api/un-m49/entities")
 def un_m49_entities() -> dict[str, Any]:
     return {"source": UN_M49_SOURCE, "entities": un_m49_catalog()}
+
+
+@app.get("/api/cod/families")
+def cod_families() -> dict[str, Any]:
+    return {
+        "families": official_cod_family_catalog(),
+        "official_reference": "https://knowledge.base.unocha.org/wiki/spaces/imtoolbox/pages/42045911/Common+Operational+Datasets+CODs",
+    }
+
+
+@app.get("/api/cod/availability")
+async def cod_availability(
+    families: list[str] = Query(default=["cod-ab"]),
+) -> dict[str, Any]:
+    try:
+        selected = validate_cod_families(families)
+        fetched = await asyncio.gather(
+            *(fetch_hdx_official_cod_catalog(family) for family in selected)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Catalogue HDX indisponible : {exc}") from exc
+    availability = official_cod_availability(
+        {family: result[1] for family, result in zip(selected, fetched)}, selected
+    )
+    return {
+        **availability,
+        "fetched_at": datetime.now(UTC),
+        "m49_source": UN_M49_SOURCE,
+        "hdx_source": "https://data.humdata.org/event/cod",
+    }
 
 
 @app.get("/api/projects")
@@ -1545,7 +1674,7 @@ def project_geodata(project_id: uuid.UUID) -> dict[str, Any]:
         m49_scope(settings["m49_scope_code"]) if settings.get("m49_scope_code") else None
     )
     settings["m49_source"] = UN_M49_SOURCE
-    settings["official_data_series"] = OFFICIAL_COD_SERIES
+    settings["official_families"] = official_cod_family_catalog()
     return settings
 
 
@@ -1555,16 +1684,17 @@ def update_project_geodata(
 ) -> dict[str, Any]:
     ensure_project(project_id)
     try:
-        scope_code = validate_m49_code(payload.m49_scope_code)
+        scope_code = validate_m49_country_code(payload.m49_scope_code)
+        selected_families = validate_cod_families(payload.cod_families)
         official_policy = validate_official_cod_policy(payload.official_policy)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     scope = m49_scope(scope_code)
-    legacy_scale = "world" if scope_code == "001" else "national" if scope["type"] == 4 else "regional"
+    legacy_scale = "national"
     now = datetime.now(UTC)
     current = get_geodata_settings(project_id)
     profile_changed = geodata_profile_changed(
-        current, scope_code, official_policy, payload.preferred_format
+        current, scope_code, official_policy, payload.preferred_format, selected_families
     )
     next_sync = current["next_sync_at"]
     if payload.auto_download and (not current["auto_download"] or profile_changed):
@@ -1585,9 +1715,9 @@ def update_project_geodata(
             INSERT INTO project_geodata_settings
                 (project_id, auto_download, dataset_id, preferred_format, max_scale,
                  m49_scope_code, official_policy, migration_required,
-                 refresh_interval_minutes, next_sync_at, last_sync_at, last_status,
+                 cod_families, refresh_interval_minutes, next_sync_at, last_sync_at, last_status,
                  last_error, last_acquisition_id, updated_at)
-            VALUES (%s, %s, 'official-cod-ab-catalog', %s, %s, %s, %s, FALSE, %s, %s,
+            VALUES (%s, %s, %s, %s, %s, %s, %s, FALSE, %s, %s, %s,
                     %s, %s, %s, %s, %s)
             ON CONFLICT (project_id) DO UPDATE SET
                 auto_download = EXCLUDED.auto_download,
@@ -1597,6 +1727,7 @@ def update_project_geodata(
                 m49_scope_code = EXCLUDED.m49_scope_code,
                 official_policy = EXCLUDED.official_policy,
                 migration_required = FALSE,
+                cod_families = EXCLUDED.cod_families,
                 refresh_interval_minutes = EXCLUDED.refresh_interval_minutes,
                 next_sync_at = EXCLUDED.next_sync_at,
                 last_sync_at = EXCLUDED.last_sync_at,
@@ -1608,10 +1739,12 @@ def update_project_geodata(
             (
                 project_id,
                 payload.auto_download,
+                "official-" + "+".join(selected_families) + "-catalog",
                 payload.preferred_format,
                 legacy_scale,
                 scope_code,
                 official_policy,
+                Jsonb(selected_families),
                 payload.refresh_interval_minutes,
                 next_sync,
                 last_sync_at,
@@ -1692,7 +1825,7 @@ def resources(
             SELECT id, acquisition_id, source, dataset_id, resource_id, title, url, format,
                    filename, local_path, sha256, size_bytes, content_type, status, error,
                    created_at, updated_at, deleted_at, m49_code, iso3_code, cod_level,
-                   publisher, license_id, dataset_modified_at
+                   publisher, license_id, dataset_modified_at, cod_family
             FROM local_resources WHERE {where} ORDER BY updated_at DESC LIMIT %s
             """,  # noqa: S608
             parameters,
@@ -1723,6 +1856,7 @@ def resources(
             "publisher": row[21],
             "license_id": row[22],
             "dataset_modified_at": row[23],
+            "cod_family": row[24],
         }
         for row in rows
     ]

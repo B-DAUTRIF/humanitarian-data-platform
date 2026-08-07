@@ -1,4 +1,4 @@
-# Humanitarian Data Platform 2.3.2
+# Humanitarian Data Platform 2.4.0
 
 Application locale pour organiser des acquisitions humanitaires par projets.
 
@@ -12,11 +12,11 @@ Le fichier `.env` peut aussi définir `GITHUB_TOKEN` pour permettre la création
 
 Le service est lié exclusivement à `127.0.0.1`. PostgreSQL/PostGIS n'est pas exposé sur Windows.
 
-La sous-version 2.3.2 reconnaît les identifiants officiels canoniques
-`cod-ab-<iso3>` même lorsque CKAN n'inclut pas `dataseries_name` dans la réponse.
-Un changement de périmètre, de politique ou de format remet l'état à
-« synchronisation requise » afin de ne jamais afficher l'erreur d'un ancien
-profil sous le nouveau territoire.
+La version 2.4.0 présente les familles officielles sous forme de liste. COD-AB
+et COD-PS sont sélectionnables ; COD-CS est visible mais désactivé tant que son
+registre vérifié est vide ; COD-HP est indiqué comme retiré. La liste de pays ou
+zones est recalculée sur l'intersection ONU M49 × groupes HDX des familles
+sélectionnées.
 
 ## Fonctionnalités
 
@@ -26,8 +26,9 @@ profil sous le nouveau territoire.
 - planificateur persistant, intervalle minimal de 15 minutes et historique des exécutions ;
 - gestion locale : inventaire, téléchargement, vérification SHA-256 et suppression avec conservation de la provenance ;
 - stockage et modification de scripts par projet, sans exécution automatique.
-- périmètre géographique choisi dans la nomenclature officielle ONU M49 ;
-- téléchargement limité aux COD-AB officiels OCHA/HDX, avec provenance complète.
+- pays ou zone choisi dans la liste commune ONU M49 × HDX COD ;
+- téléchargements COD-AB et COD-PS officiels, avec provenance de la famille ;
+- affichage explicite de COD-CS indisponible et COD-HP retiré.
 
 Les données sont écrites dans `data/raw/<projet>` et `data/projects/<projet>/resources`. Les métadonnées sont conservées dans PostgreSQL.
 
@@ -43,12 +44,13 @@ Exécutez `stop-hdp.cmd`. Les volumes et fichiers locaux restent intacts.
 
 ## Module géographique officiel
 
-La saisie libre d'un identifiant HDX n'est pas proposée dans ce module. HDP
-interroge les identifiants canoniques `cod-ab-*`, exige un niveau
-`cod-enhanced` ou `cod-standard`, puis vérifie la correspondance exacte entre
-l'identifiant et l'unique groupe ISO3 ONU M49. Les codes M49, ISO3, éditeur,
-licence et date des métadonnées sont archivés avec chaque ressource.
+HDP interroge les identifiants canoniques `cod-ab-*` et `cod-ps-*`, puis vérifie
+leur unique groupe ISO3 contre ONU M49. COD-AB exige `cod-enhanced` ou
+`cod-standard` et utilise le format géospatial choisi ; COD-PS utilise les
+ressources CSV/XLSX. Si une famille manque, aucun sous-ensemble n'est téléchargé.
+Les codes M49, ISO3, famille, niveau publié, éditeur, licence et date des
+métadonnées sont archivés avec chaque ressource.
 
 ## Limite de sécurité
 
-HDP 2.3.2 est une application locale, non un serveur Internet durci. Les scripts sont gérés comme contenu uniquement : aucune route ne les exécute. Les groupements M49 sont statistiques et n'impliquent aucune prise de position politique.
+HDP 2.4.0 est une application locale, non un serveur Internet durci. Les scripts sont gérés comme contenu uniquement : aucune route ne les exécute. Les groupements M49 sont statistiques et n'impliquent aucune prise de position politique.

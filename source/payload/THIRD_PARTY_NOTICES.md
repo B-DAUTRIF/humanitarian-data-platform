@@ -37,3 +37,18 @@ Le paquet intermédiaire `un-m49` est distribué sous licence MIT :
 
 L'affectation des pays ou zones à des groupements ONU dans M49 est statistique et
 n'implique aucune prise de position politique de HDP.
+
+## Références OCHA pour les familles COD
+
+Le fichier `api/app/official_cod_cs_registry.json` contient uniquement des
+métadonnées de contrôle créées pour HDP. Son registre est vide dans la version
+2.4.0 ; il cite la documentation OCHA afin d'expliquer pourquoi COD-CS ne peut
+pas être assimilé à une série HDX canonique universelle.
+
+- Types COD actuels et retrait de COD-HP :
+  <https://knowledge.base.unocha.org/wiki/spaces/imtoolbox/pages/42045911/Common+Operational+Datasets+CODs>
+- COD-CS, jeux spécifiques à un contexte national :
+  <https://knowledge.base.unocha.org/wiki/spaces/imtoolbox/pages/2965897217/Country-specific+CODs+COD-CS>
+
+Ces références n'accordent aucun droit supplémentaire sur les jeux téléchargés.
+La licence et les conditions de chaque fiche HDX restent applicables.

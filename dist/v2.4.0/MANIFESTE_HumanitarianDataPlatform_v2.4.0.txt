@@ -1,0 +1,108 @@
+MANIFESTE DE REMISE — HUMANITARIAN DATA PLATFORM 2.4.0
+=====================================================
+Date de construction : 7 août 2026
+Cible : Windows 10/11 x64
+Dépôt : B-DAUTRIF/humanitarian-data-platform (privé)
+
+CONTENU AVANT ARCHIVE COMPLÈTE
+------------------------------
+CHANGELOG_HDP_v2.4.0.log
+  4 132 octets
+  SHA-256 276ac26567d441b5e9f68b6249fe708f1f1f8eb861058e353ae68073b2fac68b
+
+HDP_Configurer_GitHub_v2.4.0.cmd
+  4 214 octets
+  SHA-256 35089f229c0ea436acaa9b4d3f23542d76386c0dbb4e15e61b6c513bcd90e959
+
+HDP_Diagnostic_v2.4.0.cmd
+  6 152 octets
+  SHA-256 971978088c57b2fca570d3b2b972211a1674ced92eccb38e5af728eaab185e11
+
+HDP_Prompt_exhaustif_reprise_GPT_Plus_v2.4.0.txt
+  29 343 octets
+  SHA-256 09fcb995fb97b013fd68460d0b3d3b18d1ebfe5a3008a36085950615ecb840eb
+
+HumanitarianDataPlatform_Setup_Native_GUI_v2.4.0.exe
+  399 872 octets
+  SHA-256 7ed5df7e81b05cf6f5cd614074c045e22f6f6205505fcab5631bb72f60a6d296
+
+HumanitarianDataPlatform_Setup_Native_GUI_v2.4.0.exe.sha256
+  119 octets
+  SHA-256 125db50317fedeeada3286aa0d03e52b2456e9395449a97a66740217b85445b4
+
+HumanitarianDataPlatform_Setup_README_v2.4.0.txt
+  3 750 octets
+  SHA-256 bbabda1a7b315d1e8b50c1807fc12d7353cce0e001e2ec9d77e689de863264d5
+
+HumanitarianDataPlatform_Source_v2.4.0.zip
+  218 137 octets
+  SHA-256 49b99ed733f4b8bfa5c50731a1be1ac0e2c46043c96a3204e0267cb33aa9f007
+
+HumanitarianDataPlatform_Windows_v2.4.0.zip
+  140 089 octets
+  SHA-256 e15cdc8a3fac718771bdb19fdced01be11d38f00e15a26de72be8a1177bf8dfc
+
+Notice_detaillee_Humanitarian_Data_Platform_v2.4.0.pdf
+  78 257 octets — 22 pages A4
+  SHA-256 38b16ff3600f31b9076ea6f9b8b49803ce46fea32f0fd97aa6dc2e5a4c8ad949
+
+ÉVOLUTIONS 2.4.0
+----------------
+- liste des téléchargements officiels COD-AB et COD-PS par projet ;
+- COD-CS visible mais désactivé avec un registre vérifié vide ;
+- COD-HP visible comme famille retirée par OCHA et non sélectionnable ;
+- zone limitée aux pays ou zones présents simultanément dans ONU M49 et dans
+  les groupes HDX canoniques de toutes les familles sélectionnées ;
+- vérification HDX réelle : 163 COD-AB, 146 COD-PS et 143 options communes ;
+  Soudan commun, Algérie disponible uniquement pour COD-AB ;
+- COD-AB sélectionne le format géospatial demandé, COD-PS ses CSV/XLSX ;
+- synchronisation atomique : aucune famille partielle téléchargée lorsqu'une
+  famille sélectionnée devient absente ;
+- profil enrichi par cod_families et provenance locale par cod_family ;
+- anciens profils pays conservés ; monde/région suspendus jusqu'au choix dans
+  la nouvelle liste.
+
+CONSTITUTION DES PAQUETS
+-----------------------
+Paquet Windows : EXE, empreinte EXE, notice courte, diagnostic et correctif
+GitHub sécurisé.
+
+Archive source : README, CHANGELOG, documentation Markdown hors prompts de
+livraison auto-référents, payload FastAPI/R, instantané M49, registre COD-CS,
+interface, installateur C/Win32, payload_generated.h, tests et générateur PDF.
+Elle exclut l'EXE de construction, les PDB, installer.res et les caches Python.
+
+Archive complète : fichiers de remise, manifeste et SHA256SUMS.txt dans le
+dossier HumanitarianDataPlatform_v2.4.0. Elle ne s'inclut pas elle-même.
+
+VALIDATIONS EFFECTUÉES
+----------------------
+- modules Python compilés sans erreur ;
+- 29 tests unitaires réussis ;
+- syntaxe JavaScript de l'interface acceptée par Node.js ;
+- compose.yaml analysé avec PyYAML ;
+- payload régénéré ; 19 fichiers reconstruits et comparés à l'identique ;
+- installateur compilé en PE32+ GUI x86-64, 7 sections ;
+- requête réelle HDX : 166 candidats bruts COD-AB, 148 COD-PS ; 163 et 146
+  jeux canoniques, intersection de 143 pays ou zones ;
+- Soudan : cod-ab-sdn avec 1 GeoJSON et cod-ps-sdn avec 13 CSV/XLSX ;
+- Algérie : cod-ab-dza admis, absence de COD-PS canonique ;
+- notice PDF : 22 pages A4 rendues en PNG et inspectées visuellement.
+
+VALIDATIONS NON EFFECTUÉES DANS CET ENVIRONNEMENT
+------------------------------------------------
+Docker n'était pas installé dans l'environnement Linux de construction. La
+migration PostgreSQL/PostGIS, le parcours FastAPI complet en conteneur, l'appel
+réel à GitHub depuis HDP, la synchronisation HDX depuis l'interface et
+l'installation Windows n'ont pas été exécutés. Ils restent à rejouer sur Windows
+avec Docker Desktop. La compilation, les tests et la sonde directe HDX ne
+constituent pas une recette fonctionnelle complète.
+
+SÉCURITÉ, SOURCES ET LICENCE
+----------------------------
+L'API reste destinée à 127.0.0.1. Le jeton GitHub doit avoir des droits minimaux.
+Le module géographique utilise ONU M49 et les familles COD officielles OCHA/HDX,
+mais l'utilisateur doit toujours vérifier qualité, date, licence et adéquation.
+
+L'installateur n'est pas signé par certificat d'éditeur. Aucune licence HDP
+explicite n'est incluse ; le dépôt reste privé jusqu'au choix d'une licence.

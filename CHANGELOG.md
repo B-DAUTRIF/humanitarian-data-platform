@@ -1,5 +1,26 @@
 # Journal des versions
 
+## 2.4.0 — 7 août 2026
+
+- Présentation des téléchargements officiels sous forme de liste par famille :
+  COD-AB et COD-PS sont sélectionnables dans un même profil de projet.
+- COD-CS reste visible mais désactivé tant que son registre vérifié embarqué ne
+  contient aucun jeu ; COD-HP est visible comme famille retirée par OCHA.
+- Remplacement du périmètre hiérarchique libre par une liste de pays ou zones
+  appartenant simultanément à ONU M49 et à tous les catalogues HDX sélectionnés.
+- Vérification réelle du 7 août 2026 : 163 pays/zones COD-AB, 146 COD-PS et
+  143 options dans leur intersection ; Soudan admissible aux deux, Algérie au
+  seul COD-AB.
+- Téléchargement atomique par ensemble de familles : si une famille devient
+  absente, la preuve CKAN est archivée mais aucun sous-ensemble n'est téléchargé.
+- Ajout de `cod_families` aux profils et de `cod_family` à la provenance locale ;
+  migration sûre des anciens profils pays, suspension explicite des profils
+  monde/région jusqu'au choix dans la nouvelle liste.
+- Ajout des routes `/api/cod/families` et `/api/cod/availability`, avec cache HDX
+  de 30 minutes et registre COD-CS versionné.
+- Validation : 29 tests unitaires, contrôle JavaScript et recette catalogue HDX
+  en direct sur COD-AB/COD-PS.
+
 ## 2.3.2 — 7 août 2026
 
 - Correction de la découverte HDX : le catalogue est interrogé par identifiant

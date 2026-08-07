@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-08-07",
+  "source": {
+    "name": "OCHA Common Operational Datasets — Country-specific CODs (COD-CS)",
+    "url": "https://knowledge.base.unocha.org/wiki/spaces/imtoolbox/pages/2965897217/Country-specific+CODs+COD-CS",
+    "note": "Les COD-CS sont contextuels et ne disposent pas d'une série HDX canonique universelle vérifiable. Chaque entrée future devra être explicitement contrôlée avant activation."
+  },
+  "datasets": []
+}
