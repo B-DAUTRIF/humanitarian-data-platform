@@ -1,4 +1,4 @@
-# Migration de 1.5, 2.0 ou 2.3.0 vers 2.3.1
+# Migration de 1.5, 2.0, 2.3.0 ou 2.3.1 vers 2.3.2
 
 ## Garanties
 
@@ -14,6 +14,10 @@ La migration est déclenchée au démarrage et peut être rejouée. Elle ne supp
 8. conversion d'un ancien profil `world` en périmètre ONU M49 `001` ;
 9. suspension d'un ancien profil plus étroit jusqu'au choix explicite d'une entité M49, sans déduction arbitraire ;
 10. ajout de la provenance M49, ISO3, COD, éditeur, licence et date HDX aux ressources locales.
+
+La mise à niveau depuis 2.3.1 ne modifie pas le schéma. Elle remplace le filtre
+de catalogue HDX et invalide un résultat géographique uniquement lors du prochain
+enregistrement d'un profil dont le périmètre, la politique ou le format change.
 
 Les anciens fichiers restent à leur emplacement `data/raw/<source>`. Leur colonne `raw_path` n'est pas réécrite. Les nouvelles acquisitions utilisent `data/raw/<project_uuid>/<source>`.
 

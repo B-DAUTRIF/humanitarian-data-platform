@@ -47,7 +47,7 @@ Depuis `source/` :
 bash build.sh /chemin/vers/zig /chemin/vers/cache
 ```
 
-Le résultat est `HumanitarianDataPlatform_Setup_Native_GUI_v2.3.1.exe`. La compilation cible `x86_64-windows-gnu`, le sous-système GUI et traite les avertissements comme erreurs.
+Le résultat est `HumanitarianDataPlatform_Setup_Native_GUI_v2.3.2.exe`. La compilation cible `x86_64-windows-gnu`, le sous-système GUI et traite les avertissements comme erreurs.
 
 ## Validation non disponible dans un environnement sans Docker
 

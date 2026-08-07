@@ -22,6 +22,7 @@ M49_TYPE_LABELS = {
 OFFICIAL_COD_SERIES = "COD - Subnational Administrative Boundaries"
 OFFICIAL_COD_LEVELS = {"cod-enhanced", "cod-standard"}
 OFFICIAL_COD_POLICIES = {"enhanced_only", "enhanced_preferred"}
+OFFICIAL_COD_CATALOG_QUERY = "name:cod-ab-* AND cod_level:(cod-enhanced OR cod-standard)"
 
 
 def _load_m49_snapshot() -> dict[str, Any]:
@@ -89,6 +90,16 @@ def validate_official_cod_policy(value: str) -> str:
     if policy not in OFFICIAL_COD_POLICIES:
         raise ValueError("Politique COD-AB officielle invalide")
     return policy
+
+
+def geodata_profile_changed(
+    current: dict[str, Any], scope_code: str, policy: str, preferred_format: str
+) -> bool:
+    return (
+        scope_code != str(current.get("m49_scope_code") or "")
+        or policy != str(current.get("official_policy") or "")
+        or preferred_format != str(current.get("preferred_format") or "")
+    )
 
 
 def _m49_depth(code: str) -> int:
@@ -209,8 +220,7 @@ def _dataset_value(dataset: dict[str, Any], key: str) -> Any:
 
 def official_cod_metadata(dataset: dict[str, Any]) -> dict[str, Any] | None:
     cod_level = str(_dataset_value(dataset, "cod_level") or "").strip().lower()
-    data_series = str(_dataset_value(dataset, "dataseries_name") or "").strip()
-    if cod_level not in OFFICIAL_COD_LEVELS or data_series.casefold() != OFFICIAL_COD_SERIES.casefold():
+    if cod_level not in OFFICIAL_COD_LEVELS:
         return None
 
     iso3_codes: set[str] = set()
@@ -228,6 +238,15 @@ def official_cod_metadata(dataset: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
     iso3 = next(iter(iso3_codes))
+    data_series = str(_dataset_value(dataset, "dataseries_name") or "").strip()
+    dataset_name = str(dataset.get("name") or "").strip().lower()
+    canonical_name = f"cod-ab-{iso3.lower()}"
+    if (
+        data_series.casefold() != OFFICIAL_COD_SERIES.casefold()
+        and dataset_name != canonical_name
+    ):
+        return None
+
     organization = dataset.get("organization") if isinstance(dataset.get("organization"), dict) else {}
     return {
         "dataset_id": str(dataset.get("name") or dataset.get("id") or ""),

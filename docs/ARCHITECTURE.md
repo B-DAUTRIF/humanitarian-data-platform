@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TD
-    U["Interface web locale"] --> A["FastAPI 2.3.1"]
+    U["Interface web locale"] --> A["FastAPI 2.3.2"]
     A --> P["PostgreSQL + PostGIS"]
     A --> F["JSON et ressources locales"]
     A --> X["ReliefWeb et HDX/CKAN"]
@@ -31,11 +31,21 @@ Docker Compose orchestre l'API, PostgreSQL/PostGIS et le service R facultatif. S
 
 Le projet par défaut utilise l'UUID stable `00000000-0000-4000-8000-000000000001`. Le démarrage crée les nouvelles tables de façon idempotente, ajoute `project_id` et `schedule_id` à l'historique v1.5, puis rattache les lignes sans projet.
 
-## Intégrations de projet 2.3.1
+## Intégrations de projet 2.3.2
 
 La création GitHub utilise `POST /user/repos` lorsque le propriétaire est vide ou correspond au compte du jeton, sinon `POST /orgs/{org}/repos`. Le dépôt est privé par défaut et initialisé avec un README. `GITHUB_TOKEN` demeure une variable d'environnement globale ; il ne transite jamais dans les modèles de réponse.
 
-Le profil géographique appelle `package_search` avec la série exacte `COD - Subnational Administrative Boundaries`, puis valide localement le niveau `cod-enhanced` ou `cod-standard`, la série et le groupe ISO3 présent dans ONU M49. Un périmètre régional est développé en pays ou zones descendants M49. Aucune saisie libre d'un identifiant HDX n'entre dans ce flux.
+Le profil géographique appelle `package_search` pour les identifiants canoniques
+`cod-ab-*` portant un niveau `cod-enhanced` ou `cod-standard`. Il exige ensuite
+localement l'identifiant exact `cod-ab-<iso3>` et un unique groupe ISO3 présent
+dans ONU M49. Cette identité canonique compense l'absence actuelle du champ
+`dataseries_name` dans le JSON CKAN, sans accepter un jeu arbitraire. Un
+périmètre régional est développé en pays ou zones descendants M49. Aucune saisie
+libre d'un identifiant HDX n'entre dans ce flux.
+
+Lorsqu'un périmètre, une politique COD ou un format change, le dernier résultat
+est invalidé (`sync_required`) avant toute nouvelle synchronisation. L'interface
+ne peut ainsi pas associer l'erreur d'un ancien pays au nouveau périmètre.
 
 La réponse CKAN complète, le périmètre M49, les jeux retenus, les entités sans jeu officiel et les formats manquants sont archivés sous `hdx-geodata`. Une ressource déjà complète ne consomme pas le quota ; les suivantes obtiennent le compte `deferred` et sont reprises lors d'un passage ultérieur.
 

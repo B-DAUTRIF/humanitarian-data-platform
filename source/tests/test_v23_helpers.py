@@ -13,6 +13,7 @@ sys.path.insert(0, str(API_ROOT))
 from app.scheduler_utils import next_run_at, validate_interval  # noqa: E402
 from app.project_integrations import (  # noqa: E402
     OFFICIAL_COD_SERIES,
+    geodata_profile_changed,
     github_repository_endpoint,
     m49_country_entities,
     m49_scope,
@@ -102,6 +103,19 @@ class ProjectIntegrationsTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_m49_code("999")
 
+    def test_geodata_profile_change_detects_algeria_to_sudan(self) -> None:
+        current = {
+            "m49_scope_code": "012",
+            "official_policy": "enhanced_preferred",
+            "preferred_format": "geojson",
+        }
+        self.assertTrue(
+            geodata_profile_changed(current, "729", "enhanced_preferred", "geojson")
+        )
+        self.assertFalse(
+            geodata_profile_changed(current, "012", "enhanced_preferred", "geojson")
+        )
+
     def test_official_policy_validation(self) -> None:
         self.assertEqual(validate_official_cod_policy("enhanced_only"), "enhanced_only")
         with self.assertRaises(ValueError):
@@ -152,6 +166,21 @@ class ProjectIntegrationsTest(unittest.TestCase):
         dataset = self.cod_dataset("MLI", "cod-enhanced", "2026-08-01T12:00:00")
         self.assertEqual(official_cod_metadata(dataset)["m49_code"], "466")
         dataset["dataseries_name"] = "Community boundaries"
+        self.assertIsNone(official_cod_metadata(dataset))
+
+    def test_official_cod_metadata_accepts_canonical_hdx_slug_without_returned_series(self) -> None:
+        dataset = self.cod_dataset("SDN", "cod-enhanced", "2026-06-24T09:15:51")
+        dataset["name"] = "cod-ab-sdn"
+        dataset.pop("dataseries_name")
+        metadata = official_cod_metadata(dataset)
+        self.assertIsNotNone(metadata)
+        self.assertEqual(metadata["m49_code"], "729")
+        self.assertEqual(metadata["dataset_id"], "cod-ab-sdn")
+
+    def test_missing_series_requires_exact_canonical_hdx_slug(self) -> None:
+        dataset = self.cod_dataset("DZA", "cod-enhanced", "2026-06-24T09:15:51")
+        dataset["name"] = "community-cod-ab-dza-copy"
+        dataset.pop("dataseries_name")
         self.assertIsNone(official_cod_metadata(dataset))
 
     def test_official_cod_metadata_rejects_non_cod_level(self) -> None:

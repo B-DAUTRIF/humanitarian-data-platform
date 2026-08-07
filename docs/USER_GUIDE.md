@@ -1,4 +1,4 @@
-# Guide utilisateur 2.3.1
+# Guide utilisateur 2.3.2
 
 ## Projet actif
 
@@ -44,7 +44,16 @@ Le module géographique ne demande plus d'identifiant HDX libre. Choisissez :
 - un intervalle d'actualisation entre 60 minutes et 30 jours ;
 - la synchronisation automatique, ou **Synchroniser maintenant**.
 
-Chaque passage interroge la série officielle `COD - Subnational Administrative Boundaries`, vérifie le niveau COD et l'appartenance ISO3 au périmètre M49, puis archive la réponse CKAN et sa décision. Les codes M49, ISO3, niveau COD, éditeur et licence restent associés aux ressources locales.
+Chaque passage interroge les identifiants canoniques `cod-ab-*`, vérifie le
+niveau COD, l'identifiant exact `cod-ab-<iso3>` et l'appartenance de l'unique
+groupe ISO3 au périmètre M49, puis archive la réponse CKAN et sa décision. Les
+codes M49, ISO3, niveau COD, éditeur et licence restent associés aux ressources
+locales.
+
+Après modification du périmètre, de la politique ou du format, le dernier état
+devient « synchronisation requise ». L'ancienne erreur disparaît ; utilisez
+ensuite **Synchroniser maintenant** ou laissez le planificateur exécuter le profil
+si le téléchargement automatique est actif.
 
 ## Données locales
 
@@ -56,7 +65,7 @@ La rubrique **Données locales** présente les compteurs, la taille totale et ch
 
 ## Scripts
 
-Un script possède un nom, un langage, une description et un contenu. Il peut être créé, modifié ou archivé dans son projet. HDP 2.3.1 n'exécute aucun script : n'utilisez pas cette bibliothèque comme moteur de traitement.
+Un script possède un nom, un langage, une description et un contenu. Il peut être créé, modifié ou archivé dans son projet. HDP 2.3.2 n'exécute aucun script : n'utilisez pas cette bibliothèque comme moteur de traitement.
 
 ## Planifications
 

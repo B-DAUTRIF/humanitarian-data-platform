@@ -1,4 +1,4 @@
-# Humanitarian Data Platform 2.3.1
+# Humanitarian Data Platform 2.3.2
 
 Application locale pour organiser des acquisitions humanitaires par projets.
 
@@ -11,6 +11,12 @@ Application locale pour organiser des acquisitions humanitaires par projets.
 Le fichier `.env` peut aussi définir `GITHUB_TOKEN` pour permettre la création confirmée d'un dépôt depuis les paramètres d'un projet. Ce secret n'est jamais exposé par l'API.
 
 Le service est lié exclusivement à `127.0.0.1`. PostgreSQL/PostGIS n'est pas exposé sur Windows.
+
+La sous-version 2.3.2 reconnaît les identifiants officiels canoniques
+`cod-ab-<iso3>` même lorsque CKAN n'inclut pas `dataseries_name` dans la réponse.
+Un changement de périmètre, de politique ou de format remet l'état à
+« synchronisation requise » afin de ne jamais afficher l'erreur d'un ancien
+profil sous le nouveau territoire.
 
 ## Fonctionnalités
 
@@ -38,11 +44,11 @@ Exécutez `stop-hdp.cmd`. Les volumes et fichiers locaux restent intacts.
 ## Module géographique officiel
 
 La saisie libre d'un identifiant HDX n'est pas proposée dans ce module. HDP
-interroge uniquement la série `COD - Subnational Administrative Boundaries` et
-accepte les niveaux `cod-enhanced`, ou `cod-standard` lorsque la politique du
-projet l'autorise. Les codes M49, ISO3, éditeur, licence et date des métadonnées
-sont archivés avec chaque ressource.
+interroge les identifiants canoniques `cod-ab-*`, exige un niveau
+`cod-enhanced` ou `cod-standard`, puis vérifie la correspondance exacte entre
+l'identifiant et l'unique groupe ISO3 ONU M49. Les codes M49, ISO3, éditeur,
+licence et date des métadonnées sont archivés avec chaque ressource.
 
 ## Limite de sécurité
 
-HDP 2.3.1 est une application locale, non un serveur Internet durci. Les scripts sont gérés comme contenu uniquement : aucune route ne les exécute. Les groupements M49 sont statistiques et n'impliquent aucune prise de position politique.
+HDP 2.3.2 est une application locale, non un serveur Internet durci. Les scripts sont gérés comme contenu uniquement : aucune route ne les exécute. Les groupements M49 sont statistiques et n'impliquent aucune prise de position politique.

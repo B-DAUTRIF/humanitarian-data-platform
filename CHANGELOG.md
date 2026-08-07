@@ -1,5 +1,19 @@
 # Journal des versions
 
+## 2.3.2 — 7 août 2026
+
+- Correction de la découverte HDX : le catalogue est interrogé par identifiant
+  canonique `cod-ab-*` et niveau COD, puis chaque résultat est contrôlé contre
+  son groupe ISO3 ONU M49.
+- Compatibilité avec les réponses CKAN qui indexent la série officielle mais
+  n'exposent plus `dataseries_name` dans le JSON retourné.
+- Invalidation du dernier statut, de la dernière erreur et de l'acquisition
+  affichés lorsqu'un profil change de périmètre M49, de politique ou de format.
+- Affichage explicite « synchronisation requise » et échéance immédiate lorsque
+  le téléchargement automatique est actif sur un profil modifié.
+- Régressions vérifiées sur les COD-AB officiels du Soudan (`M49 729`, `SDN`)
+  et de l'Algérie (`M49 012`, `DZA`).
+
 ## 2.3.1 — 7 août 2026
 
 - Remplacement de l'échelle opérationnelle « terrain → monde » par la nomenclature

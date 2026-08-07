@@ -21,8 +21,10 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
 from .project_integrations import (
+    OFFICIAL_COD_CATALOG_QUERY,
     OFFICIAL_COD_SERIES,
     UN_M49_SOURCE,
+    geodata_profile_changed,
     github_repository_endpoint,
     m49_scope,
     select_geodata_resources,
@@ -46,7 +48,7 @@ from .security import (
 
 
 APP_NAME = "Humanitarian Data Platform"
-APP_VERSION = "2.3.1"
+APP_VERSION = "2.3.2"
 DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
 DATABASE_URL = os.environ["DATABASE_URL"]
 R_SERVICE_URL = os.getenv("R_SERVICE_URL", "http://r-service:8001")
@@ -689,7 +691,7 @@ async def fetch_hdx_dataset(dataset_id: str) -> tuple[dict[str, Any], dict[str, 
 
 async def fetch_hdx_official_cod_catalog() -> tuple[dict[str, Any], list[dict[str, Any]]]:
     params = {
-        "fq": f'dataseries_name:"{OFFICIAL_COD_SERIES}"',
+        "q": OFFICIAL_COD_CATALOG_QUERY,
         "rows": 1000,
         "sort": "metadata_modified desc",
     }
@@ -1561,19 +1563,32 @@ def update_project_geodata(
     legacy_scale = "world" if scope_code == "001" else "national" if scope["type"] == 4 else "regional"
     now = datetime.now(UTC)
     current = get_geodata_settings(project_id)
+    profile_changed = geodata_profile_changed(
+        current, scope_code, official_policy, payload.preferred_format
+    )
     next_sync = current["next_sync_at"]
-    if payload.auto_download and not current["auto_download"]:
+    if payload.auto_download and (not current["auto_download"] or profile_changed):
         next_sync = now
     elif payload.refresh_interval_minutes != current["refresh_interval_minutes"]:
         next_sync = next_run_at(now, payload.refresh_interval_minutes)
+    last_sync_at = None if profile_changed else current["last_sync_at"]
+    last_status = "sync_required" if profile_changed else current["last_status"]
+    last_error = None if profile_changed else current["last_error"]
+    last_acquisition_id = (
+        None
+        if profile_changed or not current["last_acquisition_id"]
+        else uuid.UUID(str(current["last_acquisition_id"]))
+    )
     with database_connection() as connection:
         connection.execute(
             """
             INSERT INTO project_geodata_settings
                 (project_id, auto_download, dataset_id, preferred_format, max_scale,
                  m49_scope_code, official_policy, migration_required,
-                 refresh_interval_minutes, next_sync_at, updated_at)
-            VALUES (%s, %s, 'official-cod-ab-catalog', %s, %s, %s, %s, FALSE, %s, %s, %s)
+                 refresh_interval_minutes, next_sync_at, last_sync_at, last_status,
+                 last_error, last_acquisition_id, updated_at)
+            VALUES (%s, %s, 'official-cod-ab-catalog', %s, %s, %s, %s, FALSE, %s, %s,
+                    %s, %s, %s, %s, %s)
             ON CONFLICT (project_id) DO UPDATE SET
                 auto_download = EXCLUDED.auto_download,
                 dataset_id = EXCLUDED.dataset_id,
@@ -1584,6 +1599,10 @@ def update_project_geodata(
                 migration_required = FALSE,
                 refresh_interval_minutes = EXCLUDED.refresh_interval_minutes,
                 next_sync_at = EXCLUDED.next_sync_at,
+                last_sync_at = EXCLUDED.last_sync_at,
+                last_status = EXCLUDED.last_status,
+                last_error = EXCLUDED.last_error,
+                last_acquisition_id = EXCLUDED.last_acquisition_id,
                 updated_at = EXCLUDED.updated_at
             """,
             (
@@ -1595,6 +1614,10 @@ def update_project_geodata(
                 official_policy,
                 payload.refresh_interval_minutes,
                 next_sync,
+                last_sync_at,
+                last_status,
+                last_error,
+                last_acquisition_id,
                 now,
             ),
         )

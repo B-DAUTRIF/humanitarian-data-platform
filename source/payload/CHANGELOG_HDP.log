@@ -1,6 +1,21 @@
 Humanitarian Data Platform — journal applicatif des versions
 =============================================================
 
+[2026-08-07] Version 2.3.2
+--------------------------
+- Correction du catalogue HDX : recherche des identifiants canoniques cod-ab-*
+  portant un niveau cod-enhanced ou cod-standard.
+- Les réponses CKAN sans champ dataseries_name sont admises uniquement lorsque
+  l'identifiant exact cod-ab-<iso3> correspond à l'unique groupe ISO3 ONU M49.
+- Changer de périmètre M49, politique COD ou format invalide désormais le statut,
+  l'erreur et l'acquisition de l'ancien profil.
+- L'interface affiche « synchronisation requise » au lieu de juxtaposer le
+  nouveau territoire et une ancienne erreur.
+- Vérification en direct : cod-ab-sdn pour M49 729 et cod-ab-dza pour M49 012,
+  tous deux cod-enhanced avec une ressource GeoJSON.
+- Validation de livraison : 24 tests unitaires, compilation Python, contrôle
+  JavaScript, reconstruction de l'installateur Windows et vérification des ZIP.
+
 [2026-08-07] Version 2.3.1
 --------------------------
 - Le module géographique utilise exclusivement la nomenclature ONU M49 embarquée.
