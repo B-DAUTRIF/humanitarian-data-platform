@@ -41,6 +41,7 @@ L'application s'ouvre sur `http://localhost:8080` ou sur un port libre entre `18
 - [Développement et validation](docs/DEVELOPMENT.md)
 - [Dépannage](docs/TROUBLESHOOTING.md)
 - [Inventaire des livrables et empreintes](docs/ARTIFACTS.md)
+- [Prompt autonome de reconstruction de l’état v2.3](docs/PROMPT_RECONSTRUCTION_ETAT_ACTUEL_V2.3.md)
 - [Notice détaillée PDF](dist/v2.3/Notice_detaillee_Humanitarian_Data_Platform_v2.3.pdf)
 
 FastAPI publie aussi une documentation interactive locale sur `/docs` lorsque l'application tourne.
