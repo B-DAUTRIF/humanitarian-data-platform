@@ -18,6 +18,7 @@ Créez `.env` à côté de `compose.yaml` :
 ```dotenv
 POSTGRES_PASSWORD=une-valeur-aleatoire
 RELIEFWEB_APPNAME=
+GITHUB_TOKEN=
 HDP_PORT=8080
 ```
 
@@ -32,7 +33,7 @@ docker compose up -d --build db api
 
 ```bash
 python -m compileall -q source/payload/api/app
-python -m unittest discover -s source/tests -p 'test_v20_helpers.py' -v
+python -m unittest discover -s source/tests -p 'test_v23_helpers.py' -v
 node source/scripts/generate_payload.mjs source/payload source/src/payload_generated.h
 ```
 
@@ -46,7 +47,7 @@ Depuis `source/` :
 bash build.sh /chemin/vers/zig /chemin/vers/cache
 ```
 
-Le résultat est `HumanitarianDataPlatform_Setup_Native_GUI_v2.0.exe`. La compilation cible `x86_64-windows-gnu`, le sous-système GUI et traite les avertissements comme erreurs.
+Le résultat est `HumanitarianDataPlatform_Setup_Native_GUI_v2.3.exe`. La compilation cible `x86_64-windows-gnu`, le sous-système GUI et traite les avertissements comme erreurs.
 
 ## Validation non disponible dans un environnement sans Docker
 

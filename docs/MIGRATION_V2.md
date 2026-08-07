@@ -1,4 +1,4 @@
-# Migration de 1.5 vers 2.0
+# Migration de 1.5 ou 2.0 vers 2.3
 
 ## Garanties
 
@@ -9,6 +9,8 @@ La migration est déclenchée au démarrage et peut être rejouée. Elle ne supp
 3. création du « Projet par défaut » ;
 4. rattachement des acquisitions sans projet à ce projet ;
 5. activation de la contrainte `NOT NULL` sur `acquisitions.project_id`.
+6. création idempotente de `project_github_settings` et `project_geodata_settings`, puis ajout d'une ligne par projet existant ;
+7. synchronisation géographique automatique désactivée par défaut, avec `cod-ab-global`, GeoJSON, portée monde et intervalle hebdomadaire.
 
 Les anciens fichiers restent à leur emplacement `data/raw/<source>`. Leur colonne `raw_path` n'est pas réécrite. Les nouvelles acquisitions utilisent `data/raw/<project_uuid>/<source>`.
 

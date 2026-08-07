@@ -4,12 +4,12 @@ setlocal EnableExtensions DisableDelayedExpansion
 for /f "usebackq delims=" %%D in (`powershell.exe -NoProfile -Command "[Environment]::GetFolderPath('Desktop')"`) do set "HDP_DESKTOP=%%D"
 for /f "usebackq delims=" %%T in (`powershell.exe -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"`) do set "HDP_STAMP=%%T"
 
-set "HDP_LOG=%HDP_DESKTOP%\HDP_Debug_v2.0_%HDP_STAMP%.log"
+set "HDP_LOG=%HDP_DESKTOP%\HDP_Debug_v2.3_%HDP_STAMP%.log"
 set "HDP_APP=%USERPROFILE%\HumanitarianDataPlatform"
 set "HDP_INSTALLER_LOGS=%LOCALAPPDATA%\HumanitarianDataPlatform\logs"
 set "HDP_RUN_CWD=%CD%"
 
-call :log "Humanitarian Data Platform 2.0 - diagnostic borne"
+call :log "Humanitarian Data Platform 2.3 - diagnostic borne"
 call :log "Date locale : %date% %time%"
 call :log "Utilisateur : %USERNAME%"
 call :log "Ordinateur : %COMPUTERNAME%"
@@ -116,7 +116,7 @@ if exist "%HDP_APP%\compose.yaml" (
   call :run_bounded
 
   >>"%HDP_LOG%" echo.
-  >>"%HDP_LOG%" echo [Dossiers de donnees HDP 2.0]
+  >>"%HDP_LOG%" echo [Dossiers de donnees HDP 2.3]
   if exist "%HDP_APP%\data\raw" dir /s "%HDP_APP%\data\raw" >>"%HDP_LOG%" 2>&1
   if exist "%HDP_APP%\data\projects" dir /s "%HDP_APP%\data\projects" >>"%HDP_LOG%" 2>&1
 ) else (

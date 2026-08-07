@@ -1,12 +1,15 @@
-Humanitarian Data Platform — installateur Windows natif 2.0.0
+Humanitarian Data Platform — installateur Windows natif 2.3.0
 ================================================================
 
 Fichier principal
 -----------------
-HumanitarianDataPlatform_Setup_Native_GUI_v2.0.exe
+HumanitarianDataPlatform_Setup_Native_GUI_v2.3.exe
 
-Nouveautés 2.0
+Nouveautés 2.3
 --------------
+- création confirmée d'un dépôt GitHub privé ou public par projet ;
+- profil HDX COD-AB avec synchronisation géographique manuelle ou automatique ;
+- amplitude d'échelle maximale terrain, local, national, régional ou monde ;
 - projets séparant ressources, préférences, scripts et planifications ;
 - téléchargement automatique optionnel des ressources HDX/CKAN et des fichiers
   ReliefWeb présents dans les métadonnées ;
@@ -18,7 +21,7 @@ Installation ou mise à niveau
 -----------------------------
 1. Laissez Docker Desktop ouvert et opérationnel.
 2. Vérifiez l'empreinte SHA-256 de l'installateur.
-3. Lancez HumanitarianDataPlatform_Setup_Native_GUI_v2.0.exe.
+3. Lancez HumanitarianDataPlatform_Setup_Native_GUI_v2.3.exe.
 4. Conservez le dossier proposé pour mettre à niveau une installation 1.5.
 
 Le volume PostgreSQL, le fichier .env, les réponses brutes et les ressources
@@ -48,20 +51,28 @@ ReliefWeb exige un appname pré-approuvé. Vous pouvez le saisir dans
 l'installateur. Sans cette valeur, HDX reste utilisable et l'application affiche
 une instruction explicite pour activer ReliefWeb.
 
+GitHub et géodonnées HDX
+------------------------
+Le jeton GitHub facultatif est masqué dans l'installeur et conservé dans .env.
+Il n'est ni journalisé, ni enregistré dans les paramètres de projet. La création
+d'un dépôt nécessite une confirmation. Le profil COD-AB archive la métadonnée
+HDX et télécharge le format géographique choisi. L'échelle terrain-vers-monde
+est une classification d'usage HDP et ne transforme pas la géométrie source.
+
 Scripts et planifications
 -------------------------
-Les scripts peuvent être créés et modifiés dans chaque projet, mais HDP 2.0 ne
+Les scripts peuvent être créés et modifiés dans chaque projet, mais HDP 2.3 ne
 les exécute pas. Une planification peut seulement relancer une acquisition et,
 si demandé, télécharger les ressources correspondantes. L'intervalle minimal
 est de 15 minutes.
 
 Diagnostic
 ----------
-En cas d'échec, lancez HDP_Diagnostic_v2.0.cmd puis joignez le fichier
-HDP_Debug_v2.0_*.log créé sur le Bureau. Le diagnostic n'affiche pas le secret
-PostgreSQL ni l'appname ReliefWeb.
+En cas d'échec, lancez HDP_Diagnostic_v2.3.cmd puis joignez le fichier
+HDP_Debug_v2.3_*.log créé sur le Bureau. Le diagnostic n'affiche pas le secret
+PostgreSQL, l'appname ReliefWeb ni le jeton GitHub.
 
 Limites
 -------
-HDP 2.0 reste une application locale et ne doit pas être exposée directement
+HDP 2.3 reste une application locale et ne doit pas être exposée directement
 sur Internet. L'installateur n'est pas signé par un certificat d'éditeur.

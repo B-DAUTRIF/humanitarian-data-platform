@@ -12,14 +12,14 @@ L'installateur peut proposer Docker Desktop, Git et Visual Studio Code via `wing
 
 ## Installation
 
-1. Décompressez `HumanitarianDataPlatform_Windows_v2.0.zip`.
+1. Décompressez `HumanitarianDataPlatform_Windows_v2.3.zip`.
 2. Vérifiez l'empreinte de l'exécutable :
 
    ```powershell
-   Get-FileHash .\HumanitarianDataPlatform_Setup_Native_GUI_v2.0.exe -Algorithm SHA256
+   Get-FileHash .\HumanitarianDataPlatform_Setup_Native_GUI_v2.3.exe -Algorithm SHA256
    ```
 
-3. Comparez le résultat au contenu de `HumanitarianDataPlatform_Setup_Native_GUI_v2.0.exe.sha256`.
+3. Comparez le résultat au contenu de `HumanitarianDataPlatform_Setup_Native_GUI_v2.3.exe.sha256`.
 4. Lancez l'exécutable et vérifiez le dossier proposé :
 
    ```text
@@ -27,15 +27,16 @@ L'installateur peut proposer Docker Desktop, Git et Visual Studio Code via `wing
    ```
 
 5. Saisissez un appname ReliefWeb uniquement s'il a été pré-approuvé.
-6. Sélectionnez explicitement les composants voulus, puis installez.
+6. Facultatif : saisissez un jeton GitHub autorisé à créer les dépôts souhaités. Le champ est masqué.
+7. Sélectionnez explicitement les composants voulus, puis installez.
 
 L'installateur choisit `8080` si possible, sinon un port libre entre `18080` et `18279`. La valeur est enregistrée dans `.env` et utilisée par Compose, les scripts et le navigateur.
 
 ## Mise à niveau depuis 1.5
 
-Relancez l'installateur 2.0 en conservant le même dossier. Il remplace les fichiers applicatifs embarqués mais préserve :
+Relancez l'installateur 2.3 en conservant le même dossier. Il remplace les fichiers applicatifs embarqués mais préserve :
 
-- `.env`, donc le mot de passe PostgreSQL, l'appname ReliefWeb et le port ;
+- `.env`, donc le mot de passe PostgreSQL, l'appname ReliefWeb, le jeton GitHub et le port ;
 - le volume nommé `postgres_data` ;
 - le dossier `data`, y compris les réponses brutes ;
 - les images Docker déjà téléchargées.

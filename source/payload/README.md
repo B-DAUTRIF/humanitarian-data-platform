@@ -1,4 +1,4 @@
-# Humanitarian Data Platform 2.0.0
+# Humanitarian Data Platform 2.3.0
 
 Application locale pour organiser des acquisitions humanitaires par projets.
 
@@ -7,6 +7,8 @@ Application locale pour organiser des acquisitions humanitaires par projets.
 1. Lancez Docker Desktop.
 2. Double-cliquez sur `start-hdp.cmd`.
 3. L'interface s'ouvre sur le port `HDP_PORT` enregistré dans `.env`.
+
+Le fichier `.env` peut aussi définir `GITHUB_TOKEN` pour permettre la création confirmée d'un dépôt depuis les paramètres d'un projet. Ce secret n'est jamais exposé par l'API.
 
 Le service est lié exclusivement à `127.0.0.1`. PostgreSQL/PostGIS n'est pas exposé sur Windows.
 
@@ -33,4 +35,4 @@ Exécutez `stop-hdp.cmd`. Les volumes et fichiers locaux restent intacts.
 
 ## Limite de sécurité
 
-HDP 2.0 est une application locale, non un serveur Internet durci. Les scripts sont gérés comme contenu uniquement : aucune route ne les exécute.
+HDP 2.3 est une application locale, non un serveur Internet durci. Les scripts sont gérés comme contenu uniquement : aucune route ne les exécute. Le profil géographique HDX COD-AB conserve la couverture réellement publiée par la source ; l'échelle maximale est une classification d'usage HDP.

@@ -1,0 +1,197 @@
+PROMPT AUTONOME DE REPRISE — HUMANITARIAN DATA PLATFORM 2.3.0
+================================================================
+
+Tu reprends la maintenance de Humanitarian Data Platform (HDP), application
+locale Windows 10/11 x64. Travaille à partir du dépôt GitHub privé
+B-DAUTRIF/humanitarian-data-platform. Lis d'abord README.md, docs/, git status,
+le dernier commit et le code réel. Préserve toujours les changements présents.
+
+OBJECTIF PRODUIT
+----------------
+HDP recherche des données humanitaires publiques dans ReliefWeb et HDX/CKAN,
+archive chaque réponse brute avec une provenance SHA-256 et peut télécharger les
+ressources référencées. Tout est organisé par projet : acquisitions, ressources
+locales, préférences, scripts, planifications, paramètres GitHub et profil
+géographique HDX.
+
+ARCHITECTURE
+------------
+- installateur natif C/Win32, sous-système GUI, Windows x64 ;
+- payload embarqué sous forme de tableau C généré par Node.js ;
+- FastAPI/Python 3.12 et Uvicorn dans Docker Compose ;
+- PostgreSQL 16 + PostGIS 3.4 dans un volume nommé, sans port Windows ;
+- httpx pour ReliefWeb, HDX, GitHub et les téléchargements en flux ;
+- interface HTML/CSS/JavaScript autonome servie par FastAPI ;
+- R/plumber facultatif via le profil Compose analytics ;
+- API publiée seulement sur 127.0.0.1:${HDP_PORT}.
+
+EMPLACEMENTS WINDOWS
+--------------------
+Application : %USERPROFILE%\HumanitarianDataPlatform
+Configuration : %USERPROFILE%\HumanitarianDataPlatform\.env
+JSON bruts : %USERPROFILE%\HumanitarianDataPlatform\data\raw
+Ressources : %USERPROFILE%\HumanitarianDataPlatform\data\projects
+Logs installateur : %LOCALAPPDATA%\HumanitarianDataPlatform\logs
+Diagnostic : Bureau\HDP_Debug_v2.3_*.log
+
+FONCTIONNALITÉS 2.3
+-------------------
+1. Projets et préférences
+   - création, sélection, modification API et archivage logique ;
+   - Projet par défaut protégé : 00000000-0000-4000-8000-000000000001 ;
+   - acquisitions 1.5 sans projet migrées vers le Projet par défaut ;
+   - téléchargement automatique, taille 1 Mio à 2 Gio, 1 à 100 ressources et
+     liste facultative de formats autorisés.
+
+2. Acquisition et données locales
+   - ReliefWeb V2 avec RELIEFWEB_APPNAME pré-approuvé ;
+   - HDX via les actions CKAN package_search et package_show ;
+   - JSON UTF-8 déterministe, UUID, date UTC et SHA-256 ;
+   - HTTP(S) uniquement, URL sans identifiants, résolution DNS et refus des IP
+     non globales à chaque redirection ;
+   - noms neutralisés, chemins confinés, six redirections au maximum ;
+   - contrôle de taille, écriture .part, SHA-256 progressif et renommage ;
+   - téléchargement, vérification d'intégrité et suppression locale avec trace.
+
+3. Scripts et planifications
+   - scripts python/r/sql/shell/other stockés et éditables, jamais exécutés ;
+   - planifications ReliefWeb ou HDX de 15 minutes à 30 jours ;
+   - boucle toutes les 20 secondes dans l'unique processus Uvicorn ;
+   - revendication FOR UPDATE SKIP LOCKED, échéance avancée avant l'appel ;
+   - historique schedule_runs et exécution immédiate depuis l'interface.
+
+4. Dépôt GitHub par projet
+   - table project_github_settings : owner, repository_name, description,
+     visibility, repository_url, repository_full_name, dates ;
+   - aucun jeton dans cette table ni dans une réponse API ;
+   - GITHUB_TOKEN global lu depuis .env et transmis à l'API par Compose ;
+   - installateur : champ ES_PASSWORD facultatif ; une valeur vide conserve le
+     jeton existant ; le journal et le diagnostic ne l'affichent jamais ;
+   - GET/PUT /api/projects/{id}/github ;
+   - POST /api/projects/{id}/github/repository après confirmation côté UI ;
+   - GET https://api.github.com/user, puis POST /user/repos si owner vide ou
+     identique au login, sinon POST /orgs/{owner}/repos ;
+   - dépôt privé par défaut, auto_init=true, issues activées ;
+   - HDP ne pousse ni données, ni fichiers, ni scripts vers le dépôt créé ;
+   - HDP ne supprime jamais un dépôt distant.
+
+5. Profil géographique HDX COD-AB
+   - table project_geodata_settings avec auto_download, dataset_id,
+     preferred_format, max_scale, refresh_interval_minutes, next_sync_at,
+     dernier statut/erreur/acquisition et dates ;
+   - défaut : cod-ab-global, GeoJSON, world, 10 080 minutes, automatique faux ;
+   - formats : geojson, geopackage, shapefile, geodatabase ;
+   - GET/PUT /api/projects/{id}/geodata ;
+   - POST /api/projects/{id}/geodata/sync ;
+   - GET /api/geographic-scales ;
+   - package_show archive la réponse complète avec hdp_geographic_profile sous
+     la source hdx-geodata ;
+   - sélection par format, nom et extension, puis pipeline sécurisé commun ;
+   - synchronisation auto persistante, échéance avancée avant l'appel ;
+   - statut no_matching_resource si le format choisi n'existe pas.
+
+6. Amplitude d'échelle
+   - terrain (rang 1) : site, camp, quartier ;
+   - local (rang 2) : commune, district, détail administratif ;
+   - national (rang 3) : pays et principaux niveaux ;
+   - regional (rang 4) : ensemble de pays ;
+   - world (rang 5) : couverture mondiale maximale.
+   IMPORTANT : cette classification est une métadonnée opérationnelle HDP, pas
+   une norme officielle HDX. Elle n'altère, ne généralise, ne reprojette et
+   n'étend pas les géométries publiées par HDX.
+
+SCHÉMA POSTGRESQL
+-----------------
+projects, project_preferences, project_github_settings,
+project_geodata_settings, project_scripts, schedules, acquisitions,
+local_resources et schedule_runs. La migration est idempotente, crée les deux
+tables 2.3 et une ligne pour chaque projet. L'archivage désactive planifications
+et synchronisation géographique sans supprimer les fichiers.
+
+ROUTES PRINCIPALES
+------------------
+GET /api/health
+GET/POST /api/projects
+PATCH/DELETE /api/projects/{id}
+GET/PUT /api/projects/{id}/preferences
+GET/PUT /api/projects/{id}/github
+POST /api/projects/{id}/github/repository
+GET/PUT /api/projects/{id}/geodata
+POST /api/projects/{id}/geodata/sync
+GET /api/geographic-scales
+GET /api/search?project_id=...&source=...&query=...&limit=...
+GET /api/acquisitions?project_id=...
+GET /api/resources?project_id=...
+GET /api/resources/{id}/file
+POST /api/resources/{id}/verify
+DELETE /api/resources/{id}
+GET/POST /api/projects/{id}/scripts
+PATCH/DELETE /api/scripts/{id}
+GET/POST /api/projects/{id}/schedules
+PATCH/DELETE /api/schedules/{id}
+POST /api/schedules/{id}/run
+GET /api/schedules/{id}/runs
+GET /docs et /openapi.json
+
+ARBORESCENCE
+------------
+source/payload/api/app/main.py                 API, migrations, intégrations
+source/payload/api/app/project_integrations.py validation GitHub/HDX
+source/payload/api/app/security.py             URL, chemins, noms, empreintes
+source/payload/api/app/scheduler_utils.py      intervalles
+source/payload/api/static/index.html           interface web
+source/payload/compose.yaml                    services et GITHUB_TOKEN
+source/src/installer.c                         installateur Win32
+source/src/payload_generated.h                 payload généré
+source/tests/                                  14 tests et roundtrip C
+docs/                                          documentation GitHub
+dist/v2.3/                                     livrables actuels
+dist/v2.0/ et dist/v1.5/                       livrables historiques intacts
+tools/generate_notice_v23.py                   notice PDF
+
+VALIDATIONS DE LA REMISE 2.3
+----------------------------
+- compilation Python des modules ;
+- 14 tests unitaires ;
+- syntaxe JavaScript contrôlée par Node.js ;
+- YAML Compose analysé ;
+- payload régénéré et 15 fichiers reconstruits à l'identique ;
+- installateur compilé en PE32+ GUI x86-64 avec Zig ;
+- trois archives ZIP testées ;
+- empreintes SHA-256 recalculées ;
+- notice PDF A4 de 22 pages rendue en PNG et inspectée.
+
+Le moteur Docker n'était pas installé dans l'environnement Linux de
+construction. Ne prétends donc pas que la migration PostgreSQL/PostGIS, la
+création GitHub réelle ou le parcours navigateur Windows complet ont été testés
+pour cette remise. Ils restent à la recette Windows avec Docker Desktop.
+
+CONTRAINTES DE SÉCURITÉ ET DE MAINTENANCE
+----------------------------------------
+- préserver .env, data/ et le volume PostgreSQL pendant les mises à niveau ;
+- ne jamais lancer de suppression de volume sans consentement clair ;
+- ne jamais exposer le service au réseau par défaut ;
+- ne jamais journaliser POSTGRES_PASSWORD, RELIEFWEB_APPNAME ou GITHUB_TOKEN ;
+- utiliser un jeton GitHub à droits minimaux, dépôt privé par défaut ;
+- conserver la confirmation avant tout effet GitHub ;
+- ne jamais présenter l'échelle HDP comme une norme officielle HDX ;
+- respecter les licences, quotas et disponibilités des sources ;
+- ne pas ajouter de licence HDP implicitement ; garder le dépôt privé ;
+- après chaque changement du payload, régénérer payload_generated.h, refaire
+  le roundtrip, reconstruire l'EXE puis toutes les archives et empreintes ;
+- distinguer compilation, test unitaire, test Docker et recette Windows.
+
+SOURCES OFFICIELLES À RECONSULTER
+---------------------------------
+GitHub REST Repositories :
+https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28
+HDX COD-AB global : https://data.humdata.org/dataset/cod-ab-global
+CKAN Action API : https://docs.ckan.org/en/latest/api/
+ReliefWeb API : https://apidoc.reliefweb.int/
+
+PREMIÈRE ACTION RECOMMANDÉE
+--------------------------
+Lire git status, le dernier commit, README.md, docs/ARCHITECTURE.md,
+docs/SECURITY.md et docs/DEVELOPMENT.md. Définir le périmètre exact,
+implémenter, tester, reconstruire les livrables touchés et rédiger un rapport
+factuel sans surévaluer les validations disponibles.

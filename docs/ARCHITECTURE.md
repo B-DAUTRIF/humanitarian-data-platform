@@ -4,11 +4,12 @@
 
 ```mermaid
 flowchart TD
-    U["Interface web locale"] --> A["FastAPI 2.0"]
+    U["Interface web locale"] --> A["FastAPI 2.3"]
     A --> P["PostgreSQL + PostGIS"]
     A --> F["JSON et ressources locales"]
     A --> X["ReliefWeb et HDX/CKAN"]
     A --> S["Planificateur persistant"]
+    A --> G["API GitHub"]
     A -. facultatif .-> R["R / plumber"]
 ```
 
@@ -20,6 +21,8 @@ Docker Compose orchestre l'API, PostgreSQL/PostGIS et le service R facultatif. S
 |---|---|---|
 | `projects` | Conteneur fonctionnel | Archivage logique ; le projet par défaut est protégé |
 | `project_preferences` | Limites et téléchargement automatique par défaut | Suit le projet |
+| `project_github_settings` | Propriétaire, dépôt, description, visibilité et URL créée ; aucun jeton | Suit le projet |
+| `project_geodata_settings` | Profil HDX, format, échelle maximale et cycle de synchronisation | Automatisation désactivée à l'archivage |
 | `acquisitions` | Provenance de chaque réponse distante | Conservée |
 | `local_resources` | URL, état, chemin, taille et empreinte d'un fichier | Fichier supprimé, ligne marquée `deleted` |
 | `project_scripts` | Contenu de scripts par projet | Archivage logique ; aucune exécution |
@@ -27,6 +30,12 @@ Docker Compose orchestre l'API, PostgreSQL/PostGIS et le service R facultatif. S
 | `schedule_runs` | Historique des passages | Conservé avec statut et erreur éventuelle |
 
 Le projet par défaut utilise l'UUID stable `00000000-0000-4000-8000-000000000001`. Le démarrage crée les nouvelles tables de façon idempotente, ajoute `project_id` et `schedule_id` à l'historique v1.5, puis rattache les lignes sans projet.
+
+## Intégrations de projet 2.3
+
+La création GitHub utilise `POST /user/repos` lorsque le propriétaire est vide ou correspond au compte du jeton, sinon `POST /orgs/{org}/repos`. Le dépôt est privé par défaut et initialisé avec un README. `GITHUB_TOKEN` demeure une variable d'environnement globale ; il ne transite jamais dans les modèles de réponse.
+
+Le profil géographique appelle l'action CKAN `package_show` de HDX. Il archive la métadonnée complète sous la source `hdx-geodata`, sélectionne les ressources selon les alias du format et réutilise le pipeline sécurisé de téléchargement. La portée `terrain → monde` est une métadonnée HDP ordonnée, pas une transformation cartographique ni une propriété normative de HDX.
 
 ## Flux d'acquisition et de téléchargement
 
@@ -47,7 +56,7 @@ data/projects/<project_uuid>/resources/<acquisition_uuid>/<resource_uuid>_<nom>
 
 ## Planificateur
 
-Le planificateur est une tâche de fond de l'unique processus Uvicorn. Il interroge PostgreSQL toutes les 20 secondes. Une ligne due est revendiquée dans une transaction avec `FOR UPDATE SKIP LOCKED`; son prochain passage est avancé avant l'appel distant. Le résultat et l'erreur éventuelle sont écrits dans `schedule_runs`.
+Le planificateur est une tâche de fond de l'unique processus Uvicorn. Il interroge PostgreSQL toutes les 20 secondes. Une planification ou synchronisation géographique due est revendiquée dans une transaction avec `FOR UPDATE SKIP LOCKED`; son prochain passage est avancé avant l'appel distant. Le résultat et l'erreur éventuelle sont persistés.
 
 L'intervalle est compris entre 15 minutes et 30 jours. Une erreur de base temporaire ne termine pas définitivement la boucle. L'architecture suppose un seul processus API ; déployer plusieurs workers nécessiterait un service de tâches dédié.
 
@@ -59,6 +68,11 @@ L'intervalle est compris entre 15 minutes et 30 jours. Une erreur de base tempor
 | `GET/POST /api/projects` | Liste et création des projets |
 | `PATCH/DELETE /api/projects/{id}` | Modification ou archivage logique |
 | `GET/PUT /api/projects/{id}/preferences` | Préférences de téléchargement |
+| `GET/PUT /api/projects/{id}/github` | Paramètres GitHub sans secret |
+| `POST /api/projects/{id}/github/repository` | Création confirmée du dépôt |
+| `GET/PUT /api/projects/{id}/geodata` | Profil géographique et état de synchronisation |
+| `POST /api/projects/{id}/geodata/sync` | Synchronisation HDX immédiate |
+| `GET /api/geographic-scales` | Catalogue ordonné terrain à monde |
 | `GET /api/search` | Acquisition manuelle et téléchargement optionnel |
 | `GET /api/acquisitions?project_id=...` | Historique du projet |
 | `GET /api/resources?project_id=...` | Inventaire local |
@@ -82,4 +96,6 @@ Le profil `analytics` fournit toujours R/plumber avec `/health` et `/summary`. I
 ## Références des sources distantes
 
 - [CKAN Action API](https://docs.ckan.org/en/latest/api/) : actions `package_search`, réponses `success/result` et métadonnées de ressources ;
+- [HDX COD-AB global](https://data.humdata.org/dataset/cod-ab-global) : limites administratives communes mondiales ;
+- [GitHub REST — repositories](https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28) : création pour un utilisateur ou une organisation ;
 - [ReliefWeb API V2](https://apidoc.reliefweb.int/) et [paramètres](https://apidoc.reliefweb.int/parameters) : appname, profils, requêtes, limites et quotas.

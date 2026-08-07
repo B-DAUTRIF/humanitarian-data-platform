@@ -20,6 +20,14 @@ from fastapi.responses import FileResponse
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
+from .project_integrations import (
+    GEO_SCALES,
+    github_repository_endpoint,
+    select_geodata_resources,
+    validate_github_owner,
+    validate_hdx_dataset_id,
+    validate_repository_name,
+)
 from .scheduler_utils import MIN_INTERVAL_MINUTES, next_run_at, validate_interval
 from .security import (
     confined_path,
@@ -32,11 +40,12 @@ from .security import (
 
 
 APP_NAME = "Humanitarian Data Platform"
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.3.0"
 DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
 DATABASE_URL = os.environ["DATABASE_URL"]
 R_SERVICE_URL = os.getenv("R_SERVICE_URL", "http://r-service:8001")
 RELIEFWEB_APPNAME = os.getenv("RELIEFWEB_APPNAME", "").strip()
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 DEFAULT_PROJECT_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
 DEFAULT_PREFERENCES: dict[str, Any] = {
@@ -46,6 +55,7 @@ DEFAULT_PREFERENCES: dict[str, Any] = {
     "allowed_formats": [],
 }
 SCHEDULER_POLL_SECONDS = 20
+DEFAULT_GEODATA_INTERVAL_MINUTES = 10_080
 
 app = FastAPI(
     title=APP_NAME,
@@ -70,6 +80,23 @@ class PreferencesUpdate(BaseModel):
     max_download_bytes: int = Field(default=104_857_600, ge=1_048_576, le=2_147_483_648)
     max_resources_per_acquisition: int = Field(default=20, ge=1, le=100)
     allowed_formats: list[str] = Field(default_factory=list, max_length=50)
+
+
+class GitHubSettingsUpdate(BaseModel):
+    owner: str = Field(default="", max_length=39)
+    repository_name: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=1000)
+    visibility: str = Field(default="private", pattern="^(private|public)$")
+
+
+class GeodataSettingsUpdate(BaseModel):
+    auto_download: bool = False
+    dataset_id: str = Field(default="cod-ab-global", min_length=2, max_length=100)
+    preferred_format: str = Field(
+        default="geojson", pattern="^(geojson|geopackage|shapefile|geodatabase)$"
+    )
+    max_scale: str = Field(default="world", pattern="^(terrain|local|national|regional|world)$")
+    refresh_interval_minutes: int = Field(default=10_080, ge=60, le=43_200)
 
 
 class ScriptCreate(BaseModel):
@@ -165,6 +192,55 @@ def initialize_database() -> None:
                     VALUES (%s, %s, %s) ON CONFLICT (project_id) DO NOTHING
                     """,
                     (DEFAULT_PROJECT_ID, Jsonb(DEFAULT_PREFERENCES), now),
+                )
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS project_github_settings (
+                        project_id UUID PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+                        owner TEXT NOT NULL DEFAULT '',
+                        repository_name TEXT NOT NULL DEFAULT '',
+                        description TEXT NOT NULL DEFAULT '',
+                        visibility TEXT NOT NULL DEFAULT 'private',
+                        repository_url TEXT,
+                        repository_full_name TEXT,
+                        created_at TIMESTAMPTZ,
+                        updated_at TIMESTAMPTZ NOT NULL
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    INSERT INTO project_github_settings (project_id, updated_at)
+                    SELECT id, %s FROM projects
+                    ON CONFLICT (project_id) DO NOTHING
+                    """,
+                    (now,),
+                )
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS project_geodata_settings (
+                        project_id UUID PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+                        auto_download BOOLEAN NOT NULL DEFAULT FALSE,
+                        dataset_id TEXT NOT NULL DEFAULT 'cod-ab-global',
+                        preferred_format TEXT NOT NULL DEFAULT 'geojson',
+                        max_scale TEXT NOT NULL DEFAULT 'world',
+                        refresh_interval_minutes INTEGER NOT NULL DEFAULT 10080,
+                        next_sync_at TIMESTAMPTZ NOT NULL,
+                        last_sync_at TIMESTAMPTZ,
+                        last_status TEXT,
+                        last_error TEXT,
+                        last_acquisition_id UUID,
+                        updated_at TIMESTAMPTZ NOT NULL
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    INSERT INTO project_geodata_settings (project_id, next_sync_at, updated_at)
+                    SELECT id, %s, %s FROM projects
+                    ON CONFLICT (project_id) DO NOTHING
+                    """,
+                    (next_run_at(now, DEFAULT_GEODATA_INTERVAL_MINUTES), now),
                 )
                 connection.execute(
                     """
@@ -314,6 +390,86 @@ def get_preferences(project_id: uuid.UUID) -> dict[str, Any]:
     return {**DEFAULT_PREFERENCES, **stored}
 
 
+def get_github_settings(project_id: uuid.UUID) -> dict[str, Any]:
+    with database_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT owner, repository_name, description, visibility, repository_url,
+                   repository_full_name, created_at, updated_at
+            FROM project_github_settings WHERE project_id = %s
+            """,
+            (project_id,),
+        ).fetchone()
+    if not row:
+        return {
+            "owner": "",
+            "repository_name": "",
+            "description": "",
+            "visibility": "private",
+            "repository_url": None,
+            "repository_full_name": None,
+            "created_at": None,
+            "updated_at": None,
+            "token_configured": bool(GITHUB_TOKEN),
+        }
+    return {
+        "owner": row[0],
+        "repository_name": row[1],
+        "description": row[2],
+        "visibility": row[3],
+        "repository_url": row[4],
+        "repository_full_name": row[5],
+        "created_at": row[6],
+        "updated_at": row[7],
+        "token_configured": bool(GITHUB_TOKEN),
+    }
+
+
+def get_geodata_settings(project_id: uuid.UUID) -> dict[str, Any]:
+    with database_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT auto_download, dataset_id, preferred_format, max_scale,
+                   refresh_interval_minutes, next_sync_at, last_sync_at, last_status,
+                   last_error, last_acquisition_id, updated_at
+            FROM project_geodata_settings WHERE project_id = %s
+            """,
+            (project_id,),
+        ).fetchone()
+    if not row:
+        now = datetime.now(UTC)
+        return {
+            "auto_download": False,
+            "dataset_id": "cod-ab-global",
+            "preferred_format": "geojson",
+            "max_scale": "world",
+            "refresh_interval_minutes": DEFAULT_GEODATA_INTERVAL_MINUTES,
+            "next_sync_at": next_run_at(now, DEFAULT_GEODATA_INTERVAL_MINUTES),
+            "last_sync_at": None,
+            "last_status": None,
+            "last_error": None,
+            "last_acquisition_id": None,
+            "updated_at": now,
+        }
+    keys = [
+        "auto_download",
+        "dataset_id",
+        "preferred_format",
+        "max_scale",
+        "refresh_interval_minutes",
+        "next_sync_at",
+        "last_sync_at",
+        "last_status",
+        "last_error",
+        "last_acquisition_id",
+        "updated_at",
+    ]
+    values = list(row)
+    if values[9]:
+        values[9] = str(values[9])
+    return dict(zip(keys, values))
+
+
 def persist_raw(
     project_id: uuid.UUID,
     source: str,
@@ -451,6 +607,21 @@ async def search_hdx(query: str, limit: int) -> tuple[dict[str, Any], list[dict[
             }
         )
     return payload, items
+
+
+async def fetch_hdx_dataset(dataset_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    params = {"id": validate_hdx_dataset_id(dataset_id)}
+    async with httpx.AsyncClient(timeout=40, follow_redirects=True) as client:
+        response = await client.get(
+            "https://data.humdata.org/api/3/action/package_show", params=params
+        )
+        response.raise_for_status()
+        payload = response.json()
+    if not payload.get("success") or not isinstance(payload.get("result"), dict):
+        raise httpx.HTTPStatusError(
+            "Réponse CKAN signalée en échec", request=response.request, response=response
+        )
+    return payload, payload["result"]
 
 
 def format_allowed(resource_format: str | None, allowed: list[str]) -> bool:
@@ -669,6 +840,102 @@ async def execute_acquisition(
     )
 
 
+def finish_geodata_sync(
+    project_id: uuid.UUID,
+    status: str,
+    acquisition_id: uuid.UUID | None = None,
+    error: str | None = None,
+) -> None:
+    now = datetime.now(UTC)
+    with database_connection() as connection:
+        connection.execute(
+            """
+            UPDATE project_geodata_settings
+            SET last_sync_at = %s, last_status = %s, last_error = %s,
+                last_acquisition_id = %s, updated_at = %s
+            WHERE project_id = %s
+            """,
+            (now, status, error, acquisition_id, now, project_id),
+        )
+
+
+async def execute_geodata_sync(
+    project_id: uuid.UUID, settings: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    ensure_project(project_id)
+    profile = settings or get_geodata_settings(project_id)
+    dataset_id = validate_hdx_dataset_id(str(profile["dataset_id"]))
+    preferred_format = str(profile["preferred_format"])
+    max_scale = str(profile["max_scale"])
+    try:
+        hdx_payload, dataset = await fetch_hdx_dataset(dataset_id)
+    except httpx.HTTPError as exc:
+        finish_geodata_sync(project_id, "failed", error=f"Source HDX indisponible: {exc}"[:2000])
+        raise HTTPException(status_code=502, detail=f"Source HDX indisponible: {exc}") from exc
+
+    selected = select_geodata_resources(dataset.get("resources", []), preferred_format)
+    item = {
+        "id": dataset.get("name") or dataset_id,
+        "title": dataset.get("title") or dataset_id,
+        "date": dataset.get("metadata_modified"),
+        "url": f"https://data.humdata.org/dataset/{dataset.get('name') or dataset_id}",
+        "source": "HDX/CKAN — COD-AB",
+        "resources": selected,
+    }
+    archived_payload = {
+        "hdx": hdx_payload,
+        "hdp_geographic_profile": {
+            "profile": "HDX COD-AB",
+            "dataset_id": dataset_id,
+            "preferred_format": preferred_format,
+            "maximum_scale": max_scale,
+            "scale_semantics": "Classification opérationnelle HDP, de terrain à monde",
+        },
+    }
+    provenance = persist_raw(
+        project_id,
+        "hdx-geodata",
+        f"{dataset_id}@{max_scale}",
+        archived_payload,
+        1,
+        None,
+    )
+    acquisition_id = uuid.UUID(provenance["acquisition_id"])
+    downloads = {"queued": 0, "completed": 0, "skipped": 0, "failed": 0}
+    warning = None
+    if selected:
+        preferences = get_preferences(project_id)
+        # The profile already selected resources using format, name and URL aliases.
+        # Do not apply the stricter generic format-only filter a second time.
+        preferences["allowed_formats"] = []
+        downloads = await download_resources(
+            project_id, acquisition_id, "hdx-geodata", [item], preferences
+        )
+        if downloads["failed"]:
+            status = "partial" if downloads["completed"] or downloads["skipped"] else "failed"
+            warning = "Une ou plusieurs ressources géographiques n'ont pas pu être téléchargées."
+        else:
+            status = "completed"
+    else:
+        status = "no_matching_resource"
+        warning = f"Aucune ressource au format {preferred_format} n'est publiée dans ce jeu HDX."
+
+    finish_geodata_sync(project_id, status, acquisition_id, warning)
+    return {
+        "project_id": str(project_id),
+        "dataset_id": dataset_id,
+        "preferred_format": preferred_format,
+        "max_scale": max_scale,
+        "acquisition_id": str(acquisition_id),
+        "raw_path": provenance["raw_path"],
+        "sha256": provenance["sha256"],
+        "resource_count": len(selected),
+        "downloads": downloads,
+        "status": status,
+        "warning": warning,
+    }
+
+
 def claim_due_schedule() -> dict[str, Any] | None:
     now = datetime.now(UTC)
     with database_connection(autocommit=False) as connection:
@@ -747,12 +1014,59 @@ async def execute_claimed_schedule(schedule: dict[str, Any]) -> None:
         finish_schedule_run(schedule["id"], schedule["run_id"], "failed", error=str(exc)[:2000])
 
 
+def claim_due_geodata() -> dict[str, Any] | None:
+    now = datetime.now(UTC)
+    with database_connection(autocommit=False) as connection:
+        row = connection.execute(
+            """
+            SELECT g.project_id, g.dataset_id, g.preferred_format, g.max_scale,
+                   g.refresh_interval_minutes
+            FROM project_geodata_settings g
+            JOIN projects p ON p.id = g.project_id
+            WHERE g.auto_download = TRUE AND g.next_sync_at <= %s AND p.archived_at IS NULL
+            ORDER BY g.next_sync_at ASC FOR UPDATE OF g SKIP LOCKED LIMIT 1
+            """,
+            (now,),
+        ).fetchone()
+        if not row:
+            connection.commit()
+            return None
+        connection.execute(
+            """
+            UPDATE project_geodata_settings
+            SET next_sync_at = %s, last_status = 'running', last_error = NULL, updated_at = %s
+            WHERE project_id = %s
+            """,
+            (next_run_at(now, row[4]), now, row[0]),
+        )
+        connection.commit()
+    return {
+        "project_id": row[0],
+        "dataset_id": row[1],
+        "preferred_format": row[2],
+        "max_scale": row[3],
+        "refresh_interval_minutes": row[4],
+    }
+
+
+async def execute_claimed_geodata(settings: dict[str, Any]) -> None:
+    try:
+        await execute_geodata_sync(settings["project_id"], settings)
+    except Exception as exc:  # Keep the persistent scheduler alive and record the failure.
+        detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
+        finish_geodata_sync(settings["project_id"], "failed", error=str(detail)[:2000])
+
+
 async def scheduler_loop() -> None:
     while True:
         try:
             schedule = await asyncio.to_thread(claim_due_schedule)
             if schedule:
                 await execute_claimed_schedule(schedule)
+                continue
+            geodata = await asyncio.to_thread(claim_due_geodata)
+            if geodata:
+                await execute_claimed_geodata(geodata)
                 continue
         except asyncio.CancelledError:
             raise
@@ -785,6 +1099,11 @@ def sources() -> list[dict[str, str]]:
         {"id": "reliefweb", "name": "ReliefWeb", "access": "API avec appname pré-approuvé"},
         {"id": "hdx", "name": "HDX / CKAN", "access": "API publique"},
     ]
+
+
+@app.get("/api/geographic-scales")
+def geographic_scales() -> list[dict[str, Any]]:
+    return [dict(item) for item in GEO_SCALES]
 
 
 @app.get("/api/projects")
@@ -833,6 +1152,17 @@ def create_project(payload: ProjectCreate) -> dict[str, Any]:
             "INSERT INTO project_preferences (project_id, preferences, updated_at) VALUES (%s, %s, %s)",
             (project_id, Jsonb(DEFAULT_PREFERENCES), now),
         )
+        connection.execute(
+            "INSERT INTO project_github_settings (project_id, updated_at) VALUES (%s, %s)",
+            (project_id, now),
+        )
+        connection.execute(
+            """
+            INSERT INTO project_geodata_settings (project_id, next_sync_at, updated_at)
+            VALUES (%s, %s, %s)
+            """,
+            (project_id, next_run_at(now, DEFAULT_GEODATA_INTERVAL_MINUTES), now),
+        )
     return {"id": str(project_id), "name": payload.name.strip(), "description": payload.description.strip()}
 
 
@@ -870,6 +1200,10 @@ def archive_project(project_id: uuid.UUID) -> Response:
             "UPDATE schedules SET enabled = FALSE, archived_at = %s, updated_at = %s WHERE project_id = %s",
             (now, now, project_id),
         )
+        connection.execute(
+            "UPDATE project_geodata_settings SET auto_download = FALSE, updated_at = %s WHERE project_id = %s",
+            (now, project_id),
+        )
     return Response(status_code=204)
 
 
@@ -896,6 +1230,190 @@ def update_preferences(project_id: uuid.UUID, payload: PreferencesUpdate) -> dic
             (project_id, Jsonb(values), datetime.now(UTC)),
         )
     return values
+
+
+@app.get("/api/projects/{project_id}/github")
+def project_github(project_id: uuid.UUID) -> dict[str, Any]:
+    ensure_project(project_id)
+    return get_github_settings(project_id)
+
+
+@app.put("/api/projects/{project_id}/github")
+def update_project_github(
+    project_id: uuid.UUID, payload: GitHubSettingsUpdate
+) -> dict[str, Any]:
+    ensure_project(project_id)
+    try:
+        owner = validate_github_owner(payload.owner)
+        repository_name = validate_repository_name(payload.repository_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    now = datetime.now(UTC)
+    with database_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO project_github_settings
+                (project_id, owner, repository_name, description, visibility, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (project_id) DO UPDATE SET
+                owner = EXCLUDED.owner,
+                repository_name = EXCLUDED.repository_name,
+                description = EXCLUDED.description,
+                visibility = EXCLUDED.visibility,
+                updated_at = EXCLUDED.updated_at
+            """,
+            (
+                project_id,
+                owner,
+                repository_name,
+                payload.description.strip(),
+                payload.visibility,
+                now,
+            ),
+        )
+    return get_github_settings(project_id)
+
+
+def github_error_detail(response: httpx.Response) -> str:
+    try:
+        message = str(response.json().get("message") or "")
+    except (ValueError, AttributeError):
+        message = ""
+    return message[:500] or f"réponse HTTP {response.status_code}"
+
+
+@app.post("/api/projects/{project_id}/github/repository", status_code=201)
+async def create_github_repository(project_id: uuid.UUID) -> dict[str, Any]:
+    ensure_project(project_id)
+    if not GITHUB_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="Ajoutez GITHUB_TOKEN dans le fichier .env puis redémarrez l'application.",
+        )
+    settings = get_github_settings(project_id)
+    if settings.get("repository_url"):
+        raise HTTPException(status_code=409, detail="Un dépôt est déjà associé à ce projet.")
+    try:
+        repository_name = validate_repository_name(str(settings["repository_name"]))
+        owner = validate_github_owner(str(settings["owner"]))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": f"HDP/{APP_VERSION}",
+    }
+    async with httpx.AsyncClient(timeout=40, follow_redirects=False, headers=headers) as client:
+        user_response = await client.get("https://api.github.com/user")
+        if user_response.status_code >= 400:
+            raise HTTPException(
+                status_code=502,
+                detail=f"GitHub a refusé l'authentification : {github_error_detail(user_response)}",
+            )
+        authenticated_login = str(user_response.json().get("login") or "")
+        if not authenticated_login:
+            raise HTTPException(status_code=502, detail="GitHub n'a pas retourné d'identité utilisable.")
+        endpoint = github_repository_endpoint(owner, authenticated_login)
+        create_response = await client.post(
+            endpoint,
+            json={
+                "name": repository_name,
+                "description": str(settings["description"]),
+                "private": settings["visibility"] == "private",
+                "auto_init": True,
+                "has_issues": True,
+            },
+        )
+    if create_response.status_code >= 400:
+        status_code = 409 if create_response.status_code == 422 else 502
+        raise HTTPException(
+            status_code=status_code,
+            detail=f"Création du dépôt refusée par GitHub : {github_error_detail(create_response)}",
+        )
+    repository = create_response.json()
+    now = datetime.now(UTC)
+    with database_connection() as connection:
+        connection.execute(
+            """
+            UPDATE project_github_settings
+            SET owner = %s, repository_url = %s, repository_full_name = %s,
+                created_at = %s, updated_at = %s
+            WHERE project_id = %s
+            """,
+            (
+                str(repository.get("owner", {}).get("login") or owner or authenticated_login),
+                str(repository.get("html_url") or ""),
+                str(repository.get("full_name") or ""),
+                now,
+                now,
+                project_id,
+            ),
+        )
+    return {
+        **get_github_settings(project_id),
+        "message": "Dépôt créé et initialisé avec un README GitHub.",
+    }
+
+
+@app.get("/api/projects/{project_id}/geodata")
+def project_geodata(project_id: uuid.UUID) -> dict[str, Any]:
+    ensure_project(project_id)
+    settings = get_geodata_settings(project_id)
+    settings["scale"] = next(item for item in GEO_SCALES if item["id"] == settings["max_scale"])
+    return settings
+
+
+@app.put("/api/projects/{project_id}/geodata")
+def update_project_geodata(
+    project_id: uuid.UUID, payload: GeodataSettingsUpdate
+) -> dict[str, Any]:
+    ensure_project(project_id)
+    try:
+        dataset_id = validate_hdx_dataset_id(payload.dataset_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    now = datetime.now(UTC)
+    current = get_geodata_settings(project_id)
+    next_sync = current["next_sync_at"]
+    if payload.auto_download and not current["auto_download"]:
+        next_sync = now
+    elif payload.refresh_interval_minutes != current["refresh_interval_minutes"]:
+        next_sync = next_run_at(now, payload.refresh_interval_minutes)
+    with database_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO project_geodata_settings
+                (project_id, auto_download, dataset_id, preferred_format, max_scale,
+                 refresh_interval_minutes, next_sync_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (project_id) DO UPDATE SET
+                auto_download = EXCLUDED.auto_download,
+                dataset_id = EXCLUDED.dataset_id,
+                preferred_format = EXCLUDED.preferred_format,
+                max_scale = EXCLUDED.max_scale,
+                refresh_interval_minutes = EXCLUDED.refresh_interval_minutes,
+                next_sync_at = EXCLUDED.next_sync_at,
+                updated_at = EXCLUDED.updated_at
+            """,
+            (
+                project_id,
+                payload.auto_download,
+                dataset_id,
+                payload.preferred_format,
+                payload.max_scale,
+                payload.refresh_interval_minutes,
+                next_sync,
+                now,
+            ),
+        )
+    return project_geodata(project_id)
+
+
+@app.post("/api/projects/{project_id}/geodata/sync")
+async def sync_project_geodata(project_id: uuid.UUID) -> dict[str, Any]:
+    return await execute_geodata_sync(project_id)
 
 
 @app.get("/api/search", response_model=SearchResponse)

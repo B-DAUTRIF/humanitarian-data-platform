@@ -11,6 +11,13 @@ API_ROOT = Path(__file__).resolve().parents[1] / "payload" / "api"
 sys.path.insert(0, str(API_ROOT))
 
 from app.scheduler_utils import next_run_at, validate_interval  # noqa: E402
+from app.project_integrations import (  # noqa: E402
+    GEO_SCALES,
+    github_repository_endpoint,
+    select_geodata_resources,
+    validate_hdx_dataset_id,
+    validate_repository_name,
+)
 from app.security import (  # noqa: E402
     confined_path,
     resource_key,
@@ -39,10 +46,10 @@ class SecurityHelpersTest(unittest.TestCase):
         self.assertEqual(resource_key("abc", "https://example.org/one"), "abc")
 
     def test_sha256_file_streams_known_content(self) -> None:
-        path = Path("/tmp/hdp-v20-hash-test.txt")
-        path.write_bytes(b"HDP 2.0")
+        path = Path("/tmp/hdp-v23-hash-test.txt")
+        path.write_bytes(b"HDP 2.3")
         try:
-            self.assertEqual(sha256_file(path), "199ae50c94f80346463d33091acf2e51a2a8a6ec45ae7865746c773a12a9c56a")
+            self.assertEqual(sha256_file(path), "c0c791b2ed726bede5dd3fbee5859b827836305496c7916529c4703f04614553")
         finally:
             path.unlink(missing_ok=True)
 
@@ -67,6 +74,38 @@ class SchedulerHelpersTest(unittest.TestCase):
     def test_next_run(self) -> None:
         now = datetime(2026, 8, 7, 10, 0, tzinfo=UTC)
         self.assertEqual(next_run_at(now, 60), datetime(2026, 8, 7, 11, 0, tzinfo=UTC))
+
+
+class ProjectIntegrationsTest(unittest.TestCase):
+    def test_scale_catalog_is_ordered_from_terrain_to_world(self) -> None:
+        self.assertEqual([item["id"] for item in GEO_SCALES], ["terrain", "local", "national", "regional", "world"])
+        self.assertEqual([item["rank"] for item in GEO_SCALES], [1, 2, 3, 4, 5])
+
+    def test_repository_name_validation(self) -> None:
+        self.assertEqual(validate_repository_name(" crise-mali_2026 "), "crise-mali_2026")
+        with self.assertRaises(ValueError):
+            validate_repository_name("nom avec espaces")
+
+    def test_repository_endpoint_selects_user_or_organization(self) -> None:
+        self.assertEqual(github_repository_endpoint("", "octocat"), "https://api.github.com/user/repos")
+        self.assertEqual(github_repository_endpoint("OctoCat", "octocat"), "https://api.github.com/user/repos")
+        self.assertEqual(github_repository_endpoint("ocha", "octocat"), "https://api.github.com/orgs/ocha/repos")
+
+    def test_hdx_dataset_id_validation(self) -> None:
+        self.assertEqual(validate_hdx_dataset_id(" COD-AB-GLOBAL "), "cod-ab-global")
+        with self.assertRaises(ValueError):
+            validate_hdx_dataset_id("https://example.org/dataset")
+
+    def test_geodata_resource_selection_uses_format_aliases(self) -> None:
+        resources = [
+            {"name": "Boundaries", "format": "GeoJSON", "url": "https://example.org/a.zip"},
+            {"name": "File Geodatabase", "format": "ZIP", "url": "https://example.org/b.zip"},
+            {"name": "Boundaries", "format": "SHP ZIP", "url": "https://example.org/d.zip"},
+            {"name": "Table", "format": "CSV", "url": "https://example.org/c.csv"},
+        ]
+        self.assertEqual(len(select_geodata_resources(resources, "geojson")), 1)
+        self.assertEqual(len(select_geodata_resources(resources, "geodatabase")), 1)
+        self.assertEqual(len(select_geodata_resources(resources, "shapefile")), 1)
 
 
 if __name__ == "__main__":

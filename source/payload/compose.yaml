@@ -36,6 +36,7 @@ services:
       DATA_DIR: /app/data
       R_SERVICE_URL: http://r-service:8001
       RELIEFWEB_APPNAME: ${RELIEFWEB_APPNAME:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     volumes:
       - ./data:/app/data
     ports:

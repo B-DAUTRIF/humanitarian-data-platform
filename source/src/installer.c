@@ -20,8 +20,8 @@
 #include "payload_generated.h"
 
 #define APP_NAME L"Humanitarian Data Platform"
-#define APP_VERSION L"2.0.0"
-#define MAIN_CLASS L"HDP_NATIVE_INSTALLER_20"
+#define APP_VERSION L"2.3.0"
+#define MAIN_CLASS L"HDP_NATIVE_INSTALLER_23"
 
 #define ID_PATH 1001
 #define ID_RELIEFWEB 1002
@@ -36,6 +36,7 @@
 #define ID_STATUS 1011
 #define ID_LOG 1012
 #define ID_R_MODULE 1013
+#define ID_GITHUB_TOKEN 1014
 #define ID_ACTIVITY_TIMER 2001
 
 #define WM_HDP_LOG (WM_APP + 1)
@@ -47,6 +48,7 @@
 typedef struct {
     wchar_t install_dir[MAX_PATH * 4];
     wchar_t reliefweb_appname[256];
+    wchar_t github_token[512];
     BOOL install_docker;
     BOOL install_git;
     BOOL install_vscode;
@@ -58,6 +60,7 @@ static HINSTANCE g_instance;
 static HWND g_main;
 static HWND g_path;
 static HWND g_reliefweb;
+static HWND g_github_token;
 static HWND g_docker;
 static HWND g_git;
 static HWND g_vscode;
@@ -618,31 +621,47 @@ static BOOL appname_is_valid(const wchar_t *appname) {
     return TRUE;
 }
 
+static BOOL secret_line_is_valid(const wchar_t *secret) {
+    for (const wchar_t *cursor = secret; *cursor; cursor++) {
+        if (*cursor == L'\r' || *cursor == L'\n') return FALSE;
+    }
+    return TRUE;
+}
+
 static BOOL write_environment(const wchar_t *install_dir, const wchar_t *reliefweb_appname,
-                              USHORT host_port) {
+                              const wchar_t *github_token, USHORT host_port) {
     wchar_t env_path[MAX_PATH * 4];
     _snwprintf(env_path, sizeof(env_path) / sizeof(wchar_t), L"%ls\\.env", install_dir);
     char password[128] = {0};
     char existing_appname[256] = {0};
+    char existing_github_token[2048] = {0};
     DWORD existing_size = 0;
     char *existing = read_file_bytes(env_path, &existing_size);
     if (existing) {
         extract_env_value(existing, "POSTGRES_PASSWORD", password, sizeof(password));
         extract_env_value(existing, "RELIEFWEB_APPNAME", existing_appname, sizeof(existing_appname));
+        extract_env_value(existing, "GITHUB_TOKEN", existing_github_token, sizeof(existing_github_token));
         HeapFree(GetProcessHeap(), 0, existing);
     }
     if (!password[0] && !generate_secret(password, sizeof(password))) return FALSE;
 
     char appname_utf8[512] = {0};
+    char github_token_utf8[2048] = {0};
     if (reliefweb_appname[0]) {
         WideCharToMultiByte(CP_UTF8, 0, reliefweb_appname, -1, appname_utf8, sizeof(appname_utf8), NULL, NULL);
     } else if (existing_appname[0]) {
         strncpy(appname_utf8, existing_appname, sizeof(appname_utf8) - 1);
     }
-    char content[1024];
+    if (github_token[0]) {
+        if (!WideCharToMultiByte(CP_UTF8, 0, github_token, -1, github_token_utf8,
+                                 sizeof(github_token_utf8), NULL, NULL)) return FALSE;
+    } else if (existing_github_token[0]) {
+        strncpy(github_token_utf8, existing_github_token, sizeof(github_token_utf8) - 1);
+    }
+    char content[4096];
     int length = _snprintf(content, sizeof(content),
-                           "POSTGRES_PASSWORD=%s\r\nRELIEFWEB_APPNAME=%s\r\nHDP_PORT=%u\r\n",
-                           password, appname_utf8, host_port);
+                           "POSTGRES_PASSWORD=%s\r\nRELIEFWEB_APPNAME=%s\r\nGITHUB_TOKEN=%s\r\nHDP_PORT=%u\r\n",
+                           password, appname_utf8, github_token_utf8, host_port);
     if (length <= 0 || length >= (int)sizeof(content)) return FALSE;
     return write_binary_file(env_path, (const unsigned char *)content, (size_t)length);
 }
@@ -758,7 +777,7 @@ static BOOL ensure_docker_ready(wchar_t *docker, DWORD capacity) {
 
 static BOOL http_is_healthy(USHORT port) {
     BOOL ok = FALSE;
-    HINTERNET session = WinHttpOpen(L"HDP-Installer/2.0", WINHTTP_ACCESS_TYPE_NO_PROXY,
+    HINTERNET session = WinHttpOpen(L"HDP-Installer/2.3", WINHTTP_ACCESS_TYPE_NO_PROXY,
                                     WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session) return FALSE;
     WinHttpSetTimeouts(session, 3000, 3000, 3000, 3000);
@@ -816,7 +835,8 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
         post_log(L"Impossible de sélectionner un port local pour l'interface web.\r\n");
         goto done;
     }
-    if (!write_environment(options->install_dir, options->reliefweb_appname, options->host_port)) {
+    if (!write_environment(options->install_dir, options->reliefweb_appname,
+                           options->github_token, options->host_port)) {
         post_log(L"Échec de la création du fichier de configuration .env.\r\n");
         goto done;
     }
@@ -932,6 +952,7 @@ static void set_controls_installing(BOOL installing) {
     g_installing = installing;
     EnableWindow(g_path, !installing);
     EnableWindow(g_reliefweb, !installing);
+    EnableWindow(g_github_token, !installing);
     EnableWindow(g_analyze, !installing);
     EnableWindow(g_install, !installing);
     EnableWindow(g_open_folder, !installing);
@@ -947,6 +968,7 @@ static void begin_install(void) {
     if (!options) return;
     GetWindowTextW(g_path, options->install_dir, (int)(sizeof(options->install_dir) / sizeof(wchar_t)));
     GetWindowTextW(g_reliefweb, options->reliefweb_appname, (int)(sizeof(options->reliefweb_appname) / sizeof(wchar_t)));
+    GetWindowTextW(g_github_token, options->github_token, (int)(sizeof(options->github_token) / sizeof(wchar_t)));
     options->install_docker = SendMessageW(g_docker, BM_GETCHECK, 0, 0) == BST_CHECKED;
     options->install_git = SendMessageW(g_git, BM_GETCHECK, 0, 0) == BST_CHECKED;
     options->install_vscode = SendMessageW(g_vscode, BM_GETCHECK, 0, 0) == BST_CHECKED;
@@ -964,6 +986,11 @@ static void begin_install(void) {
     }
     if (!appname_is_valid(options->reliefweb_appname)) {
         MessageBoxW(g_main, L"L'appname ReliefWeb ne peut contenir que lettres, chiffres, tirets, points et caractères de soulignement.", APP_NAME, MB_OK | MB_ICONWARNING);
+        HeapFree(GetProcessHeap(), 0, options);
+        return;
+    }
+    if (!secret_line_is_valid(options->github_token)) {
+        MessageBoxW(g_main, L"Le jeton GitHub ne peut pas contenir de retour à la ligne.", APP_NAME, MB_OK | MB_ICONWARNING);
         HeapFree(GetProcessHeap(), 0, options);
         return;
     }
@@ -1033,22 +1060,23 @@ static void layout_controls(int width, int height) {
     if (content_width < 400) content_width = 400;
     MoveWindow(g_path, margin + 150, 83, content_width - 150, 25, TRUE);
     MoveWindow(g_reliefweb, margin + 150, 119, content_width - 150, 25, TRUE);
-    MoveWindow(g_docker, margin, 176, content_width, 24, TRUE);
-    MoveWindow(g_git, margin, 202, content_width, 24, TRUE);
-    MoveWindow(g_vscode, margin, 228, content_width, 24, TRUE);
-    MoveWindow(g_r_module, margin, 254, content_width, 24, TRUE);
+    MoveWindow(g_github_token, margin + 150, 155, content_width - 150, 25, TRUE);
+    MoveWindow(g_docker, margin, 212, content_width, 24, TRUE);
+    MoveWindow(g_git, margin, 238, content_width, 24, TRUE);
+    MoveWindow(g_vscode, margin, 264, content_width, 24, TRUE);
+    MoveWindow(g_r_module, margin, 290, content_width, 24, TRUE);
 
     int button_width = 150;
     int gap = 10;
-    MoveWindow(g_analyze, margin, 296, button_width, 30, TRUE);
-    MoveWindow(g_install, margin + button_width + gap, 296, 205, 30, TRUE);
-    MoveWindow(g_open_folder, margin + button_width + gap + 215, 296, 145, 30, TRUE);
-    MoveWindow(g_open_log, margin + button_width + gap + 370, 296, 120, 30, TRUE);
-    MoveWindow(g_progress, margin, 344, content_width, 18, TRUE);
-    MoveWindow(g_status, margin, 369, content_width, 23, TRUE);
-    int log_height = height - 432;
+    MoveWindow(g_analyze, margin, 332, button_width, 30, TRUE);
+    MoveWindow(g_install, margin + button_width + gap, 332, 205, 30, TRUE);
+    MoveWindow(g_open_folder, margin + button_width + gap + 215, 332, 145, 30, TRUE);
+    MoveWindow(g_open_log, margin + button_width + gap + 370, 332, 120, 30, TRUE);
+    MoveWindow(g_progress, margin, 380, content_width, 18, TRUE);
+    MoveWindow(g_status, margin, 405, content_width, 23, TRUE);
+    int log_height = height - 468;
     if (log_height < 120) log_height = 120;
-    MoveWindow(g_log, margin, 414, content_width, log_height, TRUE);
+    MoveWindow(g_log, margin, 450, content_width, log_height, TRUE);
 }
 
 static HWND create_control(const wchar_t *class_name, const wchar_t *text, DWORD style,
@@ -1064,21 +1092,25 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
         case WM_CREATE: {
             g_font = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
             HWND header = create_control(L"STATIC", L"Humanitarian Data Platform", SS_LEFT, 0, window);
-            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 2.0.0 — projets, ressources et planifications", SS_LEFT, 0, window);
+            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 2.3.0 — GitHub, géodonnées HDX et projets", SS_LEFT, 0, window);
             HWND path_label = create_control(L"STATIC", L"Dossier d'installation", SS_LEFT, 0, window);
             HWND relief_label = create_control(L"STATIC", L"Appname ReliefWeb", SS_LEFT, 0, window);
+            HWND github_label = create_control(L"STATIC", L"Jeton GitHub", SS_LEFT, 0, window);
             HWND dep_label = create_control(L"STATIC", L"Logiciels tiers et module R — aucune case n'est cochée automatiquement", SS_LEFT, 0, window);
             HWND log_label = create_control(L"STATIC", L"Journal détaillé (défilement disponible)", SS_LEFT, 0, window);
             MoveWindow(header, 22, 18, 700, 28, TRUE);
             MoveWindow(subtitle, 22, 48, 760, 22, TRUE);
             MoveWindow(path_label, 22, 87, 145, 22, TRUE);
             MoveWindow(relief_label, 22, 123, 145, 22, TRUE);
-            MoveWindow(dep_label, 22, 151, 700, 22, TRUE);
-            MoveWindow(log_label, 22, 395, 500, 19, TRUE);
+            MoveWindow(github_label, 22, 159, 145, 22, TRUE);
+            MoveWindow(dep_label, 22, 187, 700, 22, TRUE);
+            MoveWindow(log_label, 22, 431, 500, 19, TRUE);
 
             g_path = create_control(L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, ID_PATH, window);
             g_reliefweb = create_control(L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, ID_RELIEFWEB, window);
             SendMessageW(g_reliefweb, EM_SETCUEBANNER, TRUE, (LPARAM)L"facultatif — identifiant pré-approuvé par ReliefWeb");
+            g_github_token = create_control(L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL | ES_PASSWORD | WS_TABSTOP, ID_GITHUB_TOKEN, window);
+            SendMessageW(g_github_token, EM_SETCUEBANNER, TRUE, (LPARAM)L"facultatif — conservé dans .env, jamais affiché dans le journal");
             g_docker = create_control(L"BUTTON", L"Docker Desktop (analyse en cours)", BS_AUTOCHECKBOX | WS_TABSTOP, ID_DOCKER, window);
             g_git = create_control(L"BUTTON", L"Git (analyse en cours)", BS_AUTOCHECKBOX | WS_TABSTOP, ID_GIT, window);
             g_vscode = create_control(L"BUTTON", L"Visual Studio Code (analyse en cours)", BS_AUTOCHECKBOX | WS_TABSTOP, ID_VSCODE, window);
@@ -1259,7 +1291,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR command_line, 
     _snwprintf(title, sizeof(title) / sizeof(wchar_t), L"%ls — Installateur %ls", APP_NAME, APP_VERSION);
     g_main = CreateWindowExW(0, MAIN_CLASS, title,
                              WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-                             CW_USEDEFAULT, CW_USEDEFAULT, 980, 780,
+                             CW_USEDEFAULT, CW_USEDEFAULT, 980, 830,
                              NULL, NULL, instance, NULL);
     if (!g_main) return 2;
     ShowWindow(g_main, show_command);

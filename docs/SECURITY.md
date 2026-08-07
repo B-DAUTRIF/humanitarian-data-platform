@@ -2,7 +2,7 @@
 
 ## Périmètre
 
-HDP 2.0 est une application locale mono-utilisateur. Elle n'a ni authentification, ni TLS local, ni séparation des rôles. Ne publiez pas son port sur le réseau et ne l'exposez pas à Internet.
+HDP 2.3 est une application locale mono-utilisateur. Elle n'a ni authentification, ni TLS local, ni séparation des rôles. Ne publiez pas son port sur le réseau et ne l'exposez pas à Internet.
 
 ## Protections présentes
 
@@ -17,6 +17,8 @@ HDP 2.0 est une application locale mono-utilisateur. Elle n'a ni authentificatio
 - limite de taille contrôlée avec `Content-Length` puis pendant le flux ;
 - écriture temporaire `.part` et renommage après réussite ;
 - aucun moteur d'exécution des scripts stockés ;
+- jeton GitHub lu depuis l'environnement, jamais retourné par l'API ni enregistré dans les paramètres de projet ;
+- dépôt GitHub privé par défaut et création précédée d'une confirmation côté interface ;
 - suppressions de ressources confirmées dans l'interface et provenance conservée.
 
 ## Limites connues
@@ -31,9 +33,9 @@ HDP 2.0 est une application locale mono-utilisateur. Elle n'a ni authentificatio
 
 ## Fichiers sensibles
 
-`%USERPROFILE%\HumanitarianDataPlatform\.env` contient le secret PostgreSQL et éventuellement l'appname ReliefWeb. Ne publiez jamais ce fichier.
+`%USERPROFILE%\HumanitarianDataPlatform\.env` contient le secret PostgreSQL, éventuellement l'appname ReliefWeb et `GITHUB_TOKEN`. Ne publiez jamais ce fichier. Utilisez un jeton à droits minimaux, limitez les organisations accessibles et révoquez-le lorsqu'il n'est plus nécessaire.
 
-Le diagnostic `HDP_Diagnostic_v2.0.cmd` n'affiche que `HDP_PORT` depuis `.env`. Relisez néanmoins tout journal avant de le partager : il peut contenir le nom de la machine, l'utilisateur, des chemins ou des informations Docker.
+Le diagnostic `HDP_Diagnostic_v2.3.cmd` n'affiche que `HDP_PORT` depuis `.env` : ni le jeton GitHub, ni le mot de passe PostgreSQL, ni l'appname ReliefWeb. Relisez néanmoins tout journal avant de le partager : il peut contenir le nom de la machine, l'utilisateur, des chemins ou des informations Docker.
 
 ## Données humanitaires
 
