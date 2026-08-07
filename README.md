@@ -1,90 +1,66 @@
-# Humanitarian Data Platform
+# Humanitarian Data Platform 2.0
 
-Version de référence : **1.5.0** — application locale pour Windows 10/11 x64.
+Application locale Windows pour rechercher des données humanitaires publiques, télécharger leurs ressources, les organiser par projets et automatiser les acquisitions.
 
-Humanitarian Data Platform (HDP) fournit une interface web locale pour rechercher des données humanitaires publiques, archiver les réponses avec leur provenance et préparer leur analyse. L'installateur Windows configure un socle FastAPI, PostgreSQL/PostGIS, Docker Compose et, en option, R/plumber.
+## Nouveautés de la version 2.0
 
-> État du projet : MVP local validé sur Windows 11. Cette version n'est pas un serveur de production et ne doit pas être exposée directement à Internet.
+- **Projets** : chaque projet possède ses acquisitions, ressources, préférences, scripts et planifications.
+- **Téléchargement automatique** : option par recherche ou planification, avec limites de taille, de quantité et de formats.
+- **Planificateur persistant** : exécutions périodiques à partir de 15 minutes et historique conservé dans PostgreSQL.
+- **Données locales** : inventaire, téléchargement depuis l'interface, contrôle SHA-256 et suppression du fichier avec conservation de la trace.
+- **Scripts par projet** : création et modification de contenu Python, R, SQL ou autre. L'exécution est volontairement désactivée dans cette version.
+- **Migration 1.5** : les acquisitions existantes rejoignent automatiquement le « Projet par défaut » ; `.env`, le volume PostgreSQL et `data/` sont conservés.
 
-## Fonctions disponibles
+## Installation Windows
 
-- recherche de jeux de données via HDX/CKAN ;
-- recherche de rapports ReliefWeb avec un `appname` pré-approuvé ;
-- archivage local des réponses JSON et calcul d'une empreinte SHA-256 ;
-- enregistrement de la provenance dans PostgreSQL/PostGIS ;
-- historique des acquisitions accessible par l'API ;
-- service analytique R/plumber facultatif ;
-- installation graphique Windows avec détection des dépendances, téléchargement explicite des logiciels tiers et choix automatique d'un port local disponible ;
-- script de diagnostic Windows produisant un journal borné dans le temps.
-
-## Installation rapide
-
-1. Téléchargez et décompressez [`HumanitarianDataPlatform_Windows_v1.5.zip`](dist/HumanitarianDataPlatform_Windows_v1.5.zip).
-2. Vérifiez l'empreinte de l'exécutable :
+1. Téléchargez [`HumanitarianDataPlatform_Windows_v2.0.zip`](dist/v2.0/HumanitarianDataPlatform_Windows_v2.0.zip).
+2. Décompressez l'archive.
+3. Vérifiez l'empreinte :
 
    ```powershell
-   Get-FileHash .\HumanitarianDataPlatform_Setup_Native_GUI_v1.5.exe -Algorithm SHA256
+   Get-FileHash .\HumanitarianDataPlatform_Setup_Native_GUI_v2.0.exe -Algorithm SHA256
    ```
 
-   Valeur attendue :
+4. Comparez-la au fichier `.exe.sha256`, puis lancez l'installateur.
+5. Docker Desktop est nécessaire ; le module R reste facultatif.
 
-   ```text
-   1e77042dbbd7a7d400c690076bc61e3c7191c5e928cdb016a39292af2a362470
-   ```
-
-3. Ouvrez Docker Desktop s'il est déjà installé.
-4. Lancez `HumanitarianDataPlatform_Setup_Native_GUI_v1.5.exe`.
-5. Choisissez uniquement les composants souhaités, confirmez l'installation, puis laissez l'installateur ouvrir l'interface dans le navigateur.
-
-L'application utilise `http://localhost:8080` si le port est libre ; sinon elle choisit automatiquement un port entre `18080` et `18279`. Le port effectif est enregistré dans `%USERPROFILE%\HumanitarianDataPlatform\.env` sous `HDP_PORT`.
-
-Consultez la [procédure d'installation détaillée](docs/INSTALLATION.md) avant la première utilisation.
-
-## Architecture
-
-```mermaid
-flowchart TD
-    U["Navigateur Windows"] --> A["FastAPI + interface"]
-    A --> D["PostgreSQL / PostGIS"]
-    A --> S["ReliefWeb et HDX"]
-    A -. optionnel .-> R["R / plumber"]
-    A --> J["Archives JSON + SHA-256"]
-```
-
-Seul le port de FastAPI est publié, exclusivement sur `127.0.0.1`. PostgreSQL et R restent internes au réseau Docker Compose.
+L'application s'ouvre sur `http://localhost:8080` ou sur un port libre entre `18080` et `18279`. Elle reste liée à `127.0.0.1`.
 
 ## Documentation
 
-- [Installation et première utilisation](docs/INSTALLATION.md)
-- [Architecture, API et données](docs/ARCHITECTURE.md)
-- [Construction et validation](docs/DEVELOPMENT.md)
+- [Guide utilisateur](docs/USER_GUIDE.md)
+- [Installation et mise à niveau](docs/INSTALLATION.md)
+- [Architecture, données et API](docs/ARCHITECTURE.md)
+- [Migration depuis 1.5](docs/MIGRATION_V2.md)
 - [Sécurité et confidentialité](docs/SECURITY.md)
-- [Diagnostic et dépannage](docs/TROUBLESHOOTING.md)
-- [Inventaire des livrables](docs/ARTIFACTS.md)
-- [Notice détaillée PDF, 23 pages](dist/Notice_detaillee_Humanitarian_Data_Platform_v1.5.pdf)
-- [Prompt exhaustif de reprise dans une nouvelle instance GPT+](dist/HDP_Prompt_exhaustif_reprise_GPT_Plus_v1.5.txt)
+- [Développement et validation](docs/DEVELOPMENT.md)
+- [Dépannage](docs/TROUBLESHOOTING.md)
+- [Inventaire des livrables et empreintes](docs/ARTIFACTS.md)
+- [Notice détaillée PDF](dist/v2.0/Notice_detaillee_Humanitarian_Data_Platform_v2.0.pdf)
+
+FastAPI publie aussi une documentation interactive locale sur `/docs` lorsque l'application tourne.
+
+## Sources prises en charge
+
+| Source | Recherche | Ressources automatiques |
+|---|---:|---:|
+| HDX / CKAN | Oui | Oui, à partir des URL de ressources CKAN |
+| ReliefWeb | Oui, avec `RELIEFWEB_APPNAME` pré-approuvé | Oui lorsque les métadonnées du rapport contiennent des fichiers |
+
+Voir les documentations officielles de l'[Action API CKAN](https://docs.ckan.org/en/latest/api/) et de l'[API ReliefWeb V2](https://apidoc.reliefweb.int/). Les quotas, licences et conditions d'utilisation de chaque source restent applicables.
 
 ## Organisation du dépôt
 
 ```text
-.
-├── dist/       Livrables v1.5, archives, empreintes et notice PDF
-├── docs/       Documentation Markdown consultable sur GitHub
-├── source/     Sources extraites de l'application et de l'installateur
-└── tools/      Générateur reproductible de la notice PDF
+source/          code FastAPI, interface, installateur Win32 et tests
+docs/            documentation Markdown consultable dans GitHub
+dist/v2.0/       installateur, archives, empreintes, notices et prompt de reprise
+dist/v1.5/       livrables historiques intacts
+tools/           génération de la notice PDF
 ```
 
-Le ZIP source original est conservé dans `dist/`, tandis que son contenu est également extrait dans `source/` afin de permettre la consultation et le suivi des modifications depuis GitHub.
+## Sécurité et licence
 
-## Limites actuelles
+HDP 2.0 est une application locale mono-utilisateur, sans authentification, et ne doit pas être exposée directement sur Internet. Les téléchargements refusent les URL non HTTP(S), les identifiants intégrés et les destinations réseau non publiques ; chaque projet impose des limites.
 
-- les ressources jointes aux jeux HDX ne sont pas encore téléchargées ;
-- aucune planification d'acquisitions ni reprise automatique sur erreur ;
-- PostGIS est activé, mais aucune carte ni table géométrique n'est encore exploitée ;
-- le service R ne propose qu'un résumé descriptif et n'est pas encore relié à un panneau d'analyse dans l'interface ;
-- pas d'authentification, de TLS, de chiffrement applicatif ni de mode multi-utilisateur ;
-- aucune licence HDP explicite n'est incluse dans la version 1.5.
-
-## Licence
-
-La version 1.5 ne contient pas de fichier de licence. Aucun droit de redistribution ou statut open source ne doit être déduit. Le dépôt doit rester privé tant qu'une licence n'a pas été choisie et ajoutée explicitement.
+Aucune licence HDP explicite n'est incluse. Le dépôt doit rester privé tant qu'une licence n'a pas été choisie et ajoutée.

@@ -1,51 +1,48 @@
 # Sécurité et confidentialité
 
+## Périmètre
+
+HDP 2.0 est une application locale mono-utilisateur. Elle n'a ni authentification, ni TLS local, ni séparation des rôles. Ne publiez pas son port sur le réseau et ne l'exposez pas à Internet.
+
 ## Protections présentes
 
-- l'API est publiée uniquement sur `127.0.0.1` ;
-- PostgreSQL n'a aucun port publié sur Windows ;
-- R reste interne au réseau Docker Compose ;
-- le mot de passe PostgreSQL est généré aléatoirement ;
-- chaque acquisition archivée reçoit une empreinte SHA-256 ;
-- les liens externes de l'interface utilisent `rel=noopener`.
+- liaison de l'API à `127.0.0.1` uniquement ;
+- aucun port PostgreSQL publié sur Windows ;
+- service R interne à Compose ;
+- mot de passe PostgreSQL aléatoire conservé dans `.env` ;
+- empreintes SHA-256 des JSON et ressources ;
+- noms de fichiers neutralisés et chemins confinés sous `data/` ;
+- téléchargements HTTP(S) seulement, sans identifiants intégrés ;
+- résolution DNS et refus des adresses privées, locales, réservées ou non globales à chaque URL et redirection ;
+- limite de taille contrôlée avec `Content-Length` puis pendant le flux ;
+- écriture temporaire `.part` et renommage après réussite ;
+- aucun moteur d'exécution des scripts stockés ;
+- suppressions de ressources confirmées dans l'interface et provenance conservée.
 
 ## Limites connues
 
-- aucune authentification ni séparation des utilisateurs ;
-- HTTP local sans TLS ;
-- `.env` et les JSON sont stockés en clair sur le disque Windows ;
-- aucun chiffrement applicatif, audit de sécurité ou mécanisme de rotation des secrets ;
-- aucune politique intégrée de mise à jour automatique ;
-- l'accès à Docker confère des privilèges importants sur la machine ;
-- la version 1.5 est un MVP local et ne doit pas être exposée directement sur Internet.
+- absence d'audit de sécurité indépendant ;
+- HTTP local et données en clair sur le disque ;
+- pas de chiffrement applicatif ni rotation automatique des secrets ;
+- pas d'antivirus ou d'analyse du contenu téléchargé ;
+- le filtrage réseau réduit le risque SSRF mais ne remplace pas une isolation réseau ;
+- dépendance aux métadonnées, licences, quotas et disponibilités des sources ;
+- installateur non signé par certificat d'éditeur.
 
 ## Fichiers sensibles
 
-Le fichier `%USERPROFILE%\HumanitarianDataPlatform\.env` contient le mot de passe PostgreSQL et éventuellement l'appname ReliefWeb. Il doit rester secret.
+`%USERPROFILE%\HumanitarianDataPlatform\.env` contient le secret PostgreSQL et éventuellement l'appname ReliefWeb. Ne publiez jamais ce fichier.
 
-Ne placez jamais dans un ticket, un dépôt ou un journal partagé :
+Le diagnostic `HDP_Diagnostic_v2.0.cmd` n'affiche que `HDP_PORT` depuis `.env`. Relisez néanmoins tout journal avant de le partager : il peut contenir le nom de la machine, l'utilisateur, des chemins ou des informations Docker.
 
-- le contenu complet de `.env` ;
-- un mot de passe, jeton ou clé d'API ;
-- un journal système non relu contenant des noms d'utilisateur, noms de machine, adresses ou chemins personnels ;
-- des données humanitaires personnelles ou confidentielles.
+## Données humanitaires
 
-Le script `HDP_Diagnostic_v1.5.cmd` n'affiche volontairement que `HDP_PORT` dans `.env`. Le journal Windows de référence fourni pendant le diagnostic n'est pas inclus dans ce dépôt.
-
-## Données envoyées aux sources
-
-Les mots-clés de recherche sont envoyés à ReliefWeb ou HDX. ReliefWeb peut associer les appels à l'appname. L'utilisateur reste responsable du respect des quotas, licences, conditions d'utilisation et droits des producteurs.
+N'utilisez pas HDP pour des données personnelles ou confidentielles sans évaluation adaptée. Les mots-clés sont transmis à la source choisie. ReliefWeb peut associer les appels à l'appname.
 
 ## Empreinte et signature
 
-SHA-256 détecte une modification du fichier contrôlé. Il ne constitue pas une signature de l'éditeur ni une preuve de l'exactitude des données distantes.
+SHA-256 détecte une modification par rapport à une valeur attendue ; il ne prouve ni l'identité de l'éditeur, ni l'exactitude des données. Vérifiez les fichiers `.sha256` obtenus via un canal de confiance.
 
-L'installateur v1.5 n'est pas signé par un certificat d'éditeur. Vérifiez son empreinte avant l'exécution :
+## Licence
 
-```text
-1e77042dbbd7a7d400c690076bc61e3c7191c5e928cdb016a39292af2a362470
-```
-
-## Publication du dépôt
-
-La version 1.5 ne contient aucune licence explicite. Le dépôt doit rester privé jusqu'au choix d'une licence et à la vérification des droits de redistribution de chaque composant livré.
+Aucune licence HDP explicite n'est incluse. Le dépôt doit rester privé jusqu'au choix d'une licence et à la vérification des droits de redistribution des composants.

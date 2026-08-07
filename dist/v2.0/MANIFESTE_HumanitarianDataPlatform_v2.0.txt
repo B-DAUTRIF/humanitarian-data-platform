@@ -1,0 +1,75 @@
+MANIFESTE DE REMISE — HUMANITARIAN DATA PLATFORM 2.0.0
+======================================================
+Date de construction : 7 août 2026
+Cible : Windows 10/11 x64
+Dépôt : B-DAUTRIF/humanitarian-data-platform (privé)
+
+CONTENU AVANT ARCHIVE COMPLÈTE
+------------------------------
+HDP_Diagnostic_v2.0.cmd
+  6 146 octets
+  SHA-256 8aab3073e4cbcef53340af45e7f5eeef3b061ef0671978fe33fcb0b9a296116e
+
+HDP_Prompt_exhaustif_reprise_GPT_Plus_v2.0.txt
+  8 356 octets
+  SHA-256 72ccd5dec61e17b2e1beebce864a8eb08602c8bd7180ae438e9fdda1659499fb
+
+HumanitarianDataPlatform_Setup_Native_GUI_v2.0.exe
+  288 256 octets
+  SHA-256 f02553d1e2f63c2028ca9a4353ebb7684ccaab00ff21ab56651cf55fbac5dcb9
+
+HumanitarianDataPlatform_Setup_Native_GUI_v2.0.exe.sha256
+  117 octets
+  SHA-256 857a9eb852e079958da366ee574e8a1135d7c450c858b9059b5e76101fd9bd55
+
+HumanitarianDataPlatform_Setup_README_v2.0.txt
+  2 848 octets
+  SHA-256 301dec53836f9644de01c5aacfe21e1fe60c64f083bc25a70d73b42f469689c4
+
+HumanitarianDataPlatform_Source_v2.0.zip
+  139 839 octets
+  SHA-256 bbf794ecf3a869cade040e7ff792b0cac0d42666f251c1b026ef11b73b521cef
+
+HumanitarianDataPlatform_Windows_v2.0.zip
+  114 091 octets
+  SHA-256 5d7802d80bf21a0f17026be1c868f1a3487adad43c7bb668e2c4b601cf79de9b
+
+Notice_detaillee_Humanitarian_Data_Platform_v2.0.pdf
+  34 439 octets — 21 pages A4
+  SHA-256 db883c602c158972c39ed553c003225a9a4520939b408108d916492e47f4ccf3
+
+CONSTITUTION DES PAQUETS
+-----------------------
+Paquet Windows : EXE, empreinte EXE, notice courte et diagnostic.
+
+Archive source : README racine, documentation Markdown, payload FastAPI/R,
+interface, scripts de démarrage, installateur C/Win32, payload_generated.h,
+tests et générateurs PDF. Elle n'inclut pas l'EXE de construction ni les caches.
+
+Archive complète : tous les fichiers ci-dessus et le présent manifeste dans un
+dossier racine HumanitarianDataPlatform_v2.0. Elle ne s'inclut pas elle-même.
+
+VALIDATIONS EFFECTUÉES
+----------------------
+- modules Python compilés sans erreur ;
+- 9 tests unitaires réussis ;
+- syntaxe JavaScript de l'interface acceptée par Node.js ;
+- payload régénéré ; 14 fichiers reconstruits et comparés à l'identique ;
+- installateur compilé en PE32+ GUI x86-64, 7 sections ;
+- archives Source, Windows et complète contrôlées avec unzip -t ;
+- empreintes vérifiées avec sha256sum -c ;
+- PDF : 21 pages A4, texte extrait, pages rendues en PNG et inspection visuelle.
+
+VALIDATION NON EFFECTUÉE DANS CET ENVIRONNEMENT
+----------------------------------------------
+Docker n'était pas installé dans l'environnement Linux de construction. La
+migration PostgreSQL/PostGIS et le parcours web complet de la v2.0 n'ont donc
+pas été exécutés ici. Ils sont explicitement laissés à la recette Windows avec
+Docker Desktop. La compilation et les tests hors Docker ne doivent pas être
+présentés comme une recette fonctionnelle complète.
+
+SÉCURITÉ ET LICENCE
+-------------------
+L'API est destinée à 127.0.0.1 uniquement. L'installateur n'est pas signé par
+certificat d'éditeur. Aucune licence HDP explicite n'est incluse ; le dépôt doit
+rester privé jusqu'au choix d'une licence.

@@ -13,6 +13,8 @@ build/
 *.o
 *.obj
 *.res
+*.pdb
+/output/
 
 # Logs and editor files
 *.log

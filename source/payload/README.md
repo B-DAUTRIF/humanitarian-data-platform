@@ -1,32 +1,36 @@
-# Humanitarian Data Platform 1.5.0
+# Humanitarian Data Platform 2.0.0
 
-Socle local client-serveur pour rechercher, acquérir et archiver des données humanitaires publiques.
+Application locale pour organiser des acquisitions humanitaires par projets.
 
 ## Démarrage
 
 1. Lancez Docker Desktop.
 2. Double-cliquez sur `start-hdp.cmd`.
-3. L'interface s'ouvre sur le port local enregistré dans `.env` (`HDP_PORT`). L'installateur utilise 8080 s'il est disponible, sinon il choisit automatiquement un port libre entre 18080 et 18279.
+3. L'interface s'ouvre sur le port `HDP_PORT` enregistré dans `.env`.
 
-Le service reste lié exclusivement à `127.0.0.1` : il n'est pas exposé au réseau local.
+Le service est lié exclusivement à `127.0.0.1`. PostgreSQL/PostGIS n'est pas exposé sur Windows.
 
-## Services
+## Fonctionnalités
 
-- API et interface : FastAPI/Python ;
-- base : PostgreSQL/PostGIS, non exposée sur Windows ;
-- analyses : R/plumber ;
-- sources MVP : ReliefWeb et HDX/CKAN.
+- projets isolant préférences, acquisitions, ressources, scripts et planifications ;
+- recherche ReliefWeb et HDX/CKAN avec archivage JSON et empreinte SHA-256 ;
+- téléchargement optionnel des ressources avec limites de taille, de quantité et de formats ;
+- planificateur persistant, intervalle minimal de 15 minutes et historique des exécutions ;
+- gestion locale : inventaire, téléchargement, vérification SHA-256 et suppression avec conservation de la provenance ;
+- stockage et modification de scripts par projet, sans exécution automatique.
 
-Depuis novembre 2025, ReliefWeb exige un `appname` pré-approuvé. L'installateur peut l'enregistrer dans `.env`. Sans cet identifiant, HDX reste utilisable et l'API explique comment activer ReliefWeb.
+Les données sont écrites dans `data/raw/<projet>` et `data/projects/<projet>/resources`. Les métadonnées sont conservées dans PostgreSQL.
 
-Les réponses brutes sont écrites sous `data/raw` avec une empreinte SHA-256. Les métadonnées de provenance sont enregistrées dans PostgreSQL.
+ReliefWeb exige un `appname` pré-approuvé. Sans cet identifiant, HDX reste utilisable. Les quotas et conditions des sources restent applicables.
 
-Le module R est facultatif au premier démarrage car son image dépasse 300 Mo. S'il a été sélectionné dans l'installateur, `start-hdp-with-r.cmd` démarre également ce service analytique. Le cœur Python/PostGIS fonctionne sans lui.
+## Mise à niveau depuis 1.5
+
+Le schéma est migré au démarrage. Les acquisitions existantes rejoignent le « Projet par défaut ». Le volume PostgreSQL, `.env` et les fichiers existants sont conservés.
 
 ## Arrêt
 
-Exécutez `stop-hdp.cmd`. Les données PostgreSQL et les fichiers bruts sont conservés.
+Exécutez `stop-hdp.cmd`. Les volumes et fichiers locaux restent intacts.
 
-## Limites
+## Limite de sécurité
 
-Cette version est un socle local de développement. Elle n'est pas un déploiement serveur de production durci. Les conditions d'utilisation et quotas des sources distantes restent applicables.
+HDP 2.0 est une application locale, non un serveur Internet durci. Les scripts sont gérés comme contenu uniquement : aucune route ne les exécute.

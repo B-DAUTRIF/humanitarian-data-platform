@@ -3,82 +3,255 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Humanitarian Data Platform</title>
+  <title>Humanitarian Data Platform 2.0</title>
   <style>
-    :root { color-scheme: dark; --bg:#08111f; --panel:#111e31; --line:#263750; --text:#eef5ff; --muted:#9fb0c7; --accent:#38bdf8; --ok:#34d399; --danger:#fb7185; }
+    :root {
+      color-scheme: dark; --bg:#07111f; --panel:#0f1d30; --panel2:#13243a; --line:#29415e;
+      --text:#eff7ff; --muted:#9fb2c9; --accent:#38bdf8; --accent2:#818cf8; --ok:#34d399;
+      --warn:#fbbf24; --danger:#fb7185; --shadow:0 22px 65px #0007;
+    }
     * { box-sizing:border-box; }
-    body { margin:0; font-family:Segoe UI,Arial,sans-serif; background:linear-gradient(135deg,#07101e,#10233b); color:var(--text); min-height:100vh; }
-    main { width:min(1120px,calc(100% - 32px)); margin:0 auto; padding:38px 0 60px; }
-    header { display:flex; justify-content:space-between; align-items:flex-start; gap:24px; margin-bottom:28px; }
-    h1 { margin:0 0 8px; font-size:clamp(28px,4vw,44px); letter-spacing:-.04em; }
-    h2 { margin:0 0 18px; font-size:19px; }
-    p { color:var(--muted); }
-    .badge { border:1px solid var(--line); border-radius:999px; padding:8px 12px; color:var(--ok); background:#0b1828; white-space:nowrap; }
-    .grid { display:grid; grid-template-columns:360px 1fr; gap:20px; }
-    .card { background:rgba(17,30,49,.94); border:1px solid var(--line); border-radius:16px; padding:22px; box-shadow:0 20px 50px #0005; }
-    label { display:block; color:var(--muted); font-size:13px; margin:15px 0 7px; }
-    input,select,button { width:100%; border-radius:9px; border:1px solid var(--line); padding:11px 12px; font:inherit; }
-    input,select { background:#091526; color:var(--text); }
-    button { margin-top:18px; background:var(--accent); color:#03202e; border:0; font-weight:700; cursor:pointer; }
+    body { margin:0; font-family:Inter,Segoe UI,Arial,sans-serif; background:radial-gradient(circle at 10% 0,#12345a 0,transparent 34%),linear-gradient(135deg,#050b14,#0b1b31); color:var(--text); min-height:100vh; }
+    button,input,select,textarea { font:inherit; }
+    button { cursor:pointer; }
+    header { border-bottom:1px solid var(--line); background:#07111fe8; backdrop-filter:blur(14px); position:sticky; top:0; z-index:10; }
+    .header-inner { width:min(1320px,calc(100% - 32px)); margin:auto; min-height:78px; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+    .brand h1 { margin:0; font-size:21px; letter-spacing:-.03em; }
+    .brand p { margin:5px 0 0; font-size:12px; color:var(--muted); }
+    .context { display:flex; align-items:center; gap:10px; min-width:380px; }
+    .context select { flex:1; }
+    .badge { border:1px solid var(--line); border-radius:999px; padding:8px 11px; color:var(--ok); background:#0b1828; white-space:nowrap; font-size:12px; }
+    main { width:min(1320px,calc(100% - 32px)); margin:0 auto; padding:26px 0 64px; }
+    nav { display:flex; gap:8px; overflow:auto; margin-bottom:20px; padding-bottom:4px; }
+    nav button { width:auto; margin:0; color:var(--muted); background:#0c192b; border:1px solid var(--line); padding:10px 15px; border-radius:10px; white-space:nowrap; }
+    nav button.active { color:#04131d; background:var(--accent); border-color:var(--accent); font-weight:750; }
+    .view { display:none; }
+    .view.active { display:block; }
+    .grid { display:grid; grid-template-columns:380px 1fr; gap:18px; align-items:start; }
+    .grid.equal { grid-template-columns:1fr 1fr; }
+    .card { background:linear-gradient(155deg,#12233aee,#0d192bee); border:1px solid var(--line); border-radius:16px; padding:21px; box-shadow:var(--shadow); }
+    .card + .card { margin-top:16px; }
+    h2 { margin:0 0 5px; font-size:20px; }
+    h3 { margin:0 0 12px; font-size:16px; }
+    p { color:var(--muted); line-height:1.5; }
+    .intro { margin:0 0 18px; }
+    label { display:block; color:var(--muted); font-size:12px; margin:13px 0 6px; }
+    input,select,textarea { width:100%; border-radius:9px; border:1px solid var(--line); padding:10px 11px; background:#071426; color:var(--text); }
+    textarea { min-height:110px; resize:vertical; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+    input:focus,select:focus,textarea:focus { outline:2px solid #38bdf866; border-color:var(--accent); }
+    .check { display:flex; align-items:center; gap:9px; margin-top:14px; color:var(--text); font-size:13px; }
+    .check input { width:auto; }
+    .actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+    .actions button,.button { width:auto; border-radius:9px; border:0; padding:10px 13px; background:var(--accent); color:#03202e; font-weight:750; text-decoration:none; }
+    .actions .secondary,.secondary { background:#1c314b; border:1px solid var(--line); color:var(--text); }
+    .actions .danger,.danger { background:#3b1d2a; border:1px solid #78364d; color:#fecdd3; }
     button:disabled { opacity:.55; cursor:wait; }
-    .meta { margin-top:18px; padding-top:17px; border-top:1px solid var(--line); font-size:13px; color:var(--muted); word-break:break-all; }
-    .results { display:grid; gap:11px; max-height:540px; overflow:auto; padding-right:4px; }
-    .result { display:block; color:var(--text); text-decoration:none; border:1px solid var(--line); background:#0a1728; padding:14px; border-radius:11px; }
-    .result:hover { border-color:var(--accent); }
-    .result small { color:var(--muted); display:block; margin-top:6px; }
-    .empty { min-height:220px; display:grid; place-items:center; color:var(--muted); text-align:center; }
-    .error { color:var(--danger); white-space:pre-wrap; }
-    code { color:#bae6fd; }
-    @media (max-width:800px) { .grid { grid-template-columns:1fr; } header { flex-direction:column; } }
+    .notice { border-left:3px solid var(--accent); background:#0a1729; padding:11px 13px; border-radius:0 9px 9px 0; color:var(--muted); font-size:12px; margin-top:14px; }
+    .notice.warn { border-color:var(--warn); }
+    .status { min-height:22px; margin-top:12px; color:var(--muted); font-size:13px; white-space:pre-wrap; }
+    .status.error { color:var(--danger); }
+    .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:15px; }
+    .metric { background:#09172a; border:1px solid var(--line); border-radius:11px; padding:12px; }
+    .metric strong { display:block; font-size:20px; }
+    .metric span { color:var(--muted); font-size:11px; }
+    .list { display:grid; gap:10px; max-height:630px; overflow:auto; padding-right:3px; }
+    .item { border:1px solid var(--line); background:#09172a; padding:13px; border-radius:11px; }
+    .item-head { display:flex; justify-content:space-between; gap:12px; align-items:start; }
+    .item h4 { margin:0; font-size:14px; }
+    .item small,.muted { color:var(--muted); }
+    .item small { display:block; margin-top:5px; line-height:1.45; }
+    .item a { color:#7dd3fc; }
+    .pill { display:inline-block; padding:3px 7px; border-radius:999px; background:#172c47; border:1px solid var(--line); font-size:10px; color:#c9ddf3; }
+    .pill.completed { color:var(--ok); }
+    .pill.failed { color:var(--danger); }
+    .mini-actions { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
+    .mini-actions button,.mini-actions a { width:auto; margin:0; padding:6px 9px; border-radius:7px; border:1px solid var(--line); color:var(--text); background:#172c47; text-decoration:none; font-size:11px; }
+    .mini-actions .danger { color:#fecdd3; background:#3b1d2a; }
+    .empty { min-height:180px; display:grid; place-items:center; color:var(--muted); text-align:center; }
+    code { color:#bae6fd; word-break:break-all; }
+    .result-title { color:var(--text); text-decoration:none; }
+    .result-title:hover { color:var(--accent); }
+    @media(max-width:900px) { .grid,.grid.equal { grid-template-columns:1fr; } .header-inner { align-items:flex-start; padding:15px 0; flex-direction:column; } .context { min-width:0; width:100%; } header { position:static; } .metrics { grid-template-columns:1fr 1fr; } }
   </style>
 </head>
 <body>
-<main>
-  <header>
-    <div><h1>Humanitarian Data Platform</h1><p>Acquisition traçable de données humanitaires publiques.</p></div>
-    <div id="health" class="badge">Vérification…</div>
-  </header>
-  <div class="grid">
-    <section class="card">
-      <h2>Nouvelle recherche</h2>
-      <form id="search-form">
-        <label for="source">Source publique</label>
-        <select id="source"><option value="reliefweb">ReliefWeb (appname pré-approuvé requis)</option><option value="hdx">HDX / CKAN</option></select>
-        <label for="query">Mots-clés</label>
-        <input id="query" minlength="2" maxlength="200" placeholder="Ex. choléra Mozambique" required>
-        <label for="limit">Nombre maximal de résultats</label>
-        <input id="limit" type="number" min="1" max="100" value="25">
-        <button id="submit" type="submit">Rechercher et archiver</button>
-      </form>
-      <div id="meta" class="meta">Chaque réponse brute est enregistrée avec sa provenance et son empreinte SHA-256.</div>
-    </section>
-    <section class="card">
-      <h2>Résultats</h2>
-      <div id="results" class="empty">Lancez une recherche pour interroger une source.</div>
-    </section>
+<header>
+  <div class="header-inner">
+    <div class="brand"><h1>Humanitarian Data Platform</h1><p>Projets, acquisitions et ressources locales · version 2.0</p></div>
+    <div class="context">
+      <select id="project-select" aria-label="Projet actif"></select>
+      <span id="health" class="badge">Vérification…</span>
+    </div>
   </div>
+</header>
+<main>
+  <nav aria-label="Rubriques">
+    <button class="active" data-view="search">Recherche</button>
+    <button data-view="projects">Projets & préférences</button>
+    <button data-view="data">Données locales</button>
+    <button data-view="scripts">Scripts</button>
+    <button data-view="schedules">Planifications</button>
+  </nav>
+
+  <section id="view-search" class="view active">
+    <div class="grid">
+      <div class="card">
+        <h2>Nouvelle acquisition</h2>
+        <p class="intro">Recherchez et archivez la réponse brute dans le projet actif.</p>
+        <form id="search-form">
+          <label for="search-source">Source publique</label>
+          <select id="search-source"><option value="hdx">HDX / CKAN</option><option value="reliefweb">ReliefWeb</option></select>
+          <label for="search-query">Mots-clés</label>
+          <input id="search-query" minlength="2" maxlength="200" placeholder="Ex. choléra Mozambique" required>
+          <label for="search-limit">Nombre maximal de jeux ou rapports</label>
+          <input id="search-limit" type="number" min="1" max="100" value="25">
+          <label class="check"><input id="search-download" type="checkbox"> Télécharger automatiquement les ressources référencées</label>
+          <div class="actions"><button id="search-submit" type="submit">Rechercher et archiver</button></div>
+        </form>
+        <div class="notice">Les limites de taille, de quantité et de formats sont définies dans les préférences du projet. Les adresses réseau privées sont refusées.</div>
+        <div id="search-status" class="status"></div>
+      </div>
+      <div class="card">
+        <h2>Résultats</h2>
+        <div id="search-results" class="empty">Lancez une recherche dans le projet actif.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-projects" class="view">
+    <div class="grid equal">
+      <div>
+        <div class="card">
+          <h2>Créer un projet</h2>
+          <form id="project-form">
+            <label for="project-name">Nom</label><input id="project-name" minlength="2" maxlength="120" required>
+            <label for="project-description">Description</label><textarea id="project-description" maxlength="1000"></textarea>
+            <div class="actions"><button type="submit">Créer et sélectionner</button></div>
+          </form>
+          <div id="project-status" class="status"></div>
+        </div>
+        <div class="card"><h2>Projets actifs</h2><div id="project-list" class="list"></div></div>
+      </div>
+      <div class="card">
+        <h2>Préférences du projet</h2>
+        <p class="intro">Ces garde-fous sont appliqués aux recherches manuelles et planifiées.</p>
+        <form id="preferences-form">
+          <label class="check"><input id="pref-auto" type="checkbox"> Activer par défaut le téléchargement automatique</label>
+          <label for="pref-max-size">Taille maximale par fichier (Mio)</label><input id="pref-max-size" type="number" min="1" max="2048" value="100">
+          <label for="pref-max-count">Ressources maximales par acquisition</label><input id="pref-max-count" type="number" min="1" max="100" value="20">
+          <label for="pref-formats">Formats autorisés, séparés par des virgules (vide = tous)</label><input id="pref-formats" placeholder="csv, json, geojson, xlsx">
+          <div class="actions"><button type="submit">Enregistrer les préférences</button></div>
+        </form>
+        <div class="notice warn">Les scripts sont stockés dans le projet mais leur exécution est désactivée dans la v2.0. Cela évite qu’une planification exécute du code non vérifié.</div>
+        <div id="preferences-status" class="status"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-data" class="view">
+    <div class="card">
+      <div class="item-head"><div><h2>Données locales</h2><p class="intro">Inventaire, intégrité et suppression contrôlée des ressources du projet.</p></div><div class="actions"><button id="resources-refresh" class="secondary">Actualiser</button></div></div>
+      <div class="metrics">
+        <div class="metric"><strong id="storage-count">0</strong><span>ressources</span></div>
+        <div class="metric"><strong id="storage-size">0 o</strong><span>stockage</span></div>
+        <div class="metric"><strong id="storage-complete">0</strong><span>terminées</span></div>
+        <div class="metric"><strong id="storage-failed">0</strong><span>en erreur</span></div>
+      </div>
+      <div id="resource-status" class="status"></div>
+      <div id="resource-list" class="list"><div class="empty">Aucune ressource chargée.</div></div>
+    </div>
+  </section>
+
+  <section id="view-scripts" class="view">
+    <div class="grid">
+      <div class="card">
+        <h2>Ajouter un script</h2>
+        <form id="script-form">
+          <label for="script-name">Nom</label><input id="script-name" minlength="2" maxlength="120" required>
+          <label for="script-language">Langage</label><select id="script-language"><option value="python">Python</option><option value="r">R</option><option value="sql">SQL</option><option value="shell">Shell</option><option value="other">Autre</option></select>
+          <label for="script-description">Description</label><input id="script-description" maxlength="1000">
+          <label for="script-content">Contenu</label><textarea id="script-content" maxlength="500000" spellcheck="false" placeholder="# Script conservé dans ce projet"></textarea>
+          <div class="actions"><button type="submit">Enregistrer</button></div>
+        </form>
+        <div id="script-status" class="status"></div>
+      </div>
+      <div class="card"><h2>Bibliothèque du projet</h2><div class="notice warn">Stockage et édition uniquement. Aucun script n'est exécuté par l'application.</div><div id="script-list" class="list" style="margin-top:14px"></div></div>
+    </div>
+  </section>
+
+  <section id="view-schedules" class="view">
+    <div class="grid">
+      <div class="card">
+        <h2>Nouvelle planification</h2>
+        <form id="schedule-form">
+          <label for="schedule-name">Nom</label><input id="schedule-name" minlength="2" maxlength="120" required>
+          <label for="schedule-source">Source</label><select id="schedule-source"><option value="hdx">HDX / CKAN</option><option value="reliefweb">ReliefWeb</option></select>
+          <label for="schedule-query">Recherche</label><input id="schedule-query" minlength="2" maxlength="200" required>
+          <label for="schedule-limit">Résultats maximaux</label><input id="schedule-limit" type="number" min="1" max="100" value="25">
+          <label for="schedule-interval">Intervalle en minutes (minimum 15)</label><input id="schedule-interval" type="number" min="15" max="43200" value="1440">
+          <label class="check"><input id="schedule-download" type="checkbox"> Télécharger les ressources à chaque exécution</label>
+          <label class="check"><input id="schedule-enabled" type="checkbox" checked> Activer immédiatement</label>
+          <div class="actions"><button type="submit">Créer la planification</button></div>
+        </form>
+        <div class="notice">Le planificateur est persistant : ses paramètres et l’historique des exécutions restent dans PostgreSQL après redémarrage.</div>
+        <div id="schedule-status" class="status"></div>
+      </div>
+      <div class="card"><h2>Planifications du projet</h2><div id="schedule-list" class="list"></div></div>
+    </div>
+  </section>
 </main>
 <script>
-  const health = document.querySelector('#health');
-  const form = document.querySelector('#search-form');
-  const submit = document.querySelector('#submit');
-  const results = document.querySelector('#results');
-  const meta = document.querySelector('#meta');
-  fetch('/api/health').then(r => r.json()).then(d => { health.textContent = `Opérationnel · v${d.version}`; }).catch(() => { health.textContent = 'Service indisponible'; health.style.color='var(--danger)'; });
-  form.addEventListener('submit', async event => {
-    event.preventDefault(); submit.disabled = true; submit.textContent = 'Acquisition en cours…';
-    results.className='empty'; results.textContent='Interrogation de la source et archivage de la réponse…';
-    const source=document.querySelector('#source').value, query=document.querySelector('#query').value, limit=document.querySelector('#limit').value;
-    try {
-      const response=await fetch(`/api/search?source=${encodeURIComponent(source)}&query=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`);
-      const data=await response.json(); if(!response.ok) throw new Error(data.detail || `Erreur HTTP ${response.status}`);
-      results.className='results'; results.innerHTML='';
-      if(!data.items.length){ results.className='empty'; results.textContent='Aucun résultat.'; }
-      for(const item of data.items){ const a=document.createElement('a'); a.className='result'; a.href=item.url || '#'; a.target='_blank'; a.rel='noopener'; a.textContent=item.title || item.id || 'Résultat sans titre'; const s=document.createElement('small'); s.textContent=`${item.source}${item.date ? ' · '+item.date : ''}`; a.appendChild(s); results.appendChild(a); }
-      meta.innerHTML=`Acquisition <code>${data.acquisition_id}</code><br>${data.item_count} élément(s) · SHA-256 <code>${data.sha256}</code>`;
-    } catch(error) { results.className='error'; results.textContent=error.message; }
-    finally { submit.disabled=false; submit.textContent='Rechercher et archiver'; }
+  const state={projects:[],projectId:null,editingScriptId:null};
+  const q=selector=>document.querySelector(selector);
+  const els={project:q('#project-select'),health:q('#health')};
+  const escapeText=value=>String(value??'');
+  function setStatus(selector,message,error=false){const el=q(selector);el.textContent=message||'';el.className=`status${error?' error':''}`;}
+  async function api(path,options={}){const response=await fetch(path,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options});if(response.status===204)return null;const data=await response.json().catch(()=>({detail:`Erreur HTTP ${response.status}`}));if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail));return data;}
+  function bytes(value){const units=['o','Kio','Mio','Gio'];let n=Number(value||0),i=0;while(n>=1024&&i<units.length-1){n/=1024;i++;}return `${n.toLocaleString('fr-FR',{maximumFractionDigits:i?1:0})} ${units[i]}`;}
+  function date(value){return value?new Date(value).toLocaleString('fr-FR'):'—';}
+  function button(label,handler,className=''){const b=document.createElement('button');b.type='button';b.textContent=label;b.className=className;b.addEventListener('click',handler);return b;}
+  function empty(container,message){container.innerHTML='';const div=document.createElement('div');div.className='empty';div.textContent=message;container.appendChild(div);}
+
+  document.querySelectorAll('nav button').forEach(tab=>tab.addEventListener('click',()=>{
+    document.querySelectorAll('nav button').forEach(item=>item.classList.toggle('active',item===tab));
+    document.querySelectorAll('.view').forEach(view=>view.classList.toggle('active',view.id===`view-${tab.dataset.view}`));
+    if(tab.dataset.view==='data')loadResources();if(tab.dataset.view==='scripts')loadScripts();if(tab.dataset.view==='schedules')loadSchedules();if(tab.dataset.view==='projects')loadPreferences();
+  }));
+
+  async function loadHealth(){try{const data=await api('/api/health');els.health.textContent=`Opérationnel · v${data.version} · planificateur ${data.scheduler==='running'?'actif':'arrêté'}`;}catch(error){els.health.textContent='Service indisponible';els.health.style.color='var(--danger)';}}
+  async function loadProjects(selectId=null){
+    state.projects=await api('/api/projects');const previous=selectId||state.projectId||localStorage.getItem('hdp-project');els.project.innerHTML='';
+    state.projects.forEach(project=>{const option=document.createElement('option');option.value=project.id;option.textContent=project.name;els.project.appendChild(option);});
+    state.projectId=state.projects.some(p=>p.id===previous)?previous:state.projects[0]?.id;els.project.value=state.projectId||'';if(state.projectId)localStorage.setItem('hdp-project',state.projectId);renderProjectList();await loadPreferences();
+  }
+  els.project.addEventListener('change',async()=>{state.projectId=els.project.value;localStorage.setItem('hdp-project',state.projectId);renderProjectList();await Promise.all([loadPreferences(),loadResources(),loadScripts(),loadSchedules()]);});
+
+  q('#search-form').addEventListener('submit',async event=>{
+    event.preventDefault();const submit=q('#search-submit');submit.disabled=true;setStatus('#search-status','Acquisition en cours…');empty(q('#search-results'),'Interrogation et archivage en cours…');
+    const params=new URLSearchParams({project_id:state.projectId,source:q('#search-source').value,query:q('#search-query').value,limit:q('#search-limit').value,auto_download:q('#search-download').checked});
+    try{const data=await api(`/api/search?${params}`);renderResults(data.items);setStatus('#search-status',`Acquisition ${data.acquisition_id}\n${data.item_count} résultat(s) · téléchargements : ${data.downloads.completed} réussis, ${data.downloads.failed} en erreur, ${data.downloads.skipped} ignorés\nSHA-256 ${data.sha256}`);}
+    catch(error){empty(q('#search-results'),'Acquisition interrompue.');setStatus('#search-status',error.message,true);}finally{submit.disabled=false;}
   });
+  function renderResults(items){const container=q('#search-results');container.className='list';container.innerHTML='';if(!items.length)return empty(container,'Aucun résultat.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const link=document.createElement('a');link.className='result-title';link.href=item.url||'#';link.target='_blank';link.rel='noopener';link.textContent=item.title||item.id||'Sans titre';const small=document.createElement('small');small.textContent=`${item.source}${item.date?' · '+date(item.date):''} · ${(item.resources||[]).length} ressource(s) référencée(s)`;card.append(link,small);container.appendChild(card);});}
+
+  q('#project-form').addEventListener('submit',async event=>{event.preventDefault();try{const data=await api('/api/projects',{method:'POST',body:JSON.stringify({name:q('#project-name').value,description:q('#project-description').value})});event.target.reset();await loadProjects(data.id);setStatus('#project-status','Projet créé et sélectionné.');}catch(error){setStatus('#project-status',error.message,true);}});
+  function renderProjectList(){const container=q('#project-list');container.innerHTML='';state.projects.forEach(project=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=project.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=project.id===state.projectId?'Actif':`${project.resource_count} ressource(s)`;head.append(title,pill);const details=document.createElement('small');details.textContent=`${project.description||'Sans description'} · ${project.acquisition_count} acquisition(s) · ${bytes(project.storage_bytes)}`;card.append(head,details);if(project.id!==state.projectId){const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Sélectionner',()=>{els.project.value=project.id;els.project.dispatchEvent(new Event('change'));}));if(!project.id.endsWith('000000000001'))actions.append(button('Archiver',async()=>{if(confirm(`Archiver le projet « ${project.name} » ? Les fichiers locaux ne seront pas supprimés.`)){await api(`/api/projects/${project.id}`,{method:'DELETE'});await loadProjects();}},'danger'));card.appendChild(actions);}container.appendChild(card);});}
+  async function loadPreferences(){if(!state.projectId)return;try{const data=await api(`/api/projects/${state.projectId}/preferences`);q('#pref-auto').checked=data.auto_download;q('#search-download').checked=data.auto_download;q('#pref-max-size').value=Math.round(data.max_download_bytes/1048576);q('#pref-max-count').value=data.max_resources_per_acquisition;q('#pref-formats').value=(data.allowed_formats||[]).join(', ');}catch(error){setStatus('#preferences-status',error.message,true);}}
+  q('#preferences-form').addEventListener('submit',async event=>{event.preventDefault();const payload={auto_download:q('#pref-auto').checked,max_download_bytes:Number(q('#pref-max-size').value)*1048576,max_resources_per_acquisition:Number(q('#pref-max-count').value),allowed_formats:q('#pref-formats').value.split(',').map(x=>x.trim()).filter(Boolean)};try{await api(`/api/projects/${state.projectId}/preferences`,{method:'PUT',body:JSON.stringify(payload)});q('#search-download').checked=payload.auto_download;setStatus('#preferences-status','Préférences enregistrées.');}catch(error){setStatus('#preferences-status',error.message,true);}});
+
+  q('#resources-refresh').addEventListener('click',loadResources);
+  async function loadResources(){if(!state.projectId)return;setStatus('#resource-status','Chargement…');try{const [items,storage]=await Promise.all([api(`/api/resources?project_id=${state.projectId}`),api(`/api/projects/${state.projectId}/storage`)]);q('#storage-count').textContent=storage.resource_count;q('#storage-size').textContent=bytes(storage.size_bytes);q('#storage-complete').textContent=storage.completed;q('#storage-failed').textContent=storage.failed;renderResources(items);setStatus('#resource-status','');}catch(error){setStatus('#resource-status',error.message,true);}}
+  function renderResources(items){const container=q('#resource-list');container.innerHTML='';if(!items.length)return empty(container,'Aucune ressource locale dans ce projet.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.filename||item.title;const pill=document.createElement('span');pill.className=`pill ${item.status}`;pill.textContent=item.status;head.append(title,pill);const details=document.createElement('small');details.textContent=`${item.source} · ${item.format||'format inconnu'} · ${bytes(item.size_bytes)} · ${date(item.updated_at)}${item.error?' · '+item.error:''}`;const actions=document.createElement('div');actions.className='mini-actions';if(item.status==='completed'){const download=document.createElement('a');download.href=`/api/resources/${item.id}/file`;download.textContent='Télécharger';actions.append(download);actions.append(button('Vérifier SHA-256',async()=>{try{const result=await api(`/api/resources/${item.id}/verify`,{method:'POST'});alert(result.valid?'Empreinte valide.':`Empreinte invalide.\nAttendue: ${result.expected}\nCalculée: ${result.actual}`);}catch(error){alert(error.message);}}));}actions.append(button('Supprimer localement',async()=>{if(confirm(`Supprimer le fichier local « ${item.filename||item.title} » ? La trace d'acquisition sera conservée.`)){await api(`/api/resources/${item.id}`,{method:'DELETE'});await loadResources();}},'danger'));card.append(head,details,actions);container.appendChild(card);});}
+
+  q('#script-form').addEventListener('submit',async event=>{event.preventDefault();const payload={name:q('#script-name').value,language:q('#script-language').value,description:q('#script-description').value,content:q('#script-content').value};try{if(state.editingScriptId){await api(`/api/scripts/${state.editingScriptId}`,{method:'PATCH',body:JSON.stringify(payload)});}else{await api(`/api/projects/${state.projectId}/scripts`,{method:'POST',body:JSON.stringify(payload)});}event.target.reset();state.editingScriptId=null;event.target.querySelector('button[type="submit"]').textContent='Enregistrer';setStatus('#script-status','Script enregistré (exécution désactivée).');await loadScripts();}catch(error){setStatus('#script-status',error.message,true);}});
+  async function loadScripts(){if(!state.projectId)return;try{renderScripts(await api(`/api/projects/${state.projectId}/scripts`));}catch(error){setStatus('#script-status',error.message,true);}}
+  function renderScripts(items){const container=q('#script-list');container.innerHTML='';if(!items.length)return empty(container,'Aucun script dans ce projet.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=item.language;head.append(title,pill);const details=document.createElement('small');details.textContent=`${item.description||'Sans description'} · modifié ${date(item.updated_at)} · exécution désactivée`;const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Modifier',()=>{state.editingScriptId=item.id;q('#script-name').value=item.name;q('#script-language').value=item.language;q('#script-description').value=item.description;q('#script-content').value=item.content;q('#script-form button[type="submit"]').textContent='Enregistrer les modifications';window.scrollTo({top:0,behavior:'smooth'});}));actions.append(button('Archiver',async()=>{if(confirm(`Archiver le script « ${item.name} » ?`)){await api(`/api/scripts/${item.id}`,{method:'DELETE'});await loadScripts();}},'danger'));card.append(head,details,actions);container.appendChild(card);});}
+
+  q('#schedule-form').addEventListener('submit',async event=>{event.preventDefault();const payload={name:q('#schedule-name').value,source:q('#schedule-source').value,query:q('#schedule-query').value,result_limit:Number(q('#schedule-limit').value),auto_download:q('#schedule-download').checked,interval_minutes:Number(q('#schedule-interval').value),enabled:q('#schedule-enabled').checked};try{await api(`/api/projects/${state.projectId}/schedules`,{method:'POST',body:JSON.stringify(payload)});event.target.reset();q('#schedule-limit').value=25;q('#schedule-interval').value=1440;q('#schedule-enabled').checked=true;setStatus('#schedule-status','Planification créée. Une planification active est prise en charge au prochain passage du planificateur.');await loadSchedules();}catch(error){setStatus('#schedule-status',error.message,true);}});
+  async function loadSchedules(){if(!state.projectId)return;try{renderSchedules(await api(`/api/projects/${state.projectId}/schedules`));}catch(error){setStatus('#schedule-status',error.message,true);}}
+  function renderSchedules(items){const container=q('#schedule-list');container.innerHTML='';if(!items.length)return empty(container,'Aucune planification dans ce projet.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className=`pill ${item.last_status||''}`;pill.textContent=item.enabled?'active':'suspendue';head.append(title,pill);const details=document.createElement('small');details.textContent=`${item.source.toUpperCase()} · « ${item.query} » · toutes les ${item.interval_minutes} min · prochain passage ${date(item.next_run_at)} · dernier statut ${item.last_status||'jamais exécutée'}${item.last_error?' · '+item.last_error:''}`;const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Exécuter maintenant',async event=>{event.target.disabled=true;setStatus('#schedule-status',`Exécution de « ${item.name} »…`);try{const result=await api(`/api/schedules/${item.id}/run`,{method:'POST'});setStatus('#schedule-status',result.status==='completed'?`Exécution terminée · acquisition ${result.acquisition_id}`:`Échec : ${result.error}`,result.status!=='completed');await loadSchedules();}catch(error){setStatus('#schedule-status',error.message,true);}finally{event.target.disabled=false;}}));actions.append(button(item.enabled?'Suspendre':'Réactiver',async()=>{await api(`/api/schedules/${item.id}`,{method:'PATCH',body:JSON.stringify({enabled:!item.enabled})});await loadSchedules();}));actions.append(button('Archiver',async()=>{if(confirm(`Archiver la planification « ${item.name} » ?`)){await api(`/api/schedules/${item.id}`,{method:'DELETE'});await loadSchedules();}},'danger'));card.append(head,details,actions);container.appendChild(card);});}
+
+  (async()=>{await loadHealth();try{await loadProjects();await Promise.all([loadResources(),loadScripts(),loadSchedules()]);}catch(error){setStatus('#project-status',error.message,true);}})();
 </script>
 </body>
 </html>

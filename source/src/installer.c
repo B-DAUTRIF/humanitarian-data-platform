@@ -20,8 +20,8 @@
 #include "payload_generated.h"
 
 #define APP_NAME L"Humanitarian Data Platform"
-#define APP_VERSION L"1.5.0"
-#define MAIN_CLASS L"HDP_NATIVE_INSTALLER_15"
+#define APP_VERSION L"2.0.0"
+#define MAIN_CLASS L"HDP_NATIVE_INSTALLER_20"
 
 #define ID_PATH 1001
 #define ID_RELIEFWEB 1002
@@ -758,7 +758,7 @@ static BOOL ensure_docker_ready(wchar_t *docker, DWORD capacity) {
 
 static BOOL http_is_healthy(USHORT port) {
     BOOL ok = FALSE;
-    HINTERNET session = WinHttpOpen(L"HDP-Installer/1.5", WINHTTP_ACCESS_TYPE_NO_PROXY,
+    HINTERNET session = WinHttpOpen(L"HDP-Installer/2.0", WINHTTP_ACCESS_TYPE_NO_PROXY,
                                     WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session) return FALSE;
     WinHttpSetTimeouts(session, 3000, 3000, 3000, 3000);
@@ -1064,7 +1064,7 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
         case WM_CREATE: {
             g_font = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
             HWND header = create_control(L"STATIC", L"Humanitarian Data Platform", SS_LEFT, 0, window);
-            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 1.5.0 — application locale dans votre navigateur", SS_LEFT, 0, window);
+            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 2.0.0 — projets, ressources et planifications", SS_LEFT, 0, window);
             HWND path_label = create_control(L"STATIC", L"Dossier d'installation", SS_LEFT, 0, window);
             HWND relief_label = create_control(L"STATIC", L"Appname ReliefWeb", SS_LEFT, 0, window);
             HWND dep_label = create_control(L"STATIC", L"Logiciels tiers et module R — aucune case n'est cochée automatiquement", SS_LEFT, 0, window);

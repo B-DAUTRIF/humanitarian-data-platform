@@ -1,104 +1,85 @@
-# Architecture, API et données
+# Architecture, données et API
 
 ## Vue d'ensemble
 
 ```mermaid
 flowchart TD
-    U["Interface dans le navigateur"] --> A["FastAPI / Python 3.12"]
-    A --> P["PostgreSQL 16 + PostGIS 3.4"]
-    A --> F["Fichiers JSON dans data/raw"]
-    A --> X["API ReliefWeb et HDX/CKAN"]
-    A -. état et analyses futures .-> R["R 4.4.3 / plumber"]
+    U["Interface web locale"] --> A["FastAPI 2.0"]
+    A --> P["PostgreSQL + PostGIS"]
+    A --> F["JSON et ressources locales"]
+    A --> X["ReliefWeb et HDX/CKAN"]
+    A --> S["Planificateur persistant"]
+    A -. facultatif .-> R["R / plumber"]
 ```
 
-Docker Compose orchestre les services. Le port Windows de l'API est publié uniquement sur `127.0.0.1`. PostgreSQL n'a aucun port hôte et R utilise uniquement le réseau interne Compose.
+Docker Compose orchestre l'API, PostgreSQL/PostGIS et le service R facultatif. Seul le port HTTP de l'API est publié sur `127.0.0.1`. PostgreSQL et R restent dans le réseau interne Compose.
 
-## Composants
+## Modèle par projets
 
-| Composant | Implémentation v1.5 | Rôle |
+| Entité | Rôle | Suppression |
 |---|---|---|
-| Installateur | C/Win32, PE32+ GUI x86-64 | Analyse de l'environnement, dépendances, déploiement, journalisation et ouverture du navigateur |
-| API | Python 3.12, FastAPI 0.116.1, Uvicorn 0.35.0 | Validation, connecteurs, archivage et provenance |
-| Client HTTP | httpx 0.28.1 | Appels HTTPS à ReliefWeb et HDX |
-| Base | PostgreSQL 16 + PostGIS 3.4 | Métadonnées d'acquisition et socle géospatial |
-| Accès SQL | psycopg 3.2.9 | Initialisation et requêtes PostgreSQL |
-| Analyses | R 4.4.3, plumber, jsonlite | Service analytique facultatif |
-| Orchestration | Docker Compose | Réseau, volume, profils et contrôles de santé |
+| `projects` | Conteneur fonctionnel | Archivage logique ; le projet par défaut est protégé |
+| `project_preferences` | Limites et téléchargement automatique par défaut | Suit le projet |
+| `acquisitions` | Provenance de chaque réponse distante | Conservée |
+| `local_resources` | URL, état, chemin, taille et empreinte d'un fichier | Fichier supprimé, ligne marquée `deleted` |
+| `project_scripts` | Contenu de scripts par projet | Archivage logique ; aucune exécution |
+| `schedules` | Définition périodique d'une acquisition | Désactivation et archivage logique |
+| `schedule_runs` | Historique des passages | Conservé avec statut et erreur éventuelle |
 
-## Services Compose
+Le projet par défaut utilise l'UUID stable `00000000-0000-4000-8000-000000000001`. Le démarrage crée les nouvelles tables de façon idempotente, ajoute `project_id` et `schedule_id` à l'historique v1.5, puis rattache les lignes sans projet.
 
-### `api`
+## Flux d'acquisition et de téléchargement
 
-- construit depuis `source/payload/api` ;
-- reçoit `DATABASE_URL`, `DATA_DIR`, `R_SERVICE_URL` et `RELIEFWEB_APPNAME` ;
-- monte le dossier Windows `data` dans `/app/data` ;
-- publie `127.0.0.1:${HDP_PORT}:8080` ;
-- attend que PostgreSQL soit sain avant son démarrage.
+1. L'API valide le projet, la source, la requête et la limite.
+2. Elle appelle ReliefWeb V2 ou l'Action API CKAN de HDX.
+3. La réponse brute est sérialisée en UTF-8, archivée et hachée en SHA-256.
+4. Une ligne `acquisitions` conserve la provenance.
+5. Si le téléchargement est actif, l'API extrait les ressources référencées.
+6. Elle applique les préférences : nombre maximal, taille maximale et formats autorisés.
+7. Chaque URL et chaque redirection doivent viser une adresse IP publique.
+8. Le fichier est écrit sous forme `.part`, contrôlé pendant le flux, puis renommé atomiquement.
+9. Le chemin relatif, la taille, le type de contenu et l'empreinte SHA-256 sont enregistrés.
 
-### `db`
+```text
+data/raw/<project_uuid>/<source>/<horodatage>_<requete>_<acquisition_uuid>.json
+data/projects/<project_uuid>/resources/<acquisition_uuid>/<resource_uuid>_<nom>
+```
 
-- image `postgis/postgis:16-3.4` ;
-- base et utilisateur `humanitarian` ;
-- mot de passe injecté depuis `.env` ;
-- volume nommé `postgres_data` ;
-- aucun port publié sur Windows.
+## Planificateur
 
-### `r-service`
+Le planificateur est une tâche de fond de l'unique processus Uvicorn. Il interroge PostgreSQL toutes les 20 secondes. Une ligne due est revendiquée dans une transaction avec `FOR UPDATE SKIP LOCKED`; son prochain passage est avancé avant l'appel distant. Le résultat et l'erreur éventuelle sont écrits dans `schedule_runs`.
 
-- construit depuis `source/payload/r-service` ;
-- profil Compose `analytics` ;
-- port `8001` exposé seulement dans le réseau interne ;
-- facultatif pour le fonctionnement du cœur Python/PostGIS.
+L'intervalle est compris entre 15 minutes et 30 jours. Une erreur de base temporaire ne termine pas définitivement la boucle. L'architecture suppose un seul processus API ; déployer plusieurs workers nécessiterait un service de tâches dédié.
 
-## API locale
+## API locale principale
 
-| Méthode et route | Rôle | Effet |
-|---|---|---|
-| `GET /` | Interface HTML | Affiche le formulaire de recherche |
-| `GET /api/health` | Santé API et SQL | Vérifie aussi la connexion PostgreSQL |
-| `GET /api/sources` | Sources déclarées | Retourne ReliefWeb et HDX/CKAN |
-| `GET /api/search` | Recherche et archivage | Écrit un JSON et une ligne de provenance |
-| `GET /api/acquisitions` | Historique | Retourne jusqu'à 200 acquisitions |
-| `GET /api/analysis/status` | État de R | Retourne `ok` ou `not_started` |
-| `GET /docs` | Swagger UI | Documentation interactive générée |
-| `GET /openapi.json` | OpenAPI | Schéma lisible par machine |
+| Méthode et route | Fonction |
+|---|---|
+| `GET /api/health` | Santé SQL, version et état du planificateur |
+| `GET/POST /api/projects` | Liste et création des projets |
+| `PATCH/DELETE /api/projects/{id}` | Modification ou archivage logique |
+| `GET/PUT /api/projects/{id}/preferences` | Préférences de téléchargement |
+| `GET /api/search` | Acquisition manuelle et téléchargement optionnel |
+| `GET /api/acquisitions?project_id=...` | Historique du projet |
+| `GET /api/resources?project_id=...` | Inventaire local |
+| `GET /api/resources/{id}/file` | Téléchargement depuis le stockage local |
+| `POST /api/resources/{id}/verify` | Recalcul SHA-256 en flux |
+| `DELETE /api/resources/{id}` | Suppression locale avec trace conservée |
+| `GET/POST /api/projects/{id}/scripts` | Bibliothèque de scripts |
+| `PATCH/DELETE /api/scripts/{id}` | Modification ou archivage d'un script |
+| `GET/POST /api/projects/{id}/schedules` | Liste et création des planifications |
+| `PATCH/DELETE /api/schedules/{id}` | Modification ou archivage |
+| `POST /api/schedules/{id}/run` | Exécution manuelle immédiate |
+| `GET /api/schedules/{id}/runs` | Historique d'exécution |
+| `GET /docs` | Swagger UI générée par FastAPI |
 
-Attention : `/api/search` déclenche une acquisition. L'utiliser comme test répétitif crée des archives en double.
+`GET /api/search` et `POST /api/schedules/{id}/run` ont des effets : ils créent une acquisition et peuvent télécharger des fichiers.
 
-## Flux d'acquisition
+## Service R
 
-1. FastAPI valide `source`, `query` et `limit`.
-2. Le connecteur appelle la source distante en HTTPS.
-3. La réponse JSON est décodée, puis re-sérialisée en UTF-8 avec les clés triées.
-4. Un UUID et une date UTC sont créés.
-5. Le JSON est écrit sous :
+Le profil `analytics` fournit toujours R/plumber avec `/health` et `/summary`. Il reste facultatif et séparé du planificateur Python.
 
-   ```text
-   data/raw/<source>/YYYYMMDDTHHMMSSZ_<requete>_<uuid>.json
-   ```
+## Références des sources distantes
 
-6. SHA-256 est calculé sur les octets réellement archivés.
-7. La provenance est enregistrée dans la table `acquisitions`.
-
-## Schéma de provenance
-
-| Colonne | Type | Sens |
-|---|---|---|
-| `id` | UUID | Identifiant primaire de l'acquisition |
-| `source` | TEXT | `reliefweb` ou `hdx` |
-| `query` | TEXT | Requête saisie |
-| `retrieved_at` | TIMESTAMPTZ | Date UTC |
-| `sha256` | CHAR(64) | Empreinte du JSON archivé |
-| `item_count` | INTEGER | Nombre de résultats simplifiés |
-| `raw_path` | TEXT | Chemin relatif sous `data` |
-
-L'empreinte permet de détecter une modification ultérieure du fichier archivé. Elle ne prouve ni l'exactitude de la source distante, ni son exhaustivité, ni une origine juridique.
-
-## Module R
-
-Le service R expose actuellement :
-
-- `GET /health` : état, langage et version ;
-- `GET /summary?values=...` : effectif, moyenne, écart-type, médiane, minimum et maximum.
-
-FastAPI relaie uniquement l'état du service. La route `/summary` n'est pas encore exposée dans l'API publique ni dans l'interface.
+- [CKAN Action API](https://docs.ckan.org/en/latest/api/) : actions `package_search`, réponses `success/result` et métadonnées de ressources ;
+- [ReliefWeb API V2](https://apidoc.reliefweb.int/) et [paramètres](https://apidoc.reliefweb.int/parameters) : appname, profils, requêtes, limites et quotas.
