@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TD
-    U["Interface web locale"] --> A["FastAPI 2.3"]
+    U["Interface web locale"] --> A["FastAPI 2.3.1"]
     A --> P["PostgreSQL + PostGIS"]
     A --> F["JSON et ressources locales"]
     A --> X["ReliefWeb et HDX/CKAN"]
@@ -22,20 +22,22 @@ Docker Compose orchestre l'API, PostgreSQL/PostGIS et le service R facultatif. S
 | `projects` | Conteneur fonctionnel | Archivage logique ; le projet par défaut est protégé |
 | `project_preferences` | Limites et téléchargement automatique par défaut | Suit le projet |
 | `project_github_settings` | Propriétaire, dépôt, description, visibilité et URL créée ; aucun jeton | Suit le projet |
-| `project_geodata_settings` | Profil HDX, format, échelle maximale et cycle de synchronisation | Automatisation désactivée à l'archivage |
+| `project_geodata_settings` | Périmètre M49, politique COD officielle, format et cycle | Automatisation désactivée à l'archivage |
 | `acquisitions` | Provenance de chaque réponse distante | Conservée |
-| `local_resources` | URL, état, chemin, taille et empreinte d'un fichier | Fichier supprimé, ligne marquée `deleted` |
+| `local_resources` | URL, empreinte et provenance M49/ISO3/COD/licence | Fichier supprimé, ligne marquée `deleted` |
 | `project_scripts` | Contenu de scripts par projet | Archivage logique ; aucune exécution |
 | `schedules` | Définition périodique d'une acquisition | Désactivation et archivage logique |
 | `schedule_runs` | Historique des passages | Conservé avec statut et erreur éventuelle |
 
 Le projet par défaut utilise l'UUID stable `00000000-0000-4000-8000-000000000001`. Le démarrage crée les nouvelles tables de façon idempotente, ajoute `project_id` et `schedule_id` à l'historique v1.5, puis rattache les lignes sans projet.
 
-## Intégrations de projet 2.3
+## Intégrations de projet 2.3.1
 
 La création GitHub utilise `POST /user/repos` lorsque le propriétaire est vide ou correspond au compte du jeton, sinon `POST /orgs/{org}/repos`. Le dépôt est privé par défaut et initialisé avec un README. `GITHUB_TOKEN` demeure une variable d'environnement globale ; il ne transite jamais dans les modèles de réponse.
 
-Le profil géographique appelle l'action CKAN `package_show` de HDX. Il archive la métadonnée complète sous la source `hdx-geodata`, sélectionne les ressources selon les alias du format et réutilise le pipeline sécurisé de téléchargement. La portée `terrain → monde` est une métadonnée HDP ordonnée, pas une transformation cartographique ni une propriété normative de HDX.
+Le profil géographique appelle `package_search` avec la série exacte `COD - Subnational Administrative Boundaries`, puis valide localement le niveau `cod-enhanced` ou `cod-standard`, la série et le groupe ISO3 présent dans ONU M49. Un périmètre régional est développé en pays ou zones descendants M49. Aucune saisie libre d'un identifiant HDX n'entre dans ce flux.
+
+La réponse CKAN complète, le périmètre M49, les jeux retenus, les entités sans jeu officiel et les formats manquants sont archivés sous `hdx-geodata`. Une ressource déjà complète ne consomme pas le quota ; les suivantes obtiennent le compte `deferred` et sont reprises lors d'un passage ultérieur.
 
 ## Flux d'acquisition et de téléchargement
 
@@ -72,7 +74,7 @@ L'intervalle est compris entre 15 minutes et 30 jours. Une erreur de base tempor
 | `POST /api/projects/{id}/github/repository` | Création confirmée du dépôt |
 | `GET/PUT /api/projects/{id}/geodata` | Profil géographique et état de synchronisation |
 | `POST /api/projects/{id}/geodata/sync` | Synchronisation HDX immédiate |
-| `GET /api/geographic-scales` | Catalogue ordonné terrain à monde |
+| `GET /api/un-m49/entities` | Nomenclature hiérarchique M49 et source d'autorité |
 | `GET /api/search` | Acquisition manuelle et téléchargement optionnel |
 | `GET /api/acquisitions?project_id=...` | Historique du projet |
 | `GET /api/resources?project_id=...` | Inventaire local |
@@ -96,6 +98,7 @@ Le profil `analytics` fournit toujours R/plumber avec `/health` et `/summary`. I
 ## Références des sources distantes
 
 - [CKAN Action API](https://docs.ckan.org/en/latest/api/) : actions `package_search`, réponses `success/result` et métadonnées de ressources ;
-- [HDX COD-AB global](https://data.humdata.org/dataset/cod-ab-global) : limites administratives communes mondiales ;
+- [ONU M49](https://unstats.un.org/unsd/methodology/m49/overview/) : nomenclature statistique du monde, des régions, pays et zones ;
+- [OCHA COD-AB](https://knowledge.base.unocha.org/wiki/spaces/imtoolbox/pages/2557378679/Administrative%2BBoundaries%2BCOD-AB) : limites administratives communes ;
 - [GitHub REST — repositories](https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28) : création pour un utilisateur ou une organisation ;
 - [ReliefWeb API V2](https://apidoc.reliefweb.int/) et [paramètres](https://apidoc.reliefweb.int/parameters) : appname, profils, requêtes, limites et quotas.

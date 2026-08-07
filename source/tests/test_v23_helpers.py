@@ -12,10 +12,17 @@ sys.path.insert(0, str(API_ROOT))
 
 from app.scheduler_utils import next_run_at, validate_interval  # noqa: E402
 from app.project_integrations import (  # noqa: E402
-    GEO_SCALES,
+    OFFICIAL_COD_SERIES,
     github_repository_endpoint,
+    m49_country_entities,
+    m49_scope,
+    official_cod_metadata,
     select_geodata_resources,
+    select_official_cod_datasets,
+    un_m49_catalog,
     validate_hdx_dataset_id,
+    validate_m49_code,
+    validate_official_cod_policy,
     validate_repository_name,
 )
 from app.security import (  # noqa: E402
@@ -77,9 +84,28 @@ class SchedulerHelpersTest(unittest.TestCase):
 
 
 class ProjectIntegrationsTest(unittest.TestCase):
-    def test_scale_catalog_is_ordered_from_terrain_to_world(self) -> None:
-        self.assertEqual([item["id"] for item in GEO_SCALES], ["terrain", "local", "national", "regional", "world"])
-        self.assertEqual([item["rank"] for item in GEO_SCALES], [1, 2, 3, 4, 5])
+    def test_m49_catalog_starts_with_world_and_contains_only_known_entities(self) -> None:
+        catalog = un_m49_catalog()
+        self.assertEqual(catalog[0]["code"], "001")
+        self.assertEqual(catalog[0]["type_label"], "Monde")
+        self.assertGreater(len(catalog), 270)
+
+    def test_m49_scope_expands_to_descendant_countries(self) -> None:
+        africa = m49_country_entities("002")
+        self.assertGreater(len(africa), 50)
+        self.assertTrue(any(item.get("iso3166") == "MLI" for item in africa))
+        self.assertFalse(any(item.get("iso3166") == "FRA" for item in africa))
+        self.assertEqual(m49_scope("466")["country_count"], 1)
+
+    def test_m49_validation_rejects_unknown_code(self) -> None:
+        self.assertEqual(validate_m49_code(" 001 "), "001")
+        with self.assertRaises(ValueError):
+            validate_m49_code("999")
+
+    def test_official_policy_validation(self) -> None:
+        self.assertEqual(validate_official_cod_policy("enhanced_only"), "enhanced_only")
+        with self.assertRaises(ValueError):
+            validate_official_cod_policy("any_hdx_dataset")
 
     def test_repository_name_validation(self) -> None:
         self.assertEqual(validate_repository_name(" crise-mali_2026 "), "crise-mali_2026")
@@ -106,6 +132,46 @@ class ProjectIntegrationsTest(unittest.TestCase):
         self.assertEqual(len(select_geodata_resources(resources, "geojson")), 1)
         self.assertEqual(len(select_geodata_resources(resources, "geodatabase")), 1)
         self.assertEqual(len(select_geodata_resources(resources, "shapefile")), 1)
+
+    @staticmethod
+    def cod_dataset(iso3: str, cod_level: str, modified: str) -> dict:
+        return {
+            "id": f"id-{iso3}-{cod_level}",
+            "name": f"cod-ab-{iso3.lower()}-{cod_level}",
+            "title": f"{iso3} - Subnational Administrative Boundaries",
+            "dataseries_name": OFFICIAL_COD_SERIES,
+            "cod_level": cod_level,
+            "groups": [{"name": iso3.lower()}],
+            "metadata_modified": modified,
+            "organization": {"title": "OCHA Field Information Services"},
+            "license_id": "cc-by-igo",
+            "resources": [],
+        }
+
+    def test_official_cod_metadata_requires_official_series_and_m49_iso3(self) -> None:
+        dataset = self.cod_dataset("MLI", "cod-enhanced", "2026-08-01T12:00:00")
+        self.assertEqual(official_cod_metadata(dataset)["m49_code"], "466")
+        dataset["dataseries_name"] = "Community boundaries"
+        self.assertIsNone(official_cod_metadata(dataset))
+
+    def test_official_cod_metadata_rejects_non_cod_level(self) -> None:
+        dataset = self.cod_dataset("MLI", "unreviewed", "2026-08-01T12:00:00")
+        self.assertIsNone(official_cod_metadata(dataset))
+
+    def test_enhanced_preferred_selects_enhanced_dataset(self) -> None:
+        datasets = [
+            self.cod_dataset("MLI", "cod-standard", "2026-08-02T12:00:00"),
+            self.cod_dataset("MLI", "cod-enhanced", "2026-08-01T12:00:00"),
+        ]
+        selected, missing = select_official_cod_datasets(datasets, "466", "enhanced_preferred")
+        self.assertFalse(missing)
+        self.assertEqual(selected[0]["_hdp_official"]["cod_level"], "cod-enhanced")
+
+    def test_enhanced_only_does_not_fall_back_to_standard(self) -> None:
+        datasets = [self.cod_dataset("MLI", "cod-standard", "2026-08-02T12:00:00")]
+        selected, missing = select_official_cod_datasets(datasets, "466", "enhanced_only")
+        self.assertFalse(selected)
+        self.assertEqual(missing[0]["iso3166"], "MLI")
 
 
 if __name__ == "__main__":

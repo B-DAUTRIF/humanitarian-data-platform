@@ -2,9 +2,9 @@
 
 ## Diagnostic borné
 
-1. Double-cliquez sur `HDP_Diagnostic_v2.3.cmd`.
+1. Double-cliquez sur `HDP_Diagnostic_v2.3.1.cmd`.
 2. Attendez la fin ; chaque commande externe est limitée à 15 secondes.
-3. Récupérez `HDP_Debug_v2.3_*.log` sur le Bureau.
+3. Récupérez `HDP_Debug_v2.3.1_*.log` sur le Bureau.
 4. Relisez et masquez toute information personnelle avant partage.
 
 ## Problèmes courants
@@ -14,9 +14,12 @@
 | Docker ne répond pas | Premier démarrage, WSL ou conditions Docker en attente | Ouvrir Docker Desktop, terminer son assistant, puis relancer |
 | Port 8080 refusé | Port occupé ou réservé | Lire `HDP_PORT` dans `.env`; l'installateur choisit `18080–18279` |
 | ReliefWeb retourne 503 | `RELIEFWEB_APPNAME` absent | Obtenir un appname pré-approuvé, l'ajouter à `.env`, redémarrer |
-| Création GitHub indisponible | `GITHUB_TOKEN` absent ou conteneur API créé avant la modification de `.env` | Double-cliquer sur [`HDP_Configurer_GitHub_v2.3.cmd`](../source/HDP_Configurer_GitHub_v2.3.cmd), saisir le jeton dans l'invite masquée et attendre la vérification |
+| Création GitHub indisponible | `GITHUB_TOKEN` absent ou conteneur API créé avant la modification de `.env` | Double-cliquer sur [`HDP_Configurer_GitHub_v2.3.1.cmd`](../source/HDP_Configurer_GitHub_v2.3.1.cmd), saisir le jeton dans l'invite masquée et attendre la vérification |
 | Création GitHub refusée | dépôt existant ou droits compte/organisation insuffisants | Choisir un autre nom ou ajuster les permissions du jeton |
-| Synchronisation géographique sans ressource | format choisi absent du jeu HDX | Vérifier le jeu sur HDX ou choisir un autre format |
+| `migration_required` | ancienne portée 2.3.0 plus étroite que le monde | Choisir un territoire ONU M49, puis enregistrer le profil |
+| `no_official_dataset` | aucun COD-AB officiel admissible dans le périmètre | Élargir le périmètre ou autoriser le standard officiel en repli |
+| `no_matching_resource` | format choisi absent des jeux COD-AB officiels | Choisir un autre format sans remplacer le jeu par une source non officielle |
+| Ressources `deferred` | limite de quantité atteinte | Attendre le prochain passage ou augmenter prudemment la limite du projet |
 | Ressource `failed` | URL, réseau, taille, redirection privée ou source distante | Lire l'erreur dans Données locales et ajuster les préférences |
 | Ressource ignorée | Limite de quantité ou format non autorisé | Modifier les préférences du projet |
 | Planification jamais exécutée | Suspendue ou planificateur arrêté | Vérifier le badge de santé, réactiver puis consulter les journaux API |
@@ -37,7 +40,7 @@ N'utilisez pas `docker compose down -v`, **Clean/Purge data** ou **Reset to fact
 
 ## Correctif automatisé du jeton GitHub
 
-Le fichier [`HDP_Configurer_GitHub_v2.3.cmd`](../source/HDP_Configurer_GitHub_v2.3.cmd) applique la procédure complète sous Windows :
+Le fichier [`HDP_Configurer_GitHub_v2.3.1.cmd`](../source/HDP_Configurer_GitHub_v2.3.1.cmd) applique la procédure complète sous Windows :
 
 1. il cible `%USERPROFILE%\HumanitarianDataPlatform` par défaut ;
 2. il demande le jeton dans une saisie masquée et met à jour uniquement la clé `GITHUB_TOKEN` de `.env` ;

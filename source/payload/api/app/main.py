@@ -21,11 +21,17 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
 from .project_integrations import (
-    GEO_SCALES,
+    OFFICIAL_COD_SERIES,
+    UN_M49_SOURCE,
     github_repository_endpoint,
+    m49_scope,
     select_geodata_resources,
+    select_official_cod_datasets,
+    un_m49_catalog,
     validate_github_owner,
     validate_hdx_dataset_id,
+    validate_m49_code,
+    validate_official_cod_policy,
     validate_repository_name,
 )
 from .scheduler_utils import MIN_INTERVAL_MINUTES, next_run_at, validate_interval
@@ -40,7 +46,7 @@ from .security import (
 
 
 APP_NAME = "Humanitarian Data Platform"
-APP_VERSION = "2.3.0"
+APP_VERSION = "2.3.1"
 DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
 DATABASE_URL = os.environ["DATABASE_URL"]
 R_SERVICE_URL = os.getenv("R_SERVICE_URL", "http://r-service:8001")
@@ -91,11 +97,13 @@ class GitHubSettingsUpdate(BaseModel):
 
 class GeodataSettingsUpdate(BaseModel):
     auto_download: bool = False
-    dataset_id: str = Field(default="cod-ab-global", min_length=2, max_length=100)
+    m49_scope_code: str = Field(default="001", pattern=r"^\d{3}$")
+    official_policy: str = Field(
+        default="enhanced_preferred", pattern="^(enhanced_only|enhanced_preferred)$"
+    )
     preferred_format: str = Field(
         default="geojson", pattern="^(geojson|geopackage|shapefile|geodatabase)$"
     )
-    max_scale: str = Field(default="world", pattern="^(terrain|local|national|regional|world)$")
     refresh_interval_minutes: int = Field(default=10_080, ge=60, le=43_200)
 
 
@@ -224,6 +232,9 @@ def initialize_database() -> None:
                         dataset_id TEXT NOT NULL DEFAULT 'cod-ab-global',
                         preferred_format TEXT NOT NULL DEFAULT 'geojson',
                         max_scale TEXT NOT NULL DEFAULT 'world',
+                        m49_scope_code TEXT,
+                        official_policy TEXT NOT NULL DEFAULT 'enhanced_preferred',
+                        migration_required BOOLEAN NOT NULL DEFAULT FALSE,
                         refresh_interval_minutes INTEGER NOT NULL DEFAULT 10080,
                         next_sync_at TIMESTAMPTZ NOT NULL,
                         last_sync_at TIMESTAMPTZ,
@@ -233,6 +244,40 @@ def initialize_database() -> None:
                         updated_at TIMESTAMPTZ NOT NULL
                     )
                     """
+                )
+                connection.execute(
+                    "ALTER TABLE project_geodata_settings ADD COLUMN IF NOT EXISTS m49_scope_code TEXT"
+                )
+                connection.execute(
+                    """
+                    ALTER TABLE project_geodata_settings
+                    ADD COLUMN IF NOT EXISTS official_policy TEXT NOT NULL DEFAULT 'enhanced_preferred'
+                    """
+                )
+                connection.execute(
+                    """
+                    ALTER TABLE project_geodata_settings
+                    ADD COLUMN IF NOT EXISTS migration_required BOOLEAN NOT NULL DEFAULT FALSE
+                    """
+                )
+                connection.execute(
+                    """
+                    UPDATE project_geodata_settings
+                    SET m49_scope_code = '001', migration_required = FALSE
+                    WHERE m49_scope_code IS NULL AND max_scale = 'world'
+                    """
+                )
+                connection.execute(
+                    """
+                    UPDATE project_geodata_settings
+                    SET migration_required = TRUE, auto_download = FALSE,
+                        last_status = 'migration_required',
+                        last_error = 'Sélectionnez un territoire ONU M49 pour remplacer l''ancienne échelle HDP.'
+                    WHERE m49_scope_code IS NULL
+                    """
+                )
+                connection.execute(
+                    "ALTER TABLE project_geodata_settings ALTER COLUMN m49_scope_code SET DEFAULT '001'"
                 )
                 connection.execute(
                     """
@@ -319,6 +364,12 @@ def initialize_database() -> None:
                         sha256 CHAR(64),
                         size_bytes BIGINT,
                         content_type TEXT,
+                        m49_code TEXT,
+                        iso3_code TEXT,
+                        cod_level TEXT,
+                        publisher TEXT,
+                        license_id TEXT,
+                        dataset_modified_at TEXT,
                         status TEXT NOT NULL,
                         error TEXT,
                         created_at TIMESTAMPTZ NOT NULL,
@@ -327,6 +378,15 @@ def initialize_database() -> None:
                     )
                     """
                 )
+                for column in (
+                    "m49_code TEXT",
+                    "iso3_code TEXT",
+                    "cod_level TEXT",
+                    "publisher TEXT",
+                    "license_id TEXT",
+                    "dataset_modified_at TEXT",
+                ):
+                    connection.execute(f"ALTER TABLE local_resources ADD COLUMN IF NOT EXISTS {column}")
                 connection.execute(
                     """
                     CREATE INDEX IF NOT EXISTS local_resources_project_idx
@@ -429,9 +489,10 @@ def get_geodata_settings(project_id: uuid.UUID) -> dict[str, Any]:
     with database_connection() as connection:
         row = connection.execute(
             """
-            SELECT auto_download, dataset_id, preferred_format, max_scale,
-                   refresh_interval_minutes, next_sync_at, last_sync_at, last_status,
-                   last_error, last_acquisition_id, updated_at
+            SELECT auto_download, preferred_format, refresh_interval_minutes,
+                   next_sync_at, last_sync_at, last_status, last_error,
+                   last_acquisition_id, updated_at, m49_scope_code,
+                   official_policy, migration_required
             FROM project_geodata_settings WHERE project_id = %s
             """,
             (project_id,),
@@ -440,9 +501,7 @@ def get_geodata_settings(project_id: uuid.UUID) -> dict[str, Any]:
         now = datetime.now(UTC)
         return {
             "auto_download": False,
-            "dataset_id": "cod-ab-global",
             "preferred_format": "geojson",
-            "max_scale": "world",
             "refresh_interval_minutes": DEFAULT_GEODATA_INTERVAL_MINUTES,
             "next_sync_at": next_run_at(now, DEFAULT_GEODATA_INTERVAL_MINUTES),
             "last_sync_at": None,
@@ -450,12 +509,13 @@ def get_geodata_settings(project_id: uuid.UUID) -> dict[str, Any]:
             "last_error": None,
             "last_acquisition_id": None,
             "updated_at": now,
+            "m49_scope_code": "001",
+            "official_policy": "enhanced_preferred",
+            "migration_required": False,
         }
     keys = [
         "auto_download",
-        "dataset_id",
         "preferred_format",
-        "max_scale",
         "refresh_interval_minutes",
         "next_sync_at",
         "last_sync_at",
@@ -463,10 +523,13 @@ def get_geodata_settings(project_id: uuid.UUID) -> dict[str, Any]:
         "last_error",
         "last_acquisition_id",
         "updated_at",
+        "m49_scope_code",
+        "official_policy",
+        "migration_required",
     ]
     values = list(row)
-    if values[9]:
-        values[9] = str(values[9])
+    if values[7]:
+        values[7] = str(values[7])
     return dict(zip(keys, values))
 
 
@@ -624,6 +687,31 @@ async def fetch_hdx_dataset(dataset_id: str) -> tuple[dict[str, Any], dict[str, 
     return payload, payload["result"]
 
 
+async def fetch_hdx_official_cod_catalog() -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    params = {
+        "fq": f'dataseries_name:"{OFFICIAL_COD_SERIES}"',
+        "rows": 1000,
+        "sort": "metadata_modified desc",
+    }
+    async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+        response = await client.get(
+            "https://data.humdata.org/api/3/action/package_search", params=params
+        )
+        response.raise_for_status()
+        payload = response.json()
+    result = payload.get("result")
+    if not payload.get("success") or not isinstance(result, dict):
+        raise httpx.HTTPStatusError(
+            "Réponse CKAN signalée en échec", request=response.request, response=response
+        )
+    datasets = result.get("results")
+    if not isinstance(datasets, list):
+        raise httpx.HTTPStatusError(
+            "Catalogue CKAN invalide", request=response.request, response=response
+        )
+    return payload, [dataset for dataset in datasets if isinstance(dataset, dict)]
+
+
 def format_allowed(resource_format: str | None, allowed: list[str]) -> bool:
     if not allowed:
         return True
@@ -640,6 +728,9 @@ def reserve_resource(
 ) -> tuple[uuid.UUID, str | None, str]:
     url = str(resource["url"])
     key = resource_key(resource.get("id"), url)
+    official = resource.get("_hdp_official")
+    if not isinstance(official, dict):
+        official = {}
     with database_connection() as connection:
         existing = connection.execute(
             """
@@ -650,6 +741,30 @@ def reserve_resource(
             (project_id, key, url),
         ).fetchone()
         if existing:
+            if existing[2] != "completed":
+                connection.execute(
+                    """
+                    UPDATE local_resources
+                    SET acquisition_id = %s, source = %s, dataset_id = %s,
+                        m49_code = %s, iso3_code = %s, cod_level = %s,
+                        publisher = %s, license_id = %s, dataset_modified_at = %s,
+                        updated_at = %s
+                    WHERE id = %s
+                    """,
+                    (
+                        acquisition_id,
+                        source,
+                        dataset_id,
+                        official.get("m49_code"),
+                        official.get("iso3"),
+                        official.get("cod_level"),
+                        official.get("publisher"),
+                        official.get("license_id"),
+                        official.get("metadata_modified"),
+                        datetime.now(UTC),
+                        existing[0],
+                    ),
+                )
             return existing[0], existing[1], existing[2]
         resource_id = uuid.uuid4()
         now = datetime.now(UTC)
@@ -657,8 +772,10 @@ def reserve_resource(
             """
             INSERT INTO local_resources
                 (id, project_id, acquisition_id, resource_key, source, dataset_id, resource_id,
-                 title, url, format, status, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'queued', %s, %s)
+                 title, url, format, m49_code, iso3_code, cod_level, publisher, license_id,
+                 dataset_modified_at, status, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    'queued', %s, %s)
             """,
             (
                 resource_id,
@@ -671,6 +788,12 @@ def reserve_resource(
                 resource.get("name") or "Ressource",
                 url,
                 resource.get("format"),
+                official.get("m49_code"),
+                official.get("iso3"),
+                official.get("cod_level"),
+                official.get("publisher"),
+                official.get("license_id"),
+                official.get("metadata_modified"),
                 now,
                 now,
             ),
@@ -764,14 +887,15 @@ async def download_resources(
     items: list[dict[str, Any]],
     preferences: dict[str, Any],
 ) -> dict[str, int]:
-    summary = {"queued": 0, "completed": 0, "skipped": 0, "failed": 0}
+    summary = {"queued": 0, "completed": 0, "skipped": 0, "failed": 0, "deferred": 0}
     cap = int(preferences["max_resources_per_acquisition"])
     candidates: list[tuple[str | None, dict[str, Any]]] = []
     for item in items:
         for resource in item.get("resources", []):
             if resource.get("url"):
                 candidates.append((str(item.get("id")) if item.get("id") else None, resource))
-    for dataset_id, resource in candidates[:cap]:
+    attempted = 0
+    for dataset_id, resource in candidates:
         if not format_allowed(resource.get("format"), preferences.get("allowed_formats", [])):
             summary["skipped"] += 1
             continue
@@ -785,6 +909,10 @@ async def download_resources(
                     continue
             except ValueError:
                 pass
+        if attempted >= cap:
+            summary["deferred"] += 1
+            continue
+        attempted += 1
         summary["queued"] += 1
         try:
             await download_one(
@@ -798,7 +926,6 @@ async def download_resources(
         except (httpx.HTTPError, OSError, ValueError) as exc:
             update_resource(resource_db_id, "failed", error=str(exc)[:1000])
             summary["failed"] += 1
-    summary["skipped"] += max(0, len(candidates) - cap)
     return summary
 
 
@@ -820,7 +947,7 @@ async def execute_acquisition(
         raise HTTPException(status_code=502, detail=f"Source distante indisponible: {exc}") from exc
 
     provenance = persist_raw(project_id, source, query, payload, len(items), schedule_id)
-    downloads = {"queued": 0, "completed": 0, "skipped": 0, "failed": 0}
+    downloads = {"queued": 0, "completed": 0, "skipped": 0, "failed": 0, "deferred": 0}
     if auto_download:
         downloads = await download_resources(
             project_id,
@@ -864,72 +991,121 @@ async def execute_geodata_sync(
 ) -> dict[str, Any]:
     ensure_project(project_id)
     profile = settings or get_geodata_settings(project_id)
-    dataset_id = validate_hdx_dataset_id(str(profile["dataset_id"]))
+    if profile.get("migration_required"):
+        raise HTTPException(
+            status_code=409,
+            detail="Sélectionnez et enregistrez un territoire ONU M49 avant la synchronisation.",
+        )
+    scope_code = validate_m49_code(str(profile["m49_scope_code"]))
+    policy = validate_official_cod_policy(str(profile["official_policy"]))
     preferred_format = str(profile["preferred_format"])
-    max_scale = str(profile["max_scale"])
     try:
-        hdx_payload, dataset = await fetch_hdx_dataset(dataset_id)
+        hdx_payload, catalog = await fetch_hdx_official_cod_catalog()
     except httpx.HTTPError as exc:
         finish_geodata_sync(project_id, "failed", error=f"Source HDX indisponible: {exc}"[:2000])
         raise HTTPException(status_code=502, detail=f"Source HDX indisponible: {exc}") from exc
 
-    selected = select_geodata_resources(dataset.get("resources", []), preferred_format)
-    item = {
-        "id": dataset.get("name") or dataset_id,
-        "title": dataset.get("title") or dataset_id,
-        "date": dataset.get("metadata_modified"),
-        "url": f"https://data.humdata.org/dataset/{dataset.get('name') or dataset_id}",
-        "source": "HDX/CKAN — COD-AB",
-        "resources": selected,
-    }
+    datasets, missing = select_official_cod_datasets(catalog, scope_code, policy)
+    items: list[dict[str, Any]] = []
+    no_matching_format: list[dict[str, Any]] = []
+    for dataset in datasets:
+        official = dict(dataset["_hdp_official"])
+        selected = []
+        for resource in select_geodata_resources(dataset.get("resources", []), preferred_format):
+            annotated = dict(resource)
+            annotated["_hdp_official"] = official
+            selected.append(annotated)
+        if not selected:
+            no_matching_format.append(official)
+        items.append(
+            {
+                "id": official["dataset_id"],
+                "title": dataset.get("title") or official["dataset_id"],
+                "date": dataset.get("metadata_modified"),
+                "url": f"https://data.humdata.org/dataset/{official['dataset_id']}",
+                "source": "HDX/CKAN — COD-AB officiel",
+                "official": official,
+                "resources": selected,
+            }
+        )
+
+    scope = m49_scope(scope_code)
     archived_payload = {
-        "hdx": hdx_payload,
+        "hdx_catalog_response": hdx_payload,
         "hdp_geographic_profile": {
-            "profile": "HDX COD-AB",
-            "dataset_id": dataset_id,
+            "profile": "ONU M49 + COD-AB officiel OCHA/HDX",
+            "m49_scope": scope,
+            "official_policy": policy,
             "preferred_format": preferred_format,
-            "maximum_scale": max_scale,
-            "scale_semantics": "Classification opérationnelle HDP, de terrain à monde",
+            "official_data_series": OFFICIAL_COD_SERIES,
+            "accepted_cod_levels": ["cod-enhanced"]
+            if policy == "enhanced_only"
+            else ["cod-enhanced", "cod-standard"],
+            "un_m49_source": UN_M49_SOURCE,
+            "selected_datasets": [item["official"] for item in items],
+            "missing_m49_entities": missing,
+            "datasets_without_preferred_format": no_matching_format,
         },
     }
     provenance = persist_raw(
         project_id,
         "hdx-geodata",
-        f"{dataset_id}@{max_scale}",
+        f"m49-{scope_code}-{policy}-{preferred_format}",
         archived_payload,
-        1,
+        len(datasets),
         None,
     )
     acquisition_id = uuid.UUID(provenance["acquisition_id"])
-    downloads = {"queued": 0, "completed": 0, "skipped": 0, "failed": 0}
-    warning = None
-    if selected:
+    downloads = {"queued": 0, "completed": 0, "skipped": 0, "failed": 0, "deferred": 0}
+    warnings: list[str] = []
+    resource_count = sum(len(item["resources"]) for item in items)
+    if resource_count:
         preferences = get_preferences(project_id)
-        # The profile already selected resources using format, name and URL aliases.
-        # Do not apply the stricter generic format-only filter a second time.
         preferences["allowed_formats"] = []
         downloads = await download_resources(
-            project_id, acquisition_id, "hdx-geodata", [item], preferences
+            project_id, acquisition_id, "hdx-geodata", items, preferences
         )
         if downloads["failed"]:
-            status = "partial" if downloads["completed"] or downloads["skipped"] else "failed"
-            warning = "Une ou plusieurs ressources géographiques n'ont pas pu être téléchargées."
-        else:
-            status = "completed"
-    else:
-        status = "no_matching_resource"
-        warning = f"Aucune ressource au format {preferred_format} n'est publiée dans ce jeu HDX."
+            warnings.append(f"{downloads['failed']} téléchargement(s) ont échoué.")
+        if downloads["deferred"]:
+            warnings.append(
+                f"{downloads['deferred']} ressource(s) reportée(s) au prochain passage par la limite du projet."
+            )
+    if missing:
+        examples = ", ".join(str(entity["name"]) for entity in missing[:5])
+        suffix = "…" if len(missing) > 5 else ""
+        warnings.append(
+            f"Aucun COD-AB officiel admissible pour {len(missing)} pays ou zone(s) M49 : {examples}{suffix}"
+        )
+    if no_matching_format:
+        warnings.append(
+            f"{len(no_matching_format)} jeu(x) officiel(s) ne publient pas le format {preferred_format}."
+        )
 
+    if not datasets:
+        status = "no_official_dataset"
+    elif not resource_count:
+        status = "no_matching_resource"
+    elif downloads["failed"] and not downloads["completed"] and not downloads["skipped"]:
+        status = "failed"
+    elif warnings:
+        status = "partial"
+    else:
+        status = "completed"
+
+    warning = " ".join(warnings) or None
     finish_geodata_sync(project_id, status, acquisition_id, warning)
     return {
         "project_id": str(project_id),
-        "dataset_id": dataset_id,
+        "m49_scope": scope,
+        "official_policy": policy,
         "preferred_format": preferred_format,
-        "max_scale": max_scale,
         "acquisition_id": str(acquisition_id),
         "raw_path": provenance["raw_path"],
         "sha256": provenance["sha256"],
-        "resource_count": len(selected),
+        "dataset_count": len(datasets),
+        "missing_dataset_count": len(missing),
+        "resource_count": resource_count,
         "downloads": downloads,
         "status": status,
         "warning": warning,
@@ -1019,11 +1195,12 @@ def claim_due_geodata() -> dict[str, Any] | None:
     with database_connection(autocommit=False) as connection:
         row = connection.execute(
             """
-            SELECT g.project_id, g.dataset_id, g.preferred_format, g.max_scale,
-                   g.refresh_interval_minutes
+            SELECT g.project_id, g.m49_scope_code, g.official_policy,
+                   g.preferred_format, g.refresh_interval_minutes, g.migration_required
             FROM project_geodata_settings g
             JOIN projects p ON p.id = g.project_id
-            WHERE g.auto_download = TRUE AND g.next_sync_at <= %s AND p.archived_at IS NULL
+            WHERE g.auto_download = TRUE AND g.migration_required = FALSE
+                  AND g.next_sync_at <= %s AND p.archived_at IS NULL
             ORDER BY g.next_sync_at ASC FOR UPDATE OF g SKIP LOCKED LIMIT 1
             """,
             (now,),
@@ -1042,10 +1219,11 @@ def claim_due_geodata() -> dict[str, Any] | None:
         connection.commit()
     return {
         "project_id": row[0],
-        "dataset_id": row[1],
-        "preferred_format": row[2],
-        "max_scale": row[3],
+        "m49_scope_code": row[1],
+        "official_policy": row[2],
+        "preferred_format": row[3],
         "refresh_interval_minutes": row[4],
+        "migration_required": row[5],
     }
 
 
@@ -1101,9 +1279,9 @@ def sources() -> list[dict[str, str]]:
     ]
 
 
-@app.get("/api/geographic-scales")
-def geographic_scales() -> list[dict[str, Any]]:
-    return [dict(item) for item in GEO_SCALES]
+@app.get("/api/un-m49/entities")
+def un_m49_entities() -> dict[str, Any]:
+    return {"source": UN_M49_SOURCE, "entities": un_m49_catalog()}
 
 
 @app.get("/api/projects")
@@ -1361,7 +1539,11 @@ async def create_github_repository(project_id: uuid.UUID) -> dict[str, Any]:
 def project_geodata(project_id: uuid.UUID) -> dict[str, Any]:
     ensure_project(project_id)
     settings = get_geodata_settings(project_id)
-    settings["scale"] = next(item for item in GEO_SCALES if item["id"] == settings["max_scale"])
+    settings["scope"] = (
+        m49_scope(settings["m49_scope_code"]) if settings.get("m49_scope_code") else None
+    )
+    settings["m49_source"] = UN_M49_SOURCE
+    settings["official_data_series"] = OFFICIAL_COD_SERIES
     return settings
 
 
@@ -1371,9 +1553,12 @@ def update_project_geodata(
 ) -> dict[str, Any]:
     ensure_project(project_id)
     try:
-        dataset_id = validate_hdx_dataset_id(payload.dataset_id)
+        scope_code = validate_m49_code(payload.m49_scope_code)
+        official_policy = validate_official_cod_policy(payload.official_policy)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    scope = m49_scope(scope_code)
+    legacy_scale = "world" if scope_code == "001" else "national" if scope["type"] == 4 else "regional"
     now = datetime.now(UTC)
     current = get_geodata_settings(project_id)
     next_sync = current["next_sync_at"]
@@ -1386,13 +1571,17 @@ def update_project_geodata(
             """
             INSERT INTO project_geodata_settings
                 (project_id, auto_download, dataset_id, preferred_format, max_scale,
+                 m49_scope_code, official_policy, migration_required,
                  refresh_interval_minutes, next_sync_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, 'official-cod-ab-catalog', %s, %s, %s, %s, FALSE, %s, %s, %s)
             ON CONFLICT (project_id) DO UPDATE SET
                 auto_download = EXCLUDED.auto_download,
                 dataset_id = EXCLUDED.dataset_id,
                 preferred_format = EXCLUDED.preferred_format,
                 max_scale = EXCLUDED.max_scale,
+                m49_scope_code = EXCLUDED.m49_scope_code,
+                official_policy = EXCLUDED.official_policy,
+                migration_required = FALSE,
                 refresh_interval_minutes = EXCLUDED.refresh_interval_minutes,
                 next_sync_at = EXCLUDED.next_sync_at,
                 updated_at = EXCLUDED.updated_at
@@ -1400,9 +1589,10 @@ def update_project_geodata(
             (
                 project_id,
                 payload.auto_download,
-                dataset_id,
                 payload.preferred_format,
-                payload.max_scale,
+                legacy_scale,
+                scope_code,
+                official_policy,
                 payload.refresh_interval_minutes,
                 next_sync,
                 now,
@@ -1478,7 +1668,8 @@ def resources(
             f"""
             SELECT id, acquisition_id, source, dataset_id, resource_id, title, url, format,
                    filename, local_path, sha256, size_bytes, content_type, status, error,
-                   created_at, updated_at, deleted_at
+                   created_at, updated_at, deleted_at, m49_code, iso3_code, cod_level,
+                   publisher, license_id, dataset_modified_at
             FROM local_resources WHERE {where} ORDER BY updated_at DESC LIMIT %s
             """,  # noqa: S608
             parameters,
@@ -1503,6 +1694,12 @@ def resources(
             "created_at": row[15],
             "updated_at": row[16],
             "deleted_at": row[17],
+            "m49_code": row[18],
+            "iso3_code": row[19],
+            "cod_level": row[20],
+            "publisher": row[21],
+            "license_id": row[22],
+            "dataset_modified_at": row[23],
         }
         for row in rows
     ]

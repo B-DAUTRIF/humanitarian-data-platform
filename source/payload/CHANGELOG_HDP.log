@@ -1,0 +1,33 @@
+Humanitarian Data Platform — journal applicatif des versions
+=============================================================
+
+[2026-08-07] Version 2.3.1
+--------------------------
+- Le module géographique utilise exclusivement la nomenclature ONU M49 embarquée.
+- La saisie libre d'un identifiant de jeu HDX est supprimée du profil géographique.
+- Seule la série officielle OCHA/HDX « COD - Subnational Administrative Boundaries »
+  est admissible, avec les niveaux cod-enhanced ou cod-standard.
+- Deux politiques sont disponibles : cod-enhanced uniquement, ou cod-enhanced
+  avec cod-standard officiel en repli.
+- Chaque ressource géographique locale conserve le code M49, le code ISO3, le
+  niveau COD, l'éditeur, la licence et la date des métadonnées HDX.
+- Migration : un ancien profil « monde » devient ONU M49 001. Toute ancienne
+  portée plus étroite est désactivée et marquée migration_required jusqu'au choix
+  explicite d'un territoire M49 ; aucune portée n'est déduite arbitrairement.
+- Téléchargements : une ressource déjà complète ne consomme plus la limite du
+  passage. Les ressources au-delà du quota sont marquées deferred et seront
+  reprises lors d'un passage ultérieur.
+- Référentiel embarqué : ONU M49, instantané du 7 août 2026, 278 entités dont
+  248 pays ou zones ISO3. Génération intermédiaire un-m49 2.2.0 (licence MIT).
+- Validation de livraison : 21 tests unitaires, compilation Python, contrôle
+  JavaScript, reconstruction de l'installateur Windows et vérification des ZIP.
+
+[2026-08-07] Version 2.3.0
+--------------------------
+- Gestion par projets des ressources, préférences, scripts et planifications.
+- Création d'un dépôt GitHub depuis les paramètres du projet.
+- Synchronisation géographique HDX initiale avec échelle opérationnelle.
+- Ajout du correctif Windows sécurisé de configuration de GITHUB_TOKEN.
+
+Ce fichier est livré dans le répertoire d'installation. Il ne contient ni jeton,
+ni mot de passe, ni donnée utilisateur.

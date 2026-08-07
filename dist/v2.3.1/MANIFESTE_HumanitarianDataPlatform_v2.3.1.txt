@@ -1,0 +1,105 @@
+MANIFESTE DE REMISE — HUMANITARIAN DATA PLATFORM 2.3.1
+=====================================================
+Date de construction : 7 août 2026
+Cible : Windows 10/11 x64
+Dépôt : B-DAUTRIF/humanitarian-data-platform (privé)
+
+CONTENU AVANT ARCHIVE COMPLÈTE
+------------------------------
+CHANGELOG_HDP_v2.3.1.log
+  2 019 octets
+  SHA-256 bbf73ce846755dcef0a252954363b5bf011096010ab021bd194b324e2420e53a
+
+HDP_Configurer_GitHub_v2.3.1.cmd
+  4 214 octets
+  SHA-256 0d8a0d9d1c88a9cfa775350cea4366d9e7d3e0ec3fe87dd74c61c0f341f58270
+
+HDP_Diagnostic_v2.3.1.cmd
+  6 152 octets
+  SHA-256 a890461d2831263768938b3bea09d0a76d5a83654293e7345c0452c2feffbd21
+
+HDP_Prompt_exhaustif_reprise_GPT_Plus_v2.3.1.txt
+  25 399 octets
+  SHA-256 cb1b769a637669804e168d6c736e958216cce0bc124ad2d1adfd855aa9cc8018
+
+HumanitarianDataPlatform_Setup_Native_GUI_v2.3.1.exe
+  376 832 octets
+  SHA-256 a386c8868c5c258428c1e1df947f4aeb609c21b69abc7125e614509d52bd4c88
+
+HumanitarianDataPlatform_Setup_Native_GUI_v2.3.1.exe.sha256
+  119 octets
+  SHA-256 ad40f39139a6c08febcf6ad336a8676a9ffe68c75c926ec75e6437b0e3b7c688
+
+HumanitarianDataPlatform_Setup_README_v2.3.1.txt
+  3 492 octets
+  SHA-256 ca68cdeb6bb4fe6d824f71ae67519f406713b514e39adafb6bb4295cf08421b6
+
+HumanitarianDataPlatform_Source_v2.3.1.zip
+  203 191 octets
+  SHA-256 058c527d3fd19db3471b1f7d57d7931f463e3918dd6f24e3b6b65725b7dc79bf
+
+HumanitarianDataPlatform_Windows_v2.3.1.zip
+  134 721 octets
+  SHA-256 a2f187365c0c13bba3906cefb885813d538bc247b68b3d7bebe0a502f6432e53
+
+Notice_detaillee_Humanitarian_Data_Platform_v2.3.1.pdf
+  77 365 octets — 22 pages A4
+  SHA-256 fe3c3409ce52a11ec3d520ad8b751f15fa78cf0dcf350e608582d20d5cabf688
+
+ÉVOLUTIONS 2.3.1
+----------------
+- périmètre choisi dans l'instantané officiel ONU M49, 278 entités dont
+  248 pays ou zones ISO3 ;
+- suppression de l'identifiant HDX libre dans le module géographique ;
+- sélection stricte de la série OCHA/HDX
+  « COD - Subnational Administrative Boundaries » ;
+- niveaux cod-enhanced ou cod-standard selon la politique du projet ;
+- provenance M49, ISO3, niveau COD, éditeur, licence et date HDX ;
+- migration sûre des profils 2.3.0, sans déduction arbitraire de territoire ;
+- les ressources déjà présentes ne consomment plus le quota ; les suivantes
+  sont reportées et reprises lors d'un passage ultérieur ;
+- journal CHANGELOG_HDP.log livré dans le payload et le répertoire de remise.
+
+CONSTITUTION DES PAQUETS
+-----------------------
+Paquet Windows : EXE, empreinte EXE, notice courte, diagnostic et correctif
+GitHub sécurisé.
+
+Archive source : README, CHANGELOG, documentation Markdown hors prompts de
+livraison auto-référents, payload FastAPI/R, instantané M49, interface,
+installateur C/Win32, payload_generated.h, tests et générateur PDF. Elle exclut
+l'EXE de construction, les PDB, installer.res et les caches Python.
+
+Archive complète : fichiers de remise, manifeste et SHA256SUMS.txt dans le
+dossier HumanitarianDataPlatform_v2.3.1. Elle ne s'inclut pas elle-même.
+
+VALIDATIONS EFFECTUÉES
+----------------------
+- modules Python compilés sans erreur ;
+- 21 tests unitaires réussis ;
+- syntaxe JavaScript de l'interface acceptée par Node.js ;
+- compose.yaml analysé avec PyYAML ;
+- payload régénéré ; 18 fichiers reconstruits et comparés à l'identique ;
+- installateur compilé en PE32+ GUI x86-64, 7 sections ;
+- archives Source, Windows et complète contrôlées avec unzip -t ;
+- empreintes de SHA256SUMS.txt vérifiées avec sha256sum -c ;
+- livrables historiques v2.3.0 et v2.0 vérifiés sans modification ;
+- notice PDF : 22 pages A4 rendues en PNG et inspectées visuellement.
+
+VALIDATIONS NON EFFECTUÉES DANS CET ENVIRONNEMENT
+------------------------------------------------
+Docker n'était pas installé dans l'environnement Linux de construction. La
+migration PostgreSQL/PostGIS, les appels réels GitHub/HDX, le parcours web
+complet et l'installation Windows n'ont pas été exécutés. Ils restent à rejouer
+sur Windows avec Docker Desktop. La compilation et les tests hors Docker ne
+constituent pas une recette fonctionnelle complète.
+
+SÉCURITÉ, SOURCES ET LICENCE
+----------------------------
+L'API reste destinée à 127.0.0.1. Le jeton GitHub doit avoir des droits minimaux.
+Le module géographique utilise ONU M49 et les COD-AB officiels OCHA/HDX, mais
+l'utilisateur doit toujours vérifier qualité, date, licence et adéquation. Les
+groupements M49 sont statistiques et n'impliquent aucune position politique.
+
+L'installateur n'est pas signé par certificat d'éditeur. Aucune licence HDP
+explicite n'est incluse ; le dépôt reste privé jusqu'au choix d'une licence.

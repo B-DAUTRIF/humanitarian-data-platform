@@ -20,7 +20,7 @@
 #include "payload_generated.h"
 
 #define APP_NAME L"Humanitarian Data Platform"
-#define APP_VERSION L"2.3.0"
+#define APP_VERSION L"2.3.1"
 #define MAIN_CLASS L"HDP_NATIVE_INSTALLER_23"
 
 #define ID_PATH 1001
@@ -1092,7 +1092,7 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
         case WM_CREATE: {
             g_font = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
             HWND header = create_control(L"STATIC", L"Humanitarian Data Platform", SS_LEFT, 0, window);
-            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 2.3.0 — GitHub, géodonnées HDX et projets", SS_LEFT, 0, window);
+            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 2.3.1 — projets, GitHub et géodonnées ONU M49", SS_LEFT, 0, window);
             HWND path_label = create_control(L"STATIC", L"Dossier d'installation", SS_LEFT, 0, window);
             HWND relief_label = create_control(L"STATIC", L"Appname ReliefWeb", SS_LEFT, 0, window);
             HWND github_label = create_control(L"STATIC", L"Jeton GitHub", SS_LEFT, 0, window);

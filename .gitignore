@@ -18,6 +18,7 @@ build/
 
 # Logs and editor files
 *.log
+!source/payload/CHANGELOG_HDP.log
 .vscode/
 .idea/
 Thumbs.db

@@ -1,4 +1,4 @@
-# Humanitarian Data Platform 2.3.0
+# Humanitarian Data Platform 2.3.1
 
 Application locale pour organiser des acquisitions humanitaires par projets.
 
@@ -20,6 +20,8 @@ Le service est lié exclusivement à `127.0.0.1`. PostgreSQL/PostGIS n'est pas e
 - planificateur persistant, intervalle minimal de 15 minutes et historique des exécutions ;
 - gestion locale : inventaire, téléchargement, vérification SHA-256 et suppression avec conservation de la provenance ;
 - stockage et modification de scripts par projet, sans exécution automatique.
+- périmètre géographique choisi dans la nomenclature officielle ONU M49 ;
+- téléchargement limité aux COD-AB officiels OCHA/HDX, avec provenance complète.
 
 Les données sont écrites dans `data/raw/<projet>` et `data/projects/<projet>/resources`. Les métadonnées sont conservées dans PostgreSQL.
 
@@ -33,6 +35,14 @@ Le schéma est migré au démarrage. Les acquisitions existantes rejoignent le �
 
 Exécutez `stop-hdp.cmd`. Les volumes et fichiers locaux restent intacts.
 
+## Module géographique officiel
+
+La saisie libre d'un identifiant HDX n'est pas proposée dans ce module. HDP
+interroge uniquement la série `COD - Subnational Administrative Boundaries` et
+accepte les niveaux `cod-enhanced`, ou `cod-standard` lorsque la politique du
+projet l'autorise. Les codes M49, ISO3, éditeur, licence et date des métadonnées
+sont archivés avec chaque ressource.
+
 ## Limite de sécurité
 
-HDP 2.3 est une application locale, non un serveur Internet durci. Les scripts sont gérés comme contenu uniquement : aucune route ne les exécute. Le profil géographique HDX COD-AB conserve la couverture réellement publiée par la source ; l'échelle maximale est une classification d'usage HDP.
+HDP 2.3.1 est une application locale, non un serveur Internet durci. Les scripts sont gérés comme contenu uniquement : aucune route ne les exécute. Les groupements M49 sont statistiques et n'impliquent aucune prise de position politique.

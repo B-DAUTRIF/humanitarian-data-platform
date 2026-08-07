@@ -1,4 +1,4 @@
-# Guide utilisateur 2.3
+# Guide utilisateur 2.3.1
 
 ## Projet actif
 
@@ -34,16 +34,17 @@ Le champ compte peut rester vide pour utiliser le compte associé à `GITHUB_TOK
 
 Le jeton n'est pas un paramètre de projet : il est lu depuis `.env`, masqué dans l'installeur et absent des réponses API et des journaux HDP.
 
-## Jeu géographique HDX
+## Géodonnées ONU M49 et HDX
 
-Le profil par défaut vise `cod-ab-global`, le jeu global de limites administratives communes COD-AB publié sur HDX. Choisissez :
+Le module géographique ne demande plus d'identifiant HDX libre. Choisissez :
 
 - un format : GeoJSON, GeoPackage, Shapefile ou File Geodatabase ;
-- une portée maximale : terrain, local, national, régional ou monde ;
+- un périmètre ONU M49 : monde, région, sous-région, région intermédiaire, pays ou zone ;
+- une politique : COD amélioré uniquement, ou COD amélioré avec standard officiel en repli ;
 - un intervalle d'actualisation entre 60 minutes et 30 jours ;
 - la synchronisation automatique, ou **Synchroniser maintenant**.
 
-Chaque passage archive la réponse `package_show` de HDX, le profil choisi et son empreinte SHA-256. Les ressources au format préféré sont ensuite téléchargées avec les garde-fous du projet. L'échelle est une classification opérationnelle HDP : elle n'altère pas et ne complète pas la couverture géographique réellement publiée par HDX.
+Chaque passage interroge la série officielle `COD - Subnational Administrative Boundaries`, vérifie le niveau COD et l'appartenance ISO3 au périmètre M49, puis archive la réponse CKAN et sa décision. Les codes M49, ISO3, niveau COD, éditeur et licence restent associés aux ressources locales.
 
 ## Données locales
 
@@ -55,7 +56,7 @@ La rubrique **Données locales** présente les compteurs, la taille totale et ch
 
 ## Scripts
 
-Un script possède un nom, un langage, une description et un contenu. Il peut être créé, modifié ou archivé dans son projet. HDP 2.3 n'exécute aucun script : n'utilisez pas cette bibliothèque comme moteur de traitement.
+Un script possède un nom, un langage, une description et un contenu. Il peut être créé, modifié ou archivé dans son projet. HDP 2.3.1 n'exécute aucun script : n'utilisez pas cette bibliothèque comme moteur de traitement.
 
 ## Planifications
 

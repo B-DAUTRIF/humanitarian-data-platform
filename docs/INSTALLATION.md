@@ -12,14 +12,14 @@ L'installateur peut proposer Docker Desktop, Git et Visual Studio Code via `wing
 
 ## Installation
 
-1. Décompressez `HumanitarianDataPlatform_Windows_v2.3.zip`.
+1. Décompressez `HumanitarianDataPlatform_Windows_v2.3.1.zip`.
 2. Vérifiez l'empreinte de l'exécutable :
 
    ```powershell
-   Get-FileHash .\HumanitarianDataPlatform_Setup_Native_GUI_v2.3.exe -Algorithm SHA256
+   Get-FileHash .\HumanitarianDataPlatform_Setup_Native_GUI_v2.3.1.exe -Algorithm SHA256
    ```
 
-3. Comparez le résultat au contenu de `HumanitarianDataPlatform_Setup_Native_GUI_v2.3.exe.sha256`.
+3. Comparez le résultat au contenu de `HumanitarianDataPlatform_Setup_Native_GUI_v2.3.1.exe.sha256`.
 4. Lancez l'exécutable et vérifiez le dossier proposé :
 
    ```text
@@ -34,7 +34,7 @@ L'installateur choisit `8080` si possible, sinon un port libre entre `18080` et 
 
 ## Mise à niveau depuis 1.5
 
-Relancez l'installateur 2.3 en conservant le même dossier. Il remplace les fichiers applicatifs embarqués mais préserve :
+Relancez l'installateur 2.3.1 en conservant le même dossier. Il remplace les fichiers applicatifs embarqués mais préserve :
 
 - `.env`, donc le mot de passe PostgreSQL, l'appname ReliefWeb, le jeton GitHub et le port ;
 - le volume nommé `postgres_data` ;
@@ -42,6 +42,10 @@ Relancez l'installateur 2.3 en conservant le même dossier. Il remplace les fich
 - les images Docker déjà téléchargées.
 
 Au premier démarrage, l'API effectue la migration idempotente. Voir [Migration depuis 1.5](MIGRATION_V2.md).
+
+Après une mise à niveau depuis 2.3.0, vérifiez le profil géographique de chaque
+projet. L'ancienne portée monde devient M49 `001`. Une ancienne portée plus
+étroite reste suspendue tant qu'un territoire M49 n'a pas été choisi.
 
 ## Démarrage et arrêt
 
