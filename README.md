@@ -31,6 +31,8 @@ Application locale Windows pour rechercher des données humanitaires publiques, 
 
 L'application s'ouvre sur `http://localhost:8080` ou sur un port libre entre `18080` et `18279`. Elle reste liée à `127.0.0.1`.
 
+Si les paramètres d'un projet affichent « `GITHUB_TOKEN absent : la création reste indisponible.` », utilisez le [correctif Windows automatisé](source/HDP_Configurer_GitHub_v2.3.cmd). Il configure le secret par saisie masquée, recrée uniquement l'API et vérifie le résultat sans révéler le jeton.
+
 ## Documentation
 
 - [Guide utilisateur](docs/USER_GUIDE.md)
