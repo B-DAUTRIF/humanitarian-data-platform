@@ -28,6 +28,24 @@ services:
       timeout: 5s
       retries: 12
 
+  github-api:
+    build: ./github-api
+    restart: unless-stopped
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_API_VERSION: ${GITHUB_API_VERSION:-2026-03-10}
+      GITHUB_DEFAULT_OWNER: ${GITHUB_DEFAULT_OWNER:-B-DAUTRIF}
+      GITHUB_DEFAULT_REPOSITORY: ${GITHUB_DEFAULT_REPOSITORY:-humanitarian-data-platform}
+      GITHUB_API_WRITE_ENABLED: ${GITHUB_API_WRITE_ENABLED:-false}
+      GITHUB_API_TIMEOUT_SECONDS: ${GITHUB_API_TIMEOUT_SECONDS:-20}
+    ports:
+      - "127.0.0.1:${HDP_GITHUB_API_PORT:-8091}:8091"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8091/health', timeout=3)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
   api:
     build: ./api
     restart: unless-stopped
@@ -37,12 +55,15 @@ services:
       R_SERVICE_URL: http://r-service:8001
       RELIEFWEB_APPNAME: ${RELIEFWEB_APPNAME:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_API_SERVICE_URL: http://github-api:8091
     volumes:
       - ./data:/app/data
     ports:
       - "127.0.0.1:${HDP_PORT:-8080}:8080"
     depends_on:
       db:
+        condition: service_healthy
+      github-api:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/api/health', timeout=3)\""]
