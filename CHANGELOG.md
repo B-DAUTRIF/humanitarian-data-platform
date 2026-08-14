@@ -1,5 +1,16 @@
 # Journal des versions
 
+## 2.4.1 — 14 août 2026
+
+- Ajout d'un service Docker `github-api` exposant une passerelle locale vers l'API REST GitHub classique.
+- Fonctions de lecture : dépôt, branches, commits, issues, pull requests, releases, workflows, contenu et rate-limit.
+- Écritures limitées à la création d'issues et au déclenchement manuel de workflows dans cette première version.
+- Écritures GitHub désactivées par défaut et activables uniquement par `GITHUB_API_WRITE_ENABLED=true`.
+- Conservation du jeton GitHub exclusivement côté serveur ; aucun secret n'est renvoyé par l'API.
+- Version REST GitHub configurable avec `GITHUB_API_VERSION`, valeur par défaut `2026-03-10`.
+- Service lié à `127.0.0.1` par défaut sur le port 8091 et intégré à la pile Docker existante sans modifier les flux HDX/COD.
+- Documentation dédiée : `docs/GITHUB_API.md`.
+
 ## 2.4.0 — 7 août 2026
 
 - Présentation des téléchargements officiels sous forme de liste par famille :
