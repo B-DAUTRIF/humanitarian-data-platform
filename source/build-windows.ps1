@@ -38,16 +38,21 @@ try {
         throw "La génération du payload a échoué ($LASTEXITCODE)."
     }
 
+    # A temporary batch file avoids cmd.exe /S /C quote stripping, which can
+    # otherwise pass the compiler commands themselves to vcvars64.bat.
+    $buildScript = Join-Path $OutputDirectory "build-msvc.cmd"
     $commands = @(
-        'call "' + $vcvars + '" -no_logo',
-        'rc.exe /nologo /c 65001 /fo "src\installer.res" "src\installer.rc"',
+        '@echo off',
+        'call "' + $vcvars + '" -no_logo || exit /b 1',
+        'rc.exe /nologo /c 65001 /fo "src\installer.res" "src\installer.rc" || exit /b 1',
         'cl.exe /nologo /O2 /W4 /WX /std:c17 /D_CRT_SECURE_NO_WARNINGS "src\installer.c" "src\installer.res" ' +
             '/Fe:"' + $installerPath + '" /link /SUBSYSTEM:WINDOWS /MACHINE:X64 ' +
             '/DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA comctl32.lib shell32.lib ' +
-            'advapi32.lib winhttp.lib ws2_32.lib bcrypt.lib gdi32.lib user32.lib'
-    ) -join ' && '
+            'advapi32.lib winhttp.lib ws2_32.lib bcrypt.lib gdi32.lib user32.lib || exit /b 1'
+    )
+    Set-Content -LiteralPath $buildScript -Encoding ascii -Value $commands
 
-    & "$env:ComSpec" /d /s /c $commands
+    & "$env:ComSpec" /d /c $buildScript
     if ($LASTEXITCODE -ne 0) {
         throw "La compilation MSVC a échoué ($LASTEXITCODE)."
     }
