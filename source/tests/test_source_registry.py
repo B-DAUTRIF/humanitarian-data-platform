@@ -21,7 +21,7 @@ from app.source_registry import (  # noqa: E402
 
 
 class SourceRegistryContractTest(unittest.TestCase):
-    def test_seven_live_connectors_have_versioned_contracts(self) -> None:
+    def test_ten_live_connectors_have_versioned_contracts(self) -> None:
         self.assertEqual(
             set(CONNECTORS),
             {
@@ -32,11 +32,14 @@ class SourceRegistryContractTest(unittest.TestCase):
                 "unicef-sdmx",
                 "un-sdg",
                 "dhs",
+                "hdx-hapi",
+                "unhcr",
+                "gdacs",
             },
         )
         for source_id in CONNECTORS:
             definition = connector_definition(source_id)
-            self.assertEqual(definition["registry_version"], "3.0.0-iteration-1")
+            self.assertEqual(definition["registry_version"], "4.0.0")
             self.assertTrue(definition["documentation_evidence"])
             self.assertEqual(
                 merge_values(source_id, definition["project_defaults"], scope="project"),
@@ -89,6 +92,12 @@ class SourceRegistryContractTest(unittest.TestCase):
             {**connector_definition("reliefweb")["project_defaults"], "query": "cholera"},
         )
         self.assertIn("RELIEFWEB_APPNAME", reliefweb["display_url"])
+        hapi = request_preview(
+            "hdx-hapi",
+            {**connector_definition("hdx-hapi")["project_defaults"], "query": "cholera"},
+        )
+        self.assertIn("HDX_HAPI_APP_IDENTIFIER", hapi["display_url"])
+        self.assertNotIn("real-secret", hapi["display_url"])
 
     def test_reference_portal_is_enriched_without_project_contract(self) -> None:
         catalog = enrich_source_catalog(
@@ -102,6 +111,26 @@ class SourceRegistryContractTest(unittest.TestCase):
         )
         self.assertIsNone(catalog[0]["project_schema"])
         self.assertEqual(catalog[0]["documentation_evidence"], ["https://example.org/docs"])
+
+    def test_common_federated_criteria_are_exposed_by_every_connector(self) -> None:
+        for source_id in CONNECTORS:
+            definition = connector_definition(source_id)
+            properties = definition["project_schema"]["properties"]
+            self.assertTrue({"query", "date_from", "date_to", "location"} <= set(properties))
+            self.assertEqual(definition["capabilities"]["contract_version"], "4.0.0")
+            self.assertEqual(
+                definition["capabilities"]["criteria"]["location"],
+                "normalized_post_filter",
+            )
+
+    def test_invalid_common_date_range_is_rejected(self) -> None:
+        defaults = connector_definition("hdx")["project_defaults"]
+        with self.assertRaisesRegex(ValueError, "antérieure"):
+            validate_values(
+                "hdx",
+                {**defaults, "date_from": "2026-08-16", "date_to": "2026-08-15"},
+                scope="project",
+            )
 
 
 if __name__ == "__main__":

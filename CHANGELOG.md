@@ -1,5 +1,16 @@
 # Journal des versions
 
+## 4.0.0 — gel fonctionnel — 15 août 2026
+
+- recherche fédérée, critères communs et champs spécifiques ;
+- dix connecteurs actifs avec HAPI, UNHCR et GDACS ;
+- import atomique, périodicité et planification par ressource ;
+- accueil, carte multi-couches et SQL en lecture seule ;
+- recettes CSV/TSV, scripts Python/R et lignée dérivée ;
+- CI, SBOM, sauvegarde/restauration et documentation 4.0.0 ;
+- installateur Windows laissé à recompiler et qualifier faute de
+  compilateur/Windows/certificat.
+
 ## 3.0.0 — version finale — 15 août 2026
 
 - Gel du contrat applicatif et suppression des libellés de préversion.

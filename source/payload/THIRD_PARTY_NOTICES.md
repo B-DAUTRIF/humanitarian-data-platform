@@ -84,7 +84,7 @@ La licence et les conditions de chaque fiche HDX restent applicables.
 
 ## Catalogues sanitaires et épidémiologiques
 
-HDP 3.0.0 contient uniquement les métadonnées descriptives, liens et adaptateurs
+HDP 4.0.0 contient uniquement les métadonnées descriptives, liens et adaptateurs
 nécessaires à l'interrogation des services ci-dessous. Aucun jeu de données de
 ces organismes n'est incorporé à l'application. Les réponses et fichiers restent
 soumis aux licences, conditions, quotas et politiques d'accès de leur éditeur.
@@ -94,6 +94,11 @@ soumis aux licences, conditions, quotas et politiques d'accès de leur éditeur.
 - UNICEF SDMX API : <https://data.unicef.org/sdmx-api-documentation/>
 - UN Global SDG API : <https://unstats.un.org/sdgapi/swagger/>
 - DHS Program API : <https://api.dhsprogram.com/>
+- HDX Humanitarian API : <https://hdx-hapi.readthedocs.io/>
+- UNHCR Refugee Statistics API : <https://api.unhcr.org/docs/refugee-statistics.html>
+- GDACS API : <https://www.gdacs.org/gdacsapi/swagger/index.html>
+- IOM Displacement Tracking Matrix : <https://dtm.iom.int/data-and-analysis>
+- WHO Disease Outbreak News : <https://www.who.int/emergencies/disease-outbreak-news>
 - WHO Mortality Database : <https://www.who.int/data/data-collection-tools/who-mortality-database>
 - WHO GLASS : <https://www.who.int/initiatives/glass>
 - WHO FluNet / FluID : <https://www.who.int/tools/flunet>

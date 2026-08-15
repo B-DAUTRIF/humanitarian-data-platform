@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TD
-    U["Interface web locale"] --> A["FastAPI 3.0.0"]
+    U["Interface web locale"] --> A["FastAPI 4.0.0"]
     A --> P["PostgreSQL + PostGIS"]
     A --> F["Fichiers et rapports"]
     A --> X["Sources distantes"]
@@ -41,10 +41,14 @@ runners utilisent `network_mode: none`.
 | `map_layers` / `map_features` | Couches et géométries PostGIS SRID 4326 | Suit le projet |
 | `schedules` | Définition périodique d'une acquisition | Désactivation et archivage logique |
 | `schedule_runs` | Historique des passages | Conservé avec statut et erreur éventuelle |
+| `federated_searches` / `federated_search_members` | Recherche multi-sources et acquisitions filles | Historique conservé |
+| `data_artifacts` / `lineage_edges` | Artefacts raw/normalized/derived et filiation | Historique conservé |
+| `resource_refresh_schedules` / `resource_refresh_runs` | Mise à jour par fichier | Planification archivable |
+| `processing_recipes` / `processing_runs` | Recettes, rapports et résultats dérivés | Historique conservé |
 
 Le projet par défaut utilise l'UUID stable `00000000-0000-4000-8000-000000000001`. Le démarrage crée les nouvelles tables de façon idempotente, ajoute `project_id` et `schedule_id` à l'historique v1.5, puis rattache les lignes sans projet.
 
-## Intégrations de projet 3.0.0
+## Intégrations de projet 4.0.0
 
 Le registre `source_registry.py` décrit chaque API au moyen d'un contrat
 versionné inspiré de JSON Schema. L'interface génère les champs depuis ce

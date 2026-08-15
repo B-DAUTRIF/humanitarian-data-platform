@@ -1,0 +1,46 @@
+name: HDP validation
+
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Tests Python
+        run: python -m unittest discover -s source/tests -p 'test_*.py'
+      - name: Compilation Python
+        run: python -m compileall -q source/payload/api/app source/payload/github-api source/tests tools
+      - name: Syntaxe JavaScript
+        run: node tools/check_inline_javascript.mjs source/payload/api/static/index.html
+      - name: Contrat Compose
+        run: docker compose -f source/payload/compose.yaml config --quiet
+        env:
+          POSTGRES_PASSWORD: ci-placeholder-not-a-secret
+      - name: Runner C17
+        run: gcc -std=c17 -O2 -Wall -Wextra -Werror source/payload/runner/runner.c -o /tmp/hdp-runner
+      - name: Payload reproductible
+        run: |
+          node source/scripts/generate_payload.mjs source/payload /tmp/payload_generated.h
+          test -s /tmp/payload_generated.h
+          grep -q 'HDP_PAYLOAD_GENERATED_H' /tmp/payload_generated.h
+      - name: SBOM reproductible
+        run: |
+          python tools/generate_sbom.py --output /tmp/SBOM_HDP_v4.0.0.cdx.json
+          cmp /tmp/SBOM_HDP_v4.0.0.cdx.json docs/SBOM_HDP_v4.0.0.cdx.json
+      - name: Contrôles de sécurité statiques
+        run: python tools/security_static_checks.py
+      - name: Diff propre
+        run: git diff --check

@@ -1,4 +1,4 @@
-# Humanitarian Data Platform 3.0.0 — version finale
+# Humanitarian Data Platform 4.0.0
 
 Application locale pour organiser des acquisitions humanitaires par projets.
 
@@ -8,11 +8,13 @@ Application locale pour organiser des acquisitions humanitaires par projets.
 2. Double-cliquez sur `start-hdp.cmd`.
 3. L'interface s'ouvre sur le port `HDP_PORT` enregistré dans `.env`.
 
-Le fichier `.env` peut aussi définir `GITHUB_TOKEN` pour permettre la création confirmée d'un dépôt depuis les paramètres d'un projet. Ce secret n'est jamais exposé par l'API.
+Le fichier `.env` peut aussi définir `RELIEFWEB_APPNAME`,
+`HDX_HAPI_APP_IDENTIFIER` et `GITHUB_TOKEN`. Ces secrets ne sont jamais exposés
+par l'API.
 
 Le service est lié exclusivement à `127.0.0.1`. PostgreSQL/PostGIS n'est pas exposé sur Windows.
 
-La version 3.0.0 conserve les familles officielles sous forme de liste. COD-AB
+La version 4.0.0 conserve les familles officielles sous forme de liste. COD-AB
 et COD-PS sont sélectionnables ; COD-CS est visible mais désactivé tant que son
 registre vérifié est vide ; COD-HP est indiqué comme retiré. La liste de pays ou
 zones est recalculée sur l'intersection ONU M49 × groupes HDX des familles
@@ -20,7 +22,12 @@ sélectionnées.
 
 ## Fonctionnalités
 
-- registre versionné des paramètres pour les 7 connecteurs API actifs ;
+- registre versionné des paramètres pour les 10 connecteurs API actifs ;
+- recherche fédérée parallèle avec dates, localisation et paramètres propres ;
+- import atomique de données, scripts et documents avec contrôle de contenu ;
+- périodicité et planification directement depuis chaque fichier ;
+- recettes CSV/TSV, résultats dérivés, lignée et scripts Python/R ;
+- carte multi-couches et vues SQL du projet en lecture seule ;
 - réglages globaux (activation, délai, reprises) et modèles distincts par projet ;
 - prévisualisation locale de la commande et du lien officiel avant toute requête ;
 - bibliothèque filtrable par source, format, sujet, organisme et localisation ;
@@ -82,4 +89,7 @@ métadonnées sont archivés avec chaque ressource.
 
 ## Limite de sécurité
 
-HDP 3.0.0 est une application locale, non un serveur Internet durci. Seuls les scripts Python/R locaux et de confiance doivent être exécutés. Les runners sont non privilégiés, sans réseau et bornés, mais ne constituent pas une isolation multi-utilisateur. Les groupements M49 sont statistiques et n'impliquent aucune prise de position politique.
+HDP 4.0.0 est une application locale, non un serveur Internet durci. Seuls les
+scripts Python/R locaux et de confiance doivent être exécutés. Les runners sont
+non privilégiés, sans réseau et bornés, mais ne constituent pas une isolation
+multi-utilisateur.

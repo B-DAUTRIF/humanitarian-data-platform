@@ -105,6 +105,8 @@ services:
       DATA_DIR: /app/data
       R_SERVICE_URL: http://r-service:8001
       RELIEFWEB_APPNAME: ${RELIEFWEB_APPNAME:-}
+      HDX_HAPI_APP_IDENTIFIER: ${HDX_HAPI_APP_IDENTIFIER:-}
+      HDP_MAX_UPLOAD_BYTES: ${HDP_MAX_UPLOAD_BYTES:-536870912}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GITHUB_API_SERVICE_URL: http://github-api:8091
       EXECUTION_SPOOL_DIR: /app/execution_spool

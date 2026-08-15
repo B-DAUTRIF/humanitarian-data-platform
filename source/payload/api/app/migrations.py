@@ -210,6 +210,240 @@ MIGRATIONS: tuple[Migration, ...] = (
             """,
         ),
     ),
+    Migration(
+        version="4.0.0-001-federated-lineage",
+        description="Recherches fédérées et lignée des données brut/normalisé/dérivé",
+        statements=(
+            """
+            CREATE TABLE IF NOT EXISTS federated_searches (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                query TEXT NOT NULL,
+                criteria JSONB NOT NULL DEFAULT '{}'::jsonb,
+                sources JSONB NOT NULL DEFAULT '[]'::jsonb,
+                status TEXT NOT NULL,
+                started_at TIMESTAMPTZ NOT NULL,
+                finished_at TIMESTAMPTZ
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS federated_search_members (
+                search_id UUID NOT NULL REFERENCES federated_searches(id) ON DELETE CASCADE,
+                source_id TEXT NOT NULL,
+                acquisition_id UUID REFERENCES acquisitions(id) ON DELETE SET NULL,
+                status TEXT NOT NULL,
+                item_count INTEGER NOT NULL DEFAULT 0,
+                error TEXT,
+                PRIMARY KEY (search_id, source_id)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS data_artifacts (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                stage TEXT NOT NULL CHECK (stage IN ('raw', 'normalized', 'derived')),
+                acquisition_id UUID REFERENCES acquisitions(id) ON DELETE SET NULL,
+                resource_id UUID REFERENCES local_resources(id) ON DELETE SET NULL,
+                script_execution_id UUID REFERENCES script_executions(id) ON DELETE SET NULL,
+                parent_artifact_id UUID REFERENCES data_artifacts(id) ON DELETE SET NULL,
+                path TEXT,
+                sha256 CHAR(64),
+                media_type TEXT,
+                metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMPTZ NOT NULL
+            )
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS federated_searches_project_idx
+            ON federated_searches(project_id, started_at DESC)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS data_artifacts_project_stage_idx
+            ON data_artifacts(project_id, stage, created_at DESC)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS data_artifacts_parent_idx
+            ON data_artifacts(parent_artifact_id)
+            """,
+        ),
+    ),
+    Migration(
+        version="4.0.0-002-local-library",
+        description="Téléversements locaux et planification de l’actualisation par fichier",
+        statements=(
+            "ALTER TABLE local_resources ADD COLUMN IF NOT EXISTS origin_kind TEXT NOT NULL DEFAULT 'download'",
+            "ALTER TABLE local_resources ADD COLUMN IF NOT EXISTS update_frequency TEXT",
+            "ALTER TABLE local_resources ADD COLUMN IF NOT EXISTS original_filename TEXT",
+            "ALTER TABLE local_resources ADD COLUMN IF NOT EXISTS uploaded_at TIMESTAMPTZ",
+            """
+            CREATE TABLE IF NOT EXISTS resource_refresh_schedules (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                resource_id UUID NOT NULL REFERENCES local_resources(id) ON DELETE CASCADE,
+                mode TEXT NOT NULL CHECK (mode IN ('source_acquisition', 'manual_replacement')),
+                interval_minutes INTEGER NOT NULL,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                next_run_at TIMESTAMPTZ NOT NULL,
+                last_run_at TIMESTAMPTZ,
+                last_status TEXT,
+                last_error TEXT,
+                created_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL,
+                archived_at TIMESTAMPTZ,
+                UNIQUE (resource_id)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS resource_refresh_runs (
+                id UUID PRIMARY KEY,
+                refresh_schedule_id UUID NOT NULL REFERENCES resource_refresh_schedules(id) ON DELETE CASCADE,
+                acquisition_id UUID REFERENCES acquisitions(id) ON DELETE SET NULL,
+                started_at TIMESTAMPTZ NOT NULL,
+                finished_at TIMESTAMPTZ,
+                status TEXT NOT NULL,
+                error TEXT
+            )
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS resource_refresh_due_idx
+            ON resource_refresh_schedules(enabled, next_run_at)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS resource_refresh_project_idx
+            ON resource_refresh_schedules(project_id, updated_at DESC)
+            """,
+        ),
+    ),
+    Migration(
+        version="4.0.0-003-sql-workspace",
+        description="Vues SQL en lecture seule et limitées au projet actif",
+        statements=(
+            """
+            CREATE OR REPLACE VIEW hdp_acquisitions AS
+            SELECT id, project_id, schedule_id, source, query, retrieved_at,
+                   sha256, item_count, parameters
+            FROM acquisitions
+            WHERE project_id = NULLIF(current_setting('hdp.project_id', TRUE), '')::uuid
+            """,
+            """
+            CREATE OR REPLACE VIEW hdp_resources AS
+            SELECT id, project_id, acquisition_id, source, dataset_id, resource_id,
+                   title, format, filename, sha256, size_bytes, content_type, status,
+                   created_at, updated_at, m49_code, iso3_code, cod_family, cod_level,
+                   publisher, license_id, subject, published_at, geographic_scope,
+                   resource_type, organization, origin_kind, update_frequency, uploaded_at
+            FROM local_resources
+            WHERE project_id = NULLIF(current_setting('hdp.project_id', TRUE), '')::uuid
+                  AND deleted_at IS NULL
+            """,
+            """
+            CREATE OR REPLACE VIEW hdp_schedules AS
+            SELECT id, project_id, name, source, query, result_limit, auto_download,
+                   interval_minutes, enabled, next_run_at, last_run_at, last_status,
+                   last_error, created_at, updated_at
+            FROM schedules
+            WHERE project_id = NULLIF(current_setting('hdp.project_id', TRUE), '')::uuid
+                  AND archived_at IS NULL
+            """,
+            """
+            CREATE OR REPLACE VIEW hdp_artifacts AS
+            SELECT id, project_id, stage, acquisition_id, resource_id,
+                   script_execution_id, parent_artifact_id, path, sha256,
+                   media_type, metadata, created_at
+            FROM data_artifacts
+            WHERE project_id = NULLIF(current_setting('hdp.project_id', TRUE), '')::uuid
+            """,
+            """
+            CREATE OR REPLACE VIEW hdp_federated_searches AS
+            SELECT id, project_id, query, criteria, sources, status,
+                   started_at, finished_at
+            FROM federated_searches
+            WHERE project_id = NULLIF(current_setting('hdp.project_id', TRUE), '')::uuid
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS sql_query_audit (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                query_sha256 CHAR(64) NOT NULL,
+                status TEXT NOT NULL,
+                row_count INTEGER NOT NULL DEFAULT 0,
+                duration_ms INTEGER NOT NULL DEFAULT 0,
+                error TEXT,
+                executed_at TIMESTAMPTZ NOT NULL
+            )
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS sql_query_audit_project_idx
+            ON sql_query_audit(project_id, executed_at DESC)
+            """,
+        ),
+    ),
+    Migration(
+        version="4.0.0-004-processing",
+        description="Recettes guidées, exécutions reproductibles et lignée explicite",
+        statements=(
+            """
+            CREATE TABLE IF NOT EXISTS processing_recipes (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                engine_version TEXT NOT NULL,
+                definition JSONB NOT NULL,
+                definition_sha256 CHAR(64) NOT NULL,
+                generated_script_id UUID REFERENCES project_scripts(id) ON DELETE SET NULL,
+                created_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS processing_runs (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                recipe_id UUID NOT NULL REFERENCES processing_recipes(id),
+                input_resource_id UUID NOT NULL REFERENCES local_resources(id),
+                output_resource_id UUID REFERENCES local_resources(id) ON DELETE SET NULL,
+                status TEXT NOT NULL,
+                rows_read BIGINT NOT NULL DEFAULT 0,
+                rows_written BIGINT NOT NULL DEFAULT 0,
+                report JSONB NOT NULL DEFAULT '{}'::jsonb,
+                error TEXT,
+                started_at TIMESTAMPTZ NOT NULL,
+                finished_at TIMESTAMPTZ
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS lineage_edges (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                parent_artifact_id UUID NOT NULL REFERENCES data_artifacts(id) ON DELETE CASCADE,
+                child_artifact_id UUID NOT NULL REFERENCES data_artifacts(id) ON DELETE CASCADE,
+                relation TEXT NOT NULL,
+                metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMPTZ NOT NULL,
+                UNIQUE (parent_artifact_id, child_artifact_id, relation)
+            )
+            """,
+            """
+            CREATE OR REPLACE VIEW hdp_processing_runs AS
+            SELECT id, project_id, recipe_id, input_resource_id, output_resource_id,
+                   status, rows_read, rows_written, report, error, started_at, finished_at
+            FROM processing_runs
+            WHERE project_id = NULLIF(current_setting('hdp.project_id', TRUE), '')::uuid
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS processing_recipes_project_idx
+            ON processing_recipes(project_id, updated_at DESC)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS processing_runs_project_idx
+            ON processing_runs(project_id, started_at DESC)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS lineage_edges_project_idx
+            ON lineage_edges(project_id, created_at DESC)
+            """,
+        ),
+    ),
 )
 
 

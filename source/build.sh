@@ -21,5 +21,5 @@ ZIG_LOCAL_CACHE_DIR="$cache_root/local" \
     -Wall -Wextra -Werror \
     -Wl,/subsystem:windows \
     src/installer.c src/installer.res \
-    -o HumanitarianDataPlatform_Setup_Native_GUI_v3.0.0.exe \
+    -o HumanitarianDataPlatform_Setup_Native_GUI_v4.0.0.exe \
     -lcomctl32 -lshell32 -ladvapi32 -lwinhttp -lws2_32 -lbcrypt -lgdi32

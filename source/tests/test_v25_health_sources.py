@@ -17,12 +17,17 @@ from app.health_sources import (  # noqa: E402
     parse_world_bank_indicators,
     source_catalog,
 )
+from app.humanitarian_sources import (  # noqa: E402
+    parse_gdacs_events,
+    parse_hapi_rows,
+    parse_unhcr_population,
+)
 
 
 class HealthSourceCatalogTest(unittest.TestCase):
     def test_catalog_separates_live_connectors_and_reference_portals(self) -> None:
         catalog = source_catalog()
-        self.assertEqual(len(catalog), 18)
+        self.assertEqual(len(catalog), 23)
         self.assertEqual(len({source["id"] for source in catalog}), len(catalog))
         self.assertEqual(
             {source["id"] for source in catalog if source["searchable"]},
@@ -126,6 +131,74 @@ class HealthSourceParserTest(unittest.TestCase):
         items = parse_dhs_indicators(payload, "children stunted", 10)
         self.assertEqual([item["id"] for item in items], ["CN_NUTS_C_HA2"])
         self.assertIn("indicatorIds=CN_NUTS_C_HA2", items[0]["resources"][0]["url"])
+
+    def test_hapi_parser_normalizes_rows_without_exposing_identifier(self) -> None:
+        items = parse_hapi_rows(
+            {
+                "data": [
+                    {
+                        "location_name": "Mali",
+                        "population_group": "Internally displaced people",
+                        "reference_period_end": "2026-07-31",
+                        "population": 1234,
+                        "provider_name": "IOM",
+                    }
+                ]
+            },
+            {"endpoint": "affected-people/idps"},
+            "Mali displaced",
+            5,
+        )
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["date"], "2026-07-31")
+        self.assertEqual(items[0]["resources"], [])
+        self.assertNotIn("app_identifier", str(items[0]))
+
+    def test_unhcr_parser_exposes_annual_aggregate_and_json_resource(self) -> None:
+        items = parse_unhcr_population(
+            {
+                "items": [
+                    {
+                        "year": 2025,
+                        "coo_name": "Sudan",
+                        "coa_name": "Chad",
+                        "refugees": 800000,
+                    }
+                ]
+            },
+            {"result_limit": 10, "page": 1, "year_from": 2025, "year_to": 2025},
+            "Sudan Chad",
+            10,
+        )
+        self.assertEqual(items[0]["date"], "2025-12-31")
+        self.assertIn("refugees: 800000", items[0]["description"])
+        self.assertEqual(items[0]["resources"][0]["format"], "json")
+
+    def test_gdacs_parser_keeps_geojson_download_and_location(self) -> None:
+        items = parse_gdacs_events(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "eventid": 42,
+                            "eventtype": "FL",
+                            "name": "Flood",
+                            "country": "Mozambique",
+                            "alertlevel": "Orange",
+                            "fromdate": "2026-03-01T00:00:00",
+                        },
+                        "geometry": {"type": "Point", "coordinates": [35, -18]},
+                    }
+                ],
+            },
+            "Flood Mozambique",
+            10,
+            resource_url="https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH",
+        )
+        self.assertEqual(items[0]["geographic_scope"], "Mozambique")
+        self.assertEqual(items[0]["resources"][0]["format"], "geojson")
 
 
 if __name__ == "__main__":

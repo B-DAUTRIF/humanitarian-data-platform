@@ -1,0 +1,44 @@
+name: HDP Windows installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, "codex/**"]
+    paths:
+      - ".github/workflows/windows-installer.yml"
+      - "source/build-windows.ps1"
+      - "source/payload/**"
+      - "source/scripts/generate_payload.mjs"
+      - "source/src/installer.c"
+      - "source/src/installer.manifest"
+      - "source/src/installer.rc"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-installer:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - name: Récupérer les sources
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Construire et vérifier l'installateur PE32+ x64
+        shell: pwsh
+        run: ./source/build-windows.ps1 -OutputDirectory "${{ runner.temp }}/hdp-installer"
+
+      - name: Publier l'installateur et son empreinte
+        uses: actions/upload-artifact@v4
+        with:
+          name: HumanitarianDataPlatform-Windows-Installer-v4.0.0
+          path: |
+            ${{ runner.temp }}/hdp-installer/HumanitarianDataPlatform_Setup_Native_GUI_v4.0.0.exe
+            ${{ runner.temp }}/hdp-installer/HumanitarianDataPlatform_Setup_Native_GUI_v4.0.0.exe.sha256
+          if-no-files-found: error
+          retention-days: 30

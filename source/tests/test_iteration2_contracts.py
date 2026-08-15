@@ -129,7 +129,7 @@ class IterationTwoStaticContractTest(unittest.TestCase):
             self.assertIn(route, main)
         for element_id in ("view-rss", "view-timeline", "view-map", "execution-settings-form"):
             self.assertIn(f'id="{element_id}"', html)
-        self.assertIn("version finale 3.0.0", html)
+        self.assertIn("version 4.0.0", html)
         self.assertIn('/static/vendor/leaflet/leaflet.js', html)
         self.assertNotIn('unpkg.com', html)
         self.assertTrue((API_ROOT / "static" / "vendor" / "leaflet" / "LICENSE").is_file())

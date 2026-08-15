@@ -1,6 +1,14 @@
 Humanitarian Data Platform — journal applicatif des versions
 =============================================================
 
+[2026-08-15] Version 4.0.0 — gel fonctionnel
+------------------------------------------------
+- Recherche fédérée et paramètres propres à dix connecteurs.
+- Imports atomiques, bibliothèque, planification, carte et SQL.
+- Recettes CSV/TSV, lignée derived et scripts Python/R.
+- CI, SBOM et procédures de sauvegarde/restauration.
+- L’EXE 4.0.0 doit être recompilé et qualifié sur Windows.
+
 [2026-08-15] Version 3.0.0 — finale
 -----------------------------------
 - Gel du contrat applicatif et des libellés de version.

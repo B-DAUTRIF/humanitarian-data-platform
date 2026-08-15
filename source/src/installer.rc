@@ -3,8 +3,8 @@
 1 RT_MANIFEST "src/installer.manifest"
 
 1 VERSIONINFO
- FILEVERSION 3,0,0,0
- PRODUCTVERSION 3,0,0,0
+ FILEVERSION 4,0,0,0
+ PRODUCTVERSION 4,0,0,0
  FILEFLAGSMASK 0x3fL
  FILEFLAGS 0x0L
  FILEOS VOS_NT_WINDOWS32
@@ -17,11 +17,11 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "Humanitarian Data Platform"
       VALUE "FileDescription", "Installateur Windows natif"
-      VALUE "FileVersion", "3.0.0"
+      VALUE "FileVersion", "4.0.0"
       VALUE "InternalName", "HDPInstaller"
-      VALUE "OriginalFilename", "HumanitarianDataPlatform_Setup_Native_GUI_v3.0.0.exe"
+      VALUE "OriginalFilename", "HumanitarianDataPlatform_Setup_Native_GUI_v4.0.0.exe"
       VALUE "ProductName", "Humanitarian Data Platform"
-      VALUE "ProductVersion", "3.0.0"
+      VALUE "ProductVersion", "4.0.0"
     END
   END
   BLOCK "VarFileInfo"

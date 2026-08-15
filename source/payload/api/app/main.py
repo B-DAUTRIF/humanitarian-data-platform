@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import hashlib
 import json
 import os
@@ -8,19 +9,20 @@ import re
 import time
 import uuid
 from contextlib import suppress
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urljoin, urlparse
 
 import httpx
 import psycopg
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
+from .federated_search import filter_catalog_items, unified_federated_items
 from .health_sources import (
     SOURCE_PATTERN,
     parse_dhs_indicators,
@@ -29,6 +31,17 @@ from .health_sources import (
     parse_who_indicators,
     parse_world_bank_indicators,
     source_catalog,
+)
+from .humanitarian_sources import (
+    parse_gdacs_events,
+    parse_hapi_rows,
+    parse_unhcr_population,
+)
+from .local_library import (
+    normalize_update_frequency,
+    script_language,
+    validate_upload_content,
+    validate_upload_category,
 )
 from .migrations import apply_migrations
 from .map_utils import export_bundle, load_geojson, safe_layer_name
@@ -51,6 +64,14 @@ from .project_integrations import (
     validate_official_cod_policy,
     validate_repository_name,
 )
+from .processing_recipes import (
+    RecipeError,
+    generate_python_script,
+    generate_r_script,
+    operation_catalog,
+    run_delimited_recipe,
+    validate_recipe,
+)
 from .scheduler_utils import MIN_INTERVAL_MINUTES, next_run_at, validate_interval
 from .rss_registry import MAX_RSS_BYTES, build_rss_url, parse_rss, rss_catalog, rss_definition
 from .security import (
@@ -62,11 +83,13 @@ from .security import (
     validate_public_url,
 )
 from .source_registry import (
+    CONNECTORS,
     connector_definition,
     merge_values,
     request_preview,
     validate_values,
 )
+from .sql_workspace import ALLOWED_SQL_RELATIONS, validate_readonly_sql
 from .script_runtime import (
     TERMINAL_STATUSES,
     ensure_spool_layout,
@@ -80,12 +103,13 @@ from .script_runtime import (
 
 
 APP_NAME = "Humanitarian Data Platform"
-APP_VERSION = "3.0.0"
+APP_VERSION = "4.0.0"
 DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
 EXECUTION_SPOOL_DIR = Path(os.getenv("EXECUTION_SPOOL_DIR", "/app/execution_spool"))
 DATABASE_URL = os.environ["DATABASE_URL"]
 R_SERVICE_URL = os.getenv("R_SERVICE_URL", "http://r-service:8001")
 RELIEFWEB_APPNAME = os.getenv("RELIEFWEB_APPNAME", "").strip()
+HDX_HAPI_APP_IDENTIFIER = os.getenv("HDX_HAPI_APP_IDENTIFIER", "").strip()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
 HDP_TILE_URL = os.getenv(
     "HDP_TILE_URL", "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -101,6 +125,10 @@ DEFAULT_PREFERENCES: dict[str, Any] = {
 SCHEDULER_POLL_SECONDS = 20
 DEFAULT_GEODATA_INTERVAL_MINUTES = 10_080
 COD_CATALOG_CACHE_SECONDS = 1_800
+MAX_UPLOAD_BYTES = min(
+    max(int(os.getenv("HDP_MAX_UPLOAD_BYTES", "536870912")), 1_048_576),
+    2_147_483_648,
+)
 cod_catalog_cache: dict[str, tuple[float, dict[str, Any], list[dict[str, Any]]]] = {}
 
 app = FastAPI(
@@ -233,6 +261,44 @@ class AcquisitionCreate(BaseModel):
     source: str = Field(pattern=SOURCE_PATTERN)
     parameters: dict[str, Any] = Field(default_factory=dict)
     auto_download: bool | None = None
+
+
+class FederatedSearchCreate(BaseModel):
+    sources: list[str] = Field(min_length=2, max_length=20)
+    query: str = Field(min_length=2, max_length=200)
+    date_from: str = Field(default="", pattern=r"^$|^\d{4}-\d{2}-\d{2}$")
+    date_to: str = Field(default="", pattern=r"^$|^\d{4}-\d{2}-\d{2}$")
+    location: str = Field(default="", max_length=160)
+    result_limit_per_source: int = Field(default=25, ge=1, le=100)
+    auto_download: bool | None = None
+    source_parameters: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+
+class ResourceRefreshScheduleCreate(BaseModel):
+    interval_minutes: int = Field(default=1440, ge=MIN_INTERVAL_MINUTES, le=43_200)
+    enabled: bool = True
+
+
+class ResourceRefreshSchedulePatch(BaseModel):
+    interval_minutes: int | None = Field(
+        default=None, ge=MIN_INTERVAL_MINUTES, le=43_200
+    )
+    enabled: bool | None = None
+
+
+class SqlQueryRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=20_000)
+    max_rows: int = Field(default=200, ge=1, le=1000)
+
+
+class ProcessingRunCreate(BaseModel):
+    resource_id: uuid.UUID
+    name: str = Field(min_length=2, max_length=120)
+    output_title: str = Field(min_length=2, max_length=160)
+    recipe: dict[str, Any]
+    script_language: str = Field(default="python", pattern="^(python|r)$")
+    delimiter: str | None = Field(default=None, max_length=1)
+    max_rows: int = Field(default=5_000_000, ge=1, le=20_000_000)
 
 
 class SourceParametersPreview(BaseModel):
@@ -595,6 +661,7 @@ async def startup() -> None:
     global scheduler_task
     DATA_DIR.joinpath("raw").mkdir(parents=True, exist_ok=True)
     DATA_DIR.joinpath("projects").mkdir(parents=True, exist_ok=True)
+    DATA_DIR.joinpath("uploads").mkdir(parents=True, exist_ok=True)
     ensure_spool_layout(EXECUTION_SPOOL_DIR)
     await asyncio.to_thread(initialize_database)
     scheduler_task = asyncio.create_task(scheduler_loop(), name="hdp-scheduler")
@@ -863,6 +930,23 @@ def persist_raw(
                 Jsonb(parameters or {}),
             ),
         )
+        connection.execute(
+            """
+            INSERT INTO data_artifacts
+                (id, project_id, stage, acquisition_id, path, sha256,
+                 media_type, metadata, created_at)
+            VALUES (%s, %s, 'raw', %s, %s, %s, 'application/json', %s, %s)
+            """,
+            (
+                uuid.uuid4(),
+                project_id,
+                acquisition_id,
+                str(relative),
+                digest,
+                Jsonb({"source": source, "query": query, "item_count": item_count}),
+                retrieved_at,
+            ),
+        )
     return {
         "acquisition_id": str(acquisition_id),
         "retrieved_at": retrieved_at,
@@ -909,6 +993,17 @@ async def request_connector_json(
                 ),
             )
         query_parameters["appname"] = RELIEFWEB_APPNAME
+    if source == "hdx-hapi":
+        if not HDX_HAPI_APP_IDENTIFIER:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "HAPI exige un identifiant d’application. Ajoutez "
+                    "HDX_HAPI_APP_IDENTIFIER dans le fichier .env puis redémarrez "
+                    "l’application."
+                ),
+            )
+        query_parameters["app_identifier"] = HDX_HAPI_APP_IDENTIFIER
     timeout = httpx.Timeout(float(global_settings["timeout_seconds"]), connect=20)
     retries = int(global_settings["retry_count"])
     backoff = int(global_settings["backoff_seconds"])
@@ -1011,6 +1106,18 @@ async def search_remote_source(
         return payload, parse_un_sdg_indicators(payload, query, limit)
     if source == "dhs":
         return payload, parse_dhs_indicators(payload, query, limit)
+    if source == "hdx-hapi":
+        return payload, parse_hapi_rows(payload, values, query, limit)
+    if source == "unhcr":
+        return payload, parse_unhcr_population(payload, values, query, limit)
+    if source == "gdacs":
+        preview = request_preview(source, values)
+        return payload, parse_gdacs_events(
+            payload,
+            query,
+            limit,
+            resource_url=preview["display_url"],
+        )
     raise ValueError(f"Source non interrogeable : {source}")
 
 
@@ -1360,6 +1467,12 @@ async def execute_acquisition(
         if not global_settings["enabled"]:
             raise HTTPException(status_code=409, detail="Ce connecteur est désactivé globalement")
         payload, items = await search_remote_source(source, validated, global_settings)
+        items = filter_catalog_items(
+            items,
+            date_from=validated.get("date_from", ""),
+            date_to=validated.get("date_to", ""),
+            location=validated.get("location", ""),
+        )[: validated["result_limit"]]
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
@@ -2011,6 +2124,113 @@ async def execute_claimed_geodata(settings: dict[str, Any]) -> None:
         finish_geodata_sync(settings["project_id"], "failed", error=str(detail)[:2000])
 
 
+def claim_due_resource_refresh() -> dict[str, Any] | None:
+    now = datetime.now(UTC)
+    with database_connection(autocommit=False) as connection:
+        row = connection.execute(
+            """
+            SELECT r.id, r.project_id, r.resource_id, r.mode, r.interval_minutes,
+                   lr.source, a.query, a.parameters
+            FROM resource_refresh_schedules r
+            JOIN local_resources lr ON lr.id = r.resource_id
+            JOIN acquisitions a ON a.id = lr.acquisition_id
+            WHERE r.enabled = TRUE AND r.archived_at IS NULL
+                  AND r.next_run_at <= %s AND lr.deleted_at IS NULL
+            ORDER BY r.next_run_at ASC FOR UPDATE OF r SKIP LOCKED LIMIT 1
+            """,
+            (now,),
+        ).fetchone()
+        if not row:
+            connection.commit()
+            return None
+        run_id = uuid.uuid4()
+        connection.execute(
+            """
+            UPDATE resource_refresh_schedules
+            SET next_run_at = %s, last_status = 'running', last_error = NULL,
+                updated_at = %s
+            WHERE id = %s
+            """,
+            (next_run_at(now, row[4]), now, row[0]),
+        )
+        connection.execute(
+            """
+            INSERT INTO resource_refresh_runs
+                (id, refresh_schedule_id, started_at, status)
+            VALUES (%s, %s, %s, 'running')
+            """,
+            (run_id, row[0], now),
+        )
+        connection.commit()
+    return {
+        "run_id": run_id,
+        "id": row[0],
+        "project_id": row[1],
+        "resource_id": row[2],
+        "mode": row[3],
+        "source": row[5],
+        "query": row[6],
+        "parameters": row[7] or {},
+    }
+
+
+def finish_resource_refresh(
+    schedule_id: uuid.UUID,
+    run_id: uuid.UUID,
+    status: str,
+    *,
+    acquisition_id: uuid.UUID | None = None,
+    error: str | None = None,
+) -> None:
+    now = datetime.now(UTC)
+    with database_connection() as connection:
+        connection.execute(
+            """
+            UPDATE resource_refresh_runs
+            SET acquisition_id = %s, finished_at = %s, status = %s, error = %s
+            WHERE id = %s
+            """,
+            (acquisition_id, now, status, error, run_id),
+        )
+        connection.execute(
+            """
+            UPDATE resource_refresh_schedules
+            SET last_run_at = %s, last_status = %s, last_error = %s, updated_at = %s
+            WHERE id = %s
+            """,
+            (now, status, error, now, schedule_id),
+        )
+
+
+async def execute_claimed_resource_refresh(schedule: dict[str, Any]) -> None:
+    if schedule["mode"] == "manual_replacement":
+        finish_resource_refresh(schedule["id"], schedule["run_id"], "awaiting_upload")
+        return
+    parameters = dict(schedule.get("parameters") or {})
+    query = str(parameters.get("query") or schedule["query"] or "")
+    limit = int(parameters.get("result_limit") or 25)
+    try:
+        result = await execute_acquisition(
+            schedule["project_id"],
+            schedule["source"],
+            query,
+            limit,
+            True,
+            parameters=parameters,
+        )
+        finish_resource_refresh(
+            schedule["id"],
+            schedule["run_id"],
+            "completed",
+            acquisition_id=uuid.UUID(result.acquisition_id),
+        )
+    except Exception as exc:  # Keep other refresh schedules operational.
+        detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
+        finish_resource_refresh(
+            schedule["id"], schedule["run_id"], "failed", error=str(detail)[:2000]
+        )
+
+
 async def scheduler_loop() -> None:
     while True:
         try:
@@ -2018,6 +2238,10 @@ async def scheduler_loop() -> None:
             schedule = await asyncio.to_thread(claim_due_schedule)
             if schedule:
                 await execute_claimed_schedule(schedule)
+                continue
+            resource_refresh = await asyncio.to_thread(claim_due_resource_refresh)
+            if resource_refresh:
+                await execute_claimed_resource_refresh(resource_refresh)
                 continue
             geodata = await asyncio.to_thread(claim_due_geodata)
             if geodata:
@@ -2057,6 +2281,106 @@ def health() -> dict[str, Any]:
             "r": heartbeat_status(EXECUTION_SPOOL_DIR, "r"),
         },
     }
+
+
+@app.get("/api/projects/{project_id}/sql/schema")
+def sql_schema(project_id: uuid.UUID) -> dict[str, Any]:
+    ensure_project(project_id)
+    with database_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT table_name, column_name, data_type, ordinal_position
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = ANY(%s)
+            ORDER BY table_name, ordinal_position
+            """,
+            (list(sorted(ALLOWED_SQL_RELATIONS)),),
+        ).fetchall()
+    views: dict[str, list[dict[str, str]]] = {}
+    for table_name, column_name, data_type, _ in rows:
+        views.setdefault(table_name, []).append(
+            {"name": column_name, "type": data_type}
+        )
+    return {
+        "engine": "PostgreSQL/PostGIS",
+        "access": "read_only",
+        "project_id": str(project_id),
+        "max_rows": 1000,
+        "statement_timeout_ms": 5000,
+        "views": views,
+        "examples": [
+            "SELECT source, count(*) AS resources FROM hdp_resources GROUP BY source ORDER BY resources DESC",
+            "SELECT stage, count(*) AS artifacts FROM hdp_artifacts GROUP BY stage",
+            "SELECT * FROM hdp_acquisitions ORDER BY retrieved_at DESC LIMIT 20",
+        ],
+    }
+
+
+def record_sql_audit(
+    project_id: uuid.UUID,
+    query: str,
+    status: str,
+    row_count: int,
+    duration_ms: int,
+    error: str | None = None,
+) -> None:
+    with database_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO sql_query_audit
+                (id, project_id, query_sha256, status, row_count,
+                 duration_ms, error, executed_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                uuid.uuid4(),
+                project_id,
+                hashlib.sha256(query.encode("utf-8")).hexdigest(),
+                status,
+                row_count,
+                duration_ms,
+                error,
+                datetime.now(UTC),
+            ),
+        )
+
+
+@app.post("/api/projects/{project_id}/sql/query")
+def execute_sql_query(
+    project_id: uuid.UUID,
+    payload: SqlQueryRequest,
+) -> dict[str, Any]:
+    ensure_project(project_id)
+    try:
+        query = validate_readonly_sql(payload.query)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    started = time.perf_counter()
+    try:
+        with database_connection(autocommit=False) as connection:
+            connection.execute("SET TRANSACTION READ ONLY")
+            connection.execute("SET LOCAL statement_timeout = '5000ms'")
+            connection.execute("SELECT set_config('hdp.project_id', %s, TRUE)", (str(project_id),))
+            cursor = connection.execute(query)  # noqa: S608 - strict read-only validator and DB transaction
+            columns = [description.name for description in (cursor.description or [])]
+            rows = cursor.fetchmany(payload.max_rows + 1)
+        truncated = len(rows) > payload.max_rows
+        rows = rows[: payload.max_rows]
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        record_sql_audit(project_id, query, "completed", len(rows), duration_ms)
+        return {
+            "columns": columns,
+            "rows": [list(row) for row in rows],
+            "row_count": len(rows),
+            "truncated": truncated,
+            "duration_ms": duration_ms,
+            "project_id": str(project_id),
+        }
+    except psycopg.Error as exc:
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        error = str(exc).splitlines()[0][:500]
+        record_sql_audit(project_id, query, "failed", 0, duration_ms, error)
+        raise HTTPException(status_code=422, detail=f"Requête SQL refusée ou invalide : {error}") from exc
 
 
 @app.get("/api/sources")
@@ -2620,6 +2944,207 @@ async def create_acquisition(payload: AcquisitionCreate) -> SearchResponse:
     )
 
 
+@app.post("/api/projects/{project_id}/federated-search", status_code=201)
+async def create_federated_search(
+    project_id: uuid.UUID,
+    payload: FederatedSearchCreate,
+) -> dict[str, Any]:
+    ensure_project(project_id)
+    sources = list(dict.fromkeys(payload.sources))
+    if len(sources) < 2:
+        raise HTTPException(status_code=422, detail="Sélectionnez au moins deux sources distinctes")
+    unknown_sources = sorted(set(sources) - set(CONNECTORS))
+    if unknown_sources:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Sources non interrogeables : {', '.join(unknown_sources)}",
+        )
+    unknown_parameter_sources = sorted(set(payload.source_parameters) - set(sources))
+    if unknown_parameter_sources:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Paramètres fournis pour des sources non sélectionnées : "
+                + ", ".join(unknown_parameter_sources)
+            ),
+        )
+    try:
+        parsed_start = date.fromisoformat(payload.date_from) if payload.date_from else None
+        parsed_end = date.fromisoformat(payload.date_to) if payload.date_to else None
+        if parsed_start and parsed_end:
+            if parsed_start > parsed_end:
+                raise HTTPException(
+                    status_code=422,
+                    detail="date_from doit être antérieure ou égale à date_to",
+                )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Date ISO 8601 invalide") from exc
+
+    search_id = uuid.uuid4()
+    started_at = datetime.now(UTC)
+    criteria = {
+        "query": payload.query,
+        "date_from": payload.date_from,
+        "date_to": payload.date_to,
+        "location": payload.location.strip(),
+        "result_limit_per_source": payload.result_limit_per_source,
+        "auto_download": payload.auto_download,
+    }
+    should_download = (
+        get_preferences(project_id)["auto_download"]
+        if payload.auto_download is None
+        else payload.auto_download
+    )
+    criteria["auto_download"] = should_download
+    with database_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO federated_searches
+                (id, project_id, query, criteria, sources, status, started_at)
+            VALUES (%s, %s, %s, %s, %s, 'running', %s)
+            """,
+            (
+                search_id,
+                project_id,
+                payload.query,
+                Jsonb(criteria),
+                Jsonb(sources),
+                started_at,
+            ),
+        )
+
+    async def run_source(source_id: str) -> tuple[str, SearchResponse | None, str | None]:
+        source_parameters = dict(payload.source_parameters.get(source_id) or {})
+        source_parameters.update(
+            {
+                "query": payload.query,
+                "date_from": payload.date_from,
+                "date_to": payload.date_to,
+                "location": payload.location,
+                "result_limit": payload.result_limit_per_source,
+            }
+        )
+        try:
+            result = await execute_acquisition(
+                project_id,
+                source_id,
+                payload.query,
+                payload.result_limit_per_source,
+                bool(should_download),
+                parameters=source_parameters,
+            )
+            return source_id, result, None
+        except HTTPException as exc:
+            return source_id, None, str(exc.detail)[:1000]
+        except Exception:
+            return source_id, None, "Erreur interne inattendue du connecteur"
+
+    executions = await asyncio.gather(*(run_source(source_id) for source_id in sources))
+    successes = [(source_id, result) for source_id, result, _ in executions if result]
+    status = "completed" if len(successes) == len(sources) else "partial" if successes else "failed"
+    finished_at = datetime.now(UTC)
+    with database_connection() as connection:
+        for source_id, result, error in executions:
+            connection.execute(
+                """
+                INSERT INTO federated_search_members
+                    (search_id, source_id, acquisition_id, status, item_count, error)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    search_id,
+                    source_id,
+                    uuid.UUID(result.acquisition_id) if result else None,
+                    "completed" if result else "failed",
+                    result.item_count if result else 0,
+                    error,
+                ),
+            )
+        connection.execute(
+            """
+            UPDATE federated_searches
+            SET status = %s, finished_at = %s
+            WHERE id = %s
+            """,
+            (status, finished_at, search_id),
+        )
+
+    unified_items = unified_federated_items(
+        (source_id, result.items) for source_id, result in successes if result
+    )
+    return {
+        "id": str(search_id),
+        "project_id": str(project_id),
+        "status": status,
+        "started_at": started_at,
+        "finished_at": finished_at,
+        "criteria": criteria,
+        "sources": [
+            {
+                "source_id": source_id,
+                "status": "completed" if result else "failed",
+                "acquisition_id": result.acquisition_id if result else None,
+                "item_count": result.item_count if result else 0,
+                "downloads": result.downloads if result else None,
+                "error": error,
+            }
+            for source_id, result, error in executions
+        ],
+        "item_count": len(unified_items),
+        "items": unified_items,
+    }
+
+
+@app.get("/api/projects/{project_id}/federated-searches")
+def federated_search_history(
+    project_id: uuid.UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[dict[str, Any]]:
+    ensure_project(project_id)
+    with database_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, query, criteria, sources, status, started_at, finished_at
+            FROM federated_searches
+            WHERE project_id = %s
+            ORDER BY started_at DESC LIMIT %s
+            """,
+            (project_id, limit),
+        ).fetchall()
+        searches: list[dict[str, Any]] = []
+        for row in rows:
+            members = connection.execute(
+                """
+                SELECT source_id, acquisition_id, status, item_count, error
+                FROM federated_search_members
+                WHERE search_id = %s ORDER BY source_id
+                """,
+                (row[0],),
+            ).fetchall()
+            searches.append(
+                {
+                    "id": str(row[0]),
+                    "query": row[1],
+                    "criteria": row[2],
+                    "sources": row[3],
+                    "status": row[4],
+                    "started_at": row[5],
+                    "finished_at": row[6],
+                    "members": [
+                        {
+                            "source_id": member[0],
+                            "acquisition_id": str(member[1]) if member[1] else None,
+                            "status": member[2],
+                            "item_count": member[3],
+                            "error": member[4],
+                        }
+                        for member in members
+                    ],
+                }
+            )
+    return searches
+
+
 @app.get("/api/acquisitions")
 def acquisitions(
     project_id: uuid.UUID,
@@ -2649,6 +3174,192 @@ def acquisitions(
         }
         for row in rows
     ]
+
+
+@app.post("/api/projects/{project_id}/uploads", status_code=201)
+async def upload_project_file(
+    project_id: uuid.UUID,
+    file: UploadFile = File(...),
+    category: str = Form(...),
+    title: str = Form(default=""),
+    geographic_scope: str = Form(default=""),
+    update_frequency: str = Form(default=""),
+) -> dict[str, Any]:
+    ensure_project(project_id)
+    original_filename = str(file.filename or "").strip()
+    if not original_filename:
+        raise HTTPException(status_code=422, detail="Le fichier doit avoir un nom")
+    filename = safe_filename(original_filename)
+    try:
+        extension, geographic = validate_upload_category(filename, category)
+        frequency = normalize_update_frequency(update_frequency)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    category = category.strip().lower()
+    if len(title.strip()) > 200 or len(geographic_scope.strip()) > 200:
+        raise HTTPException(status_code=422, detail="Titre ou localisation trop long")
+
+    resource_id = uuid.uuid4()
+    relative = Path("uploads") / str(project_id) / category / f"{resource_id}_{filename}"
+    destination = confined_path(DATA_DIR, str(relative))
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(destination.name + ".part")
+    digest = hashlib.sha256()
+    size_bytes = 0
+    try:
+        with temporary.open("xb") as stream:
+            while chunk := await file.read(1024 * 1024):
+                size_bytes += len(chunk)
+                if size_bytes > MAX_UPLOAD_BYTES:
+                    raise ValueError(
+                        f"Le fichier dépasse la limite de {MAX_UPLOAD_BYTES} octets"
+                    )
+                digest.update(chunk)
+                stream.write(chunk)
+        validate_upload_content(temporary, extension, category)
+        os.replace(temporary, destination)
+    except (OSError, ValueError) as exc:
+        temporary.unlink(missing_ok=True)
+        destination.unlink(missing_ok=True)
+        status_code = 413 if isinstance(exc, ValueError) else 500
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    finally:
+        await file.close()
+
+    if size_bytes == 0:
+        temporary.unlink(missing_ok=True)
+        destination.unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail="Le fichier transmis est vide")
+    now = datetime.now(UTC)
+    sha256 = digest.hexdigest()
+    metadata = {
+        "category": category,
+        "original_filename": original_filename,
+        "geographic": geographic,
+        "update_frequency": frequency,
+        "uploaded_at": now.isoformat(),
+    }
+    try:
+        provenance = persist_raw(
+            project_id,
+            "upload",
+            filename,
+            {
+                "event": "local_file_uploaded",
+                "filename": filename,
+                "size_bytes": size_bytes,
+                "sha256": sha256,
+                "metadata": metadata,
+            },
+            1,
+            None,
+            {"category": category, "update_frequency": frequency},
+        )
+        acquisition_id = uuid.UUID(provenance["acquisition_id"])
+        with database_connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO local_resources
+                    (id, project_id, acquisition_id, resource_key, source, dataset_id,
+                     resource_id, title, url, format, filename, local_path, sha256,
+                     size_bytes, content_type, status, created_at, updated_at, subject,
+                     geographic_scope, resource_type, organization, metadata, origin_kind,
+                     update_frequency, original_filename, uploaded_at)
+                VALUES (%s, %s, %s, %s, 'upload', NULL, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, 'completed', %s, %s, %s, %s, %s,
+                        'Import utilisateur', %s, 'upload', %s, %s, %s)
+                """,
+                (
+                    resource_id,
+                    project_id,
+                    acquisition_id,
+                    resource_key(str(resource_id), f"upload://{resource_id}"),
+                    str(resource_id),
+                    title.strip() or filename,
+                    f"upload://{resource_id}/{filename}",
+                    extension,
+                    filename,
+                    str(relative),
+                    sha256,
+                    size_bytes,
+                    file.content_type or "application/octet-stream",
+                    now,
+                    now,
+                    title.strip() or filename,
+                    geographic_scope.strip() or None,
+                    category,
+                    Jsonb(metadata),
+                    frequency or None,
+                    original_filename,
+                    now,
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO data_artifacts
+                    (id, project_id, stage, acquisition_id, resource_id,
+                     parent_artifact_id, path, sha256, media_type, metadata, created_at)
+                VALUES (%s, %s, 'raw', %s, %s,
+                        (SELECT id FROM data_artifacts WHERE acquisition_id = %s
+                         ORDER BY created_at ASC LIMIT 1),
+                        %s, %s, %s, %s, %s)
+                """,
+                (
+                    uuid.uuid4(),
+                    project_id,
+                    acquisition_id,
+                    resource_id,
+                    acquisition_id,
+                    str(relative),
+                    sha256,
+                    file.content_type or "application/octet-stream",
+                    Jsonb(metadata),
+                    now,
+                ),
+            )
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+
+    imported_script: dict[str, str] | None = None
+    warning: str | None = None
+    language = script_language(filename) if category == "script" else None
+    if language:
+        if size_bytes > 500_000:
+            warning = "Fichier conservé, mais trop volumineux pour la bibliothèque de scripts."
+        else:
+            try:
+                content = destination.read_text(encoding="utf-8")
+                imported_script = create_script(
+                    project_id,
+                    ScriptCreate(
+                        name=(Path(filename).stem if len(Path(filename).stem) >= 2 else f"Script {Path(filename).stem}"),
+                        language=language,
+                        content=content,
+                        description=f"Importé depuis {original_filename}",
+                    ),
+                )
+                with database_connection() as connection:
+                    connection.execute(
+                        "UPDATE local_resources SET metadata = metadata || %s WHERE id = %s",
+                        (Jsonb({"script_id": imported_script["id"]}), resource_id),
+                    )
+            except UnicodeDecodeError:
+                warning = "Fichier conservé, mais son encodage n’est pas UTF-8."
+
+    return {
+        "id": str(resource_id),
+        "project_id": str(project_id),
+        "filename": filename,
+        "category": category,
+        "format": extension,
+        "geographic": geographic,
+        "size_bytes": size_bytes,
+        "sha256": sha256,
+        "update_frequency": frequency or None,
+        "script": imported_script,
+        "warning": warning,
+    }
 
 
 @app.get("/api/resources")
@@ -2698,10 +3409,34 @@ def resources(
                    publisher, license_id, dataset_modified_at, cod_family
                    , subject, published_at, geographic_scope, resource_type,
                    organization, metadata
+                   , origin_kind, update_frequency, original_filename, uploaded_at
             FROM local_resources WHERE {where} ORDER BY updated_at DESC LIMIT %s
             """,  # noqa: S608
             parameters,
         ).fetchall()
+        refresh_rows = connection.execute(
+            """
+            SELECT id, resource_id, mode, interval_minutes, enabled, next_run_at,
+                   last_run_at, last_status, last_error, updated_at
+            FROM resource_refresh_schedules
+            WHERE project_id = %s AND archived_at IS NULL
+            """,
+            (project_id,),
+        ).fetchall()
+    refresh_by_resource = {
+        str(row[1]): {
+            "id": str(row[0]),
+            "mode": row[2],
+            "interval_minutes": row[3],
+            "enabled": row[4],
+            "next_run_at": row[5],
+            "last_run_at": row[6],
+            "last_status": row[7],
+            "last_error": row[8],
+            "updated_at": row[9],
+        }
+        for row in refresh_rows
+    }
     return [
         {
             "id": str(row[0]),
@@ -2735,6 +3470,11 @@ def resources(
             "resource_type": row[28],
             "organization": row[29],
             "metadata": row[30],
+            "origin_kind": row[31],
+            "update_frequency": row[32],
+            "original_filename": row[33],
+            "uploaded_at": row[34],
+            "refresh_schedule": refresh_by_resource.get(str(row[0])),
         }
         for row in rows
     ]
@@ -2776,6 +3516,427 @@ def verify_resource(resource_id: uuid.UUID) -> dict[str, Any]:
     except (ValueError, OSError) as exc:
         raise HTTPException(status_code=404, detail=f"Fichier local inaccessible: {exc}") from exc
     return {"id": str(resource_id), "valid": digest == row[4], "expected": row[4], "actual": digest}
+
+
+@app.get("/api/processing/operations")
+def processing_operations() -> dict[str, Any]:
+    return operation_catalog()
+
+
+@app.get("/api/projects/{project_id}/processing-runs")
+def processing_runs(
+    project_id: uuid.UUID,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[dict[str, Any]]:
+    ensure_project(project_id)
+    with database_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT r.id, r.recipe_id, p.name, r.input_resource_id, source.title,
+                   r.output_resource_id, output.title, r.status, r.rows_read,
+                   r.rows_written, r.report, r.error, r.started_at, r.finished_at,
+                   p.engine_version, p.definition_sha256, p.generated_script_id
+            FROM processing_runs r
+            JOIN processing_recipes p ON p.id = r.recipe_id
+            JOIN local_resources source ON source.id = r.input_resource_id
+            LEFT JOIN local_resources output ON output.id = r.output_resource_id
+            WHERE r.project_id = %s
+            ORDER BY r.started_at DESC LIMIT %s
+            """,
+            (project_id, limit),
+        ).fetchall()
+    keys = [
+        "id", "recipe_id", "name", "input_resource_id", "input_title",
+        "output_resource_id", "output_title", "status", "rows_read",
+        "rows_written", "report", "error", "started_at", "finished_at",
+        "engine_version", "definition_sha256", "generated_script_id",
+    ]
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(zip(keys, row))
+        for key in ("id", "recipe_id", "input_resource_id", "output_resource_id", "generated_script_id"):
+            item[key] = str(item[key]) if item[key] else None
+        result.append(item)
+    return result
+
+
+@app.post("/api/projects/{project_id}/processing-runs", status_code=201)
+def create_processing_run(
+    project_id: uuid.UUID,
+    payload: ProcessingRunCreate,
+) -> dict[str, Any]:
+    ensure_project(project_id)
+    try:
+        recipe = validate_recipe(payload.recipe)
+    except RecipeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if payload.delimiter is not None and payload.delimiter not in {",", "\t", ";", "|"}:
+        raise HTTPException(status_code=422, detail="Séparateur non autorisé")
+    with database_connection() as connection:
+        source = connection.execute(
+            """
+            SELECT id, acquisition_id, title, format, filename, local_path, sha256,
+                   status, deleted_at, metadata
+            FROM local_resources
+            WHERE id = %s AND project_id = %s
+            """,
+            (payload.resource_id, project_id),
+        ).fetchone()
+    if not source or source[8] is not None:
+        raise HTTPException(status_code=404, detail="Ressource source introuvable")
+    if source[7] != "completed" or not source[5] or not source[6]:
+        raise HTTPException(status_code=409, detail="La ressource source n’est pas complète ou vérifiable")
+    source_format = str(source[3] or Path(str(source[4] or "")).suffix.lstrip(".")).casefold()
+    if source_format not in {"csv", "tsv"}:
+        raise HTTPException(status_code=422, detail="Le moteur guidé accepte actuellement CSV et TSV")
+    try:
+        source_path = confined_path(DATA_DIR, str(source[5]))
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not source_path.is_file():
+        raise HTTPException(status_code=404, detail="Le fichier source local a disparu")
+    actual_sha256 = sha256_file(source_path)
+    if actual_sha256 != source[6]:
+        raise HTTPException(status_code=409, detail="L’empreinte du fichier source ne correspond plus")
+
+    recipe_id, run_id, now = uuid.uuid4(), uuid.uuid4(), datetime.now(UTC)
+    recipe_bytes = json.dumps(recipe, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    recipe_sha256 = hashlib.sha256(recipe_bytes).hexdigest()
+    with database_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO processing_recipes
+                (id, project_id, name, engine_version, definition,
+                 definition_sha256, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                recipe_id, project_id, payload.name.strip(), recipe["version"],
+                Jsonb(recipe), recipe_sha256, now, now,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO processing_runs
+                (id, project_id, recipe_id, input_resource_id, status, started_at)
+            VALUES (%s, %s, %s, %s, 'running', %s)
+            """,
+            (run_id, project_id, recipe_id, payload.resource_id, now),
+        )
+
+    try:
+        generated = (
+            generate_python_script(recipe)
+            if payload.script_language == "python"
+            else generate_r_script(recipe)
+        )
+        script = create_script(
+            project_id,
+            ScriptCreate(
+                name=f"Recette — {payload.name.strip()}",
+                language=payload.script_language,
+                content=generated,
+                description=(
+                    f"Généré depuis la recette {recipe_id}; entrée {payload.resource_id}; "
+                    f"SHA-256 {recipe_sha256}"
+                ),
+            ),
+        )
+        with database_connection() as connection:
+            connection.execute(
+                "UPDATE processing_recipes SET generated_script_id = %s, updated_at = %s WHERE id = %s",
+                (uuid.UUID(script["id"]), datetime.now(UTC), recipe_id),
+            )
+    except Exception as exc:
+        with database_connection() as connection:
+            connection.execute(
+                """
+                UPDATE processing_runs
+                SET status = 'failed', error = %s, finished_at = %s
+                WHERE id = %s
+                """,
+                ("Impossible de générer le script reproductible", datetime.now(UTC), run_id),
+            )
+        raise HTTPException(
+            status_code=500,
+            detail="Impossible de générer le script reproductible",
+        ) from exc
+
+    output_name = safe_filename(payload.output_title.strip(), f"derived_{run_id}.csv")
+    if not output_name.casefold().endswith(".csv"):
+        output_name += ".csv"
+    relative = Path("projects") / str(project_id) / "derived" / f"{run_id}_{output_name}"
+    output_path = confined_path(DATA_DIR, str(relative))
+    try:
+        report = run_delimited_recipe(
+            source_path,
+            output_path,
+            recipe,
+            delimiter=payload.delimiter,
+            max_rows=payload.max_rows,
+        )
+        manifest = {
+            "event": "processing_recipe_completed",
+            "run_id": str(run_id),
+            "recipe_id": str(recipe_id),
+            "recipe_sha256": recipe_sha256,
+            "input_resource_id": str(payload.resource_id),
+            "input_sha256": actual_sha256,
+            "output_sha256": report["output_sha256"],
+            "engine_version": recipe["version"],
+            "recipe": recipe,
+            "report": report,
+        }
+        provenance = persist_raw(
+            project_id,
+            "processing",
+            payload.name.strip(),
+            manifest,
+            int(report["rows_written"]),
+            None,
+            {"recipe_id": str(recipe_id), "run_id": str(run_id)},
+        )
+        acquisition_id = uuid.UUID(provenance["acquisition_id"])
+        output_resource_id = uuid.uuid4()
+        derived_artifact_id = uuid.uuid4()
+        finished_at = datetime.now(UTC)
+        metadata = {
+            "category": "data",
+            "geographic": False,
+            "processing_run_id": str(run_id),
+            "recipe_id": str(recipe_id),
+            "recipe_sha256": recipe_sha256,
+            "input_resource_id": str(payload.resource_id),
+            "input_sha256": actual_sha256,
+            "engine_version": recipe["version"],
+            "profile": report["input_profile"],
+        }
+        with database_connection(autocommit=False) as connection:
+            parent = connection.execute(
+                """
+                SELECT id FROM data_artifacts
+                WHERE resource_id = %s OR acquisition_id = %s
+                ORDER BY CASE WHEN resource_id = %s THEN 0 ELSE 1 END, created_at DESC
+                LIMIT 1
+                """,
+                (payload.resource_id, source[1], payload.resource_id),
+            ).fetchone()
+            parent_artifact_id = parent[0] if parent else None
+            connection.execute(
+                """
+                INSERT INTO local_resources
+                    (id, project_id, acquisition_id, resource_key, source, dataset_id,
+                     resource_id, title, url, format, filename, local_path, sha256,
+                     size_bytes, content_type, status, created_at, updated_at, subject,
+                     geographic_scope, resource_type, organization, metadata, origin_kind,
+                     update_frequency, original_filename, uploaded_at)
+                VALUES (%s, %s, %s, %s, 'processing', %s, %s, %s, %s, 'csv', %s,
+                        %s, %s, %s, 'text/csv', 'completed', %s, %s, %s, NULL,
+                        'data', 'HDP Processing Engine', %s, 'derived', NULL, %s, NULL)
+                """,
+                (
+                    output_resource_id, project_id, acquisition_id,
+                    resource_key(str(run_id), f"derived://{run_id}/{output_name}"),
+                    str(recipe_id), str(run_id), payload.output_title.strip(),
+                    f"derived://{run_id}/{output_name}", output_name, str(relative),
+                    report["output_sha256"], report["output_size_bytes"],
+                    finished_at, finished_at, payload.output_title.strip(),
+                    Jsonb(metadata), output_name,
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO data_artifacts
+                    (id, project_id, stage, acquisition_id, resource_id,
+                     parent_artifact_id, path, sha256, media_type, metadata, created_at)
+                VALUES (%s, %s, 'derived', %s, %s, %s, %s, %s, 'text/csv', %s, %s)
+                """,
+                (
+                    derived_artifact_id, project_id, acquisition_id, output_resource_id,
+                    parent_artifact_id, str(relative), report["output_sha256"],
+                    Jsonb({**metadata, "report": report}), finished_at,
+                ),
+            )
+            if parent_artifact_id:
+                connection.execute(
+                    """
+                    INSERT INTO lineage_edges
+                        (id, project_id, parent_artifact_id, child_artifact_id,
+                         relation, metadata, created_at)
+                    VALUES (%s, %s, %s, %s, 'transformed_by_recipe', %s, %s)
+                    """,
+                    (
+                        uuid.uuid4(), project_id, parent_artifact_id,
+                        derived_artifact_id, Jsonb({"recipe_id": str(recipe_id)}),
+                        finished_at,
+                    ),
+                )
+            connection.execute(
+                """
+                UPDATE processing_runs
+                SET output_resource_id = %s, status = 'completed', rows_read = %s,
+                    rows_written = %s, report = %s, finished_at = %s
+                WHERE id = %s
+                """,
+                (
+                    output_resource_id, report["rows_read"], report["rows_written"],
+                    Jsonb(report), finished_at, run_id,
+                ),
+            )
+            connection.commit()
+        return {
+            "id": str(run_id),
+            "recipe_id": str(recipe_id),
+            "status": "completed",
+            "input_resource_id": str(payload.resource_id),
+            "output_resource_id": str(output_resource_id),
+            "generated_script_id": script["id"],
+            "recipe_sha256": recipe_sha256,
+            "report": report,
+        }
+    except (RecipeError, OSError, UnicodeError, csv.Error) as exc:
+        output_path.unlink(missing_ok=True)
+        with database_connection() as connection:
+            connection.execute(
+                """
+                UPDATE processing_runs
+                SET status = 'failed', error = %s, finished_at = %s
+                WHERE id = %s
+                """,
+                (str(exc)[:2000], datetime.now(UTC), run_id),
+            )
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def get_resource_refresh_schedule(resource_id: uuid.UUID) -> dict[str, Any]:
+    with database_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id, project_id, resource_id, mode, interval_minutes, enabled,
+                   next_run_at, last_run_at, last_status, last_error, created_at, updated_at
+            FROM resource_refresh_schedules
+            WHERE resource_id = %s AND archived_at IS NULL
+            """,
+            (resource_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Planification du fichier introuvable")
+    keys = [
+        "id", "project_id", "resource_id", "mode", "interval_minutes", "enabled",
+        "next_run_at", "last_run_at", "last_status", "last_error", "created_at", "updated_at",
+    ]
+    result = dict(zip(keys, row))
+    for key in ("id", "project_id", "resource_id"):
+        result[key] = str(result[key])
+    return result
+
+
+@app.get("/api/resources/{resource_id}/refresh-schedule")
+def resource_refresh_schedule(resource_id: uuid.UUID) -> dict[str, Any]:
+    resource_row(resource_id)
+    return get_resource_refresh_schedule(resource_id)
+
+
+@app.post("/api/resources/{resource_id}/refresh-schedule", status_code=201)
+def create_resource_refresh_schedule(
+    resource_id: uuid.UUID,
+    payload: ResourceRefreshScheduleCreate,
+) -> dict[str, Any]:
+    with database_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT lr.project_id, lr.source, lr.deleted_at, a.query, a.parameters
+            FROM local_resources lr
+            JOIN acquisitions a ON a.id = lr.acquisition_id
+            WHERE lr.id = %s
+            """,
+            (resource_id,),
+        ).fetchone()
+    if not row or row[2]:
+        raise HTTPException(status_code=404, detail="Ressource locale introuvable")
+    mode = "source_acquisition" if row[1] in CONNECTORS else "manual_replacement"
+    now = datetime.now(UTC)
+    schedule_id = uuid.uuid4()
+    with database_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO resource_refresh_schedules
+                (id, project_id, resource_id, mode, interval_minutes, enabled,
+                 next_run_at, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (resource_id) DO UPDATE SET
+                mode = EXCLUDED.mode,
+                interval_minutes = EXCLUDED.interval_minutes,
+                enabled = EXCLUDED.enabled,
+                next_run_at = EXCLUDED.next_run_at,
+                updated_at = EXCLUDED.updated_at,
+                archived_at = NULL
+            """,
+            (
+                schedule_id,
+                row[0],
+                resource_id,
+                mode,
+                payload.interval_minutes,
+                payload.enabled,
+                next_run_at(now, payload.interval_minutes),
+                now,
+                now,
+            ),
+        )
+        connection.execute(
+            """
+            UPDATE local_resources SET update_frequency = %s, updated_at = %s
+            WHERE id = %s
+            """,
+            (f"Toutes les {payload.interval_minutes} minutes", now, resource_id),
+        )
+    return get_resource_refresh_schedule(resource_id)
+
+
+@app.patch("/api/resources/{resource_id}/refresh-schedule")
+def update_resource_refresh_schedule(
+    resource_id: uuid.UUID,
+    payload: ResourceRefreshSchedulePatch,
+) -> dict[str, Any]:
+    updates = payload.model_dump(exclude_none=True)
+    current = get_resource_refresh_schedule(resource_id)
+    if not updates:
+        return current
+    interval = int(updates.get("interval_minutes", current["interval_minutes"]))
+    enabled = bool(updates.get("enabled", current["enabled"]))
+    now = datetime.now(UTC)
+    with database_connection() as connection:
+        connection.execute(
+            """
+            UPDATE resource_refresh_schedules
+            SET interval_minutes = %s, enabled = %s, next_run_at = %s, updated_at = %s
+            WHERE resource_id = %s AND archived_at IS NULL
+            """,
+            (interval, enabled, next_run_at(now, interval), now, resource_id),
+        )
+        connection.execute(
+            "UPDATE local_resources SET update_frequency = %s, updated_at = %s WHERE id = %s",
+            (f"Toutes les {interval} minutes", now, resource_id),
+        )
+    return get_resource_refresh_schedule(resource_id)
+
+
+@app.delete("/api/resources/{resource_id}/refresh-schedule", status_code=204)
+def archive_resource_refresh_schedule(resource_id: uuid.UUID) -> Response:
+    now = datetime.now(UTC)
+    with database_connection() as connection:
+        result = connection.execute(
+            """
+            UPDATE resource_refresh_schedules
+            SET enabled = FALSE, archived_at = %s, updated_at = %s
+            WHERE resource_id = %s AND archived_at IS NULL
+            """,
+            (now, now, resource_id),
+        )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Planification du fichier introuvable")
+    return Response(status_code=204)
 
 
 @app.delete("/api/resources/{resource_id}", status_code=204)
@@ -2881,7 +4042,7 @@ def import_map_resource(resource_id: uuid.UUID) -> dict[str, Any]:
     with database_connection() as connection:
         row = connection.execute(
             """
-            SELECT project_id, title, filename, local_path, status, format
+            SELECT project_id, title, filename, local_path, status, format, sha256
             FROM local_resources WHERE id = %s AND deleted_at IS NULL
             """,
             (resource_id,),
@@ -2892,6 +4053,8 @@ def import_map_resource(resource_id: uuid.UUID) -> dict[str, Any]:
         raise HTTPException(status_code=409, detail="La ressource doit être téléchargée et complète")
     try:
         path = confined_path(DATA_DIR, row[3])
+        if not row[6] or sha256_file(path) != row[6]:
+            raise ValueError("L’empreinte SHA-256 de la ressource ne correspond plus")
         features = load_geojson(path)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -2962,6 +4125,15 @@ def import_map_resource(resource_id: uuid.UUID) -> dict[str, Any]:
 def map_layer_geojson(layer_id: uuid.UUID) -> dict[str, Any]:
     _, feature_collection = _map_layer_feature_collection(layer_id)
     return feature_collection
+
+
+@app.delete("/api/map/layers/{layer_id}", status_code=204)
+def delete_map_layer(layer_id: uuid.UUID) -> Response:
+    with database_connection() as connection:
+        result = connection.execute("DELETE FROM map_layers WHERE id = %s", (layer_id,))
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Couche cartographique introuvable")
+    return Response(status_code=204)
 
 
 @app.get("/api/map/layers/{layer_id}/export")

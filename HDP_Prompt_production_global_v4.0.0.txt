@@ -1,0 +1,133 @@
+PROMPT GLOBAL DE PRODUCTION ET DE RECONSTRUCTION
+HUMANITARIAN DATA PLATFORM 4.0.0
+================================================
+
+MISSION
+Reproduire, vérifier et livrer Humanitarian Data Platform 4.0.0 (HDP), une
+application locale mono-utilisateur pour rechercher, télécharger, importer,
+organiser, planifier, traiter, interroger et cartographier des données de santé
+publique et d’action humanitaire. Ne jamais revendiquer un test ou un livrable
+qui n’a pas été réellement produit et vérifié.
+
+RÈGLES DE GEL
+1. Conserver immuables toutes les archives dist/v3.0.0 et antérieures.
+2. Travailler sur une branche dédiée issue d’une révision identifiée.
+3. Terminer chaque lot par tests, point de reprise, journal et commit.
+4. Garder le dépôt privé tant que la licence n’est pas choisie.
+5. Ne jamais publier .env, jetons, mots de passe, URL signées ou données locales.
+6. Documenter séparément vérifié, limité, bloqué et non testé.
+
+ARCHITECTURE
+- Interface HTML/CSS/JavaScript locale, Leaflet 1.9.4 embarqué.
+- API FastAPI 4.0.0 et passerelle GitHub FastAPI 4.0.0.
+- PostgreSQL 16/PostGIS 3.4, volume persistant non publié.
+- Runner C17 lançant Python 3.12 ou R hors réseau dans des conteneurs non
+  privilégiés, en lecture seule et bornés.
+- Compose publie API et passerelle uniquement sur 127.0.0.1.
+- Toutes les entités sont séparées par project_id.
+
+RECHERCHE ET SOURCES
+- Publier un registre JSON Schema 4.0.0 et une matrice de capacités.
+- Rendre dans Recherche query/date_from/date_to/location et les champs propres
+  aux sources sélectionnées.
+- Exécuter en parallèle au moins deux sources, conserver recherche parente,
+  acquisition fille et réponse brute SHA-256 par source.
+- Préserver les succès si une source échoue et produire completed/partial/failed.
+- Activer HDX/CKAN, ReliefWeb, WHO GHO, World Bank Health, UNICEF SDMX, UN SDG,
+  DHS, HDX HAPI v2, UNHCR Refugee Statistics et GDACS.
+- Injecter RELIEFWEB_APPNAME et HDX_HAPI_APP_IDENTIFIER côté serveur ; afficher
+  des marqueurs, jamais les valeurs.
+- Laisser IOM DTM, WHO DON et WorldPop en portail de référence plutôt que
+  simuler une API ou scraper silencieusement.
+
+BIBLIOTHÈQUE, IMPORT ET PLANIFICATION
+- Importer en multipart les données, scripts et documents autorisés.
+- Nettoyer les noms, confiner les chemins, écrire .part, valider, calculer
+  SHA-256 et renommer atomiquement.
+- Valider texte UTF-8, JSON, signatures PDF/images, ZIP/Open XML sans chemins
+  dangereux, liens, macro ou exécutable, et signatures Parquet/Arrow/GeoPackage.
+- Ne jamais exécuter ni envoyer un import automatiquement.
+- Afficher périodicité publiée, planification HDP et échéances par fichier.
+- Une ressource de connecteur peut relancer son acquisition ; un import sans URL
+  crée une échéance de remplacement manuel.
+
+TRAITEMENTS ET LIGNÉE
+- Conserver raw, normalized et derived sans écraser les originaux.
+- Le moteur 4.0.0 accepte CSV/TSV, lit/écrit en flux et borne lignes, colonnes,
+  clés de déduplication et groupes.
+- Opérations : select, rename, filter, fill_missing, recode, cast, derive_rate,
+  drop_duplicates et aggregate.
+- Pour incidence, létalité ou couverture, exiger numérateur, dénominateur,
+  multiplicateur, unité et période cohérente.
+- Produire profil, comptes de lignes, SHA-256, ressource derived, data_artifact,
+  lineage_edge, recipe et processing_run.
+- Générer un script Python ou R ; ne pas l’exécuter automatiquement.
+- Les scripts lancés volontairement passent par les runners hors réseau.
+
+CARTE
+- Alimenter Carte depuis local_resources et vérifier SHA-256 avant import.
+- Accepter GeoJSON Feature/FeatureCollection UTF-8, 20 Mio et 5 000 entités au
+  maximum, propriétés bornées, SRID 4326.
+- Afficher plusieurs couches, popups par DOM sûr, fond OSM opt-in et export
+  GeoJSON/QGIS/R.
+- Supprimer une couche PostGIS sans supprimer le fichier source.
+- Ne pas prétendre convertir GeoPackage/GeoParquet/KML/Shapefile sans test.
+
+BASE SQL
+- Ne transmettre aucun identifiant de connexion au navigateur.
+- Publier uniquement les vues hdp_acquisitions, hdp_resources, hdp_schedules,
+  hdp_artifacts, hdp_federated_searches et hdp_processing_runs, filtrées par
+  current_setting('hdp.project_id').
+- Autoriser SELECT/EXPLAIN SELECT sur liste blanche ; refuser DDL, DML, COPY,
+  commandes de session, requêtes multiples et fonctions dangereuses.
+- Appliquer transaction READ ONLY, délai 5 s, limite 1 000 lignes et audit.
+
+SÉCURITÉ ET PERSISTANCE
+- Refuser URL non HTTP(S), identifiants dans URL et IP non publiques.
+- Préserver .env, variables inconnues, data/ et postgres_data ; créer
+  .env.backup-before-v4.0.0 avant réécriture.
+- Fournir backup-hdp.ps1 et restore-hdp.ps1. La restauration exige RESTORE-HDP,
+  sauvegarde d’abord l’état courant et conserve les anciens fichiers.
+- Fournir SBOM CycloneDX, THIRD_PARTY_NOTICES, revue interne et limites connues.
+- Ne pas qualifier l’auto-évaluation d’audit indépendant.
+
+VALIDATION
+1. python -m unittest discover -s source/tests -p 'test_*.py'
+2. python -m compileall -q source/payload/api/app source/payload/github-api source/tests tools
+3. node tools/check_inline_javascript.mjs source/payload/api/static/index.html
+4. docker compose -f source/payload/compose.yaml config --quiet
+5. gcc -std=c17 -O2 -Wall -Wextra -Werror source/payload/runner/runner.c
+6. régénérer source/src/payload_generated.h et comparer octet pour octet
+7. régénérer le SBOM et comparer au fichier livré
+8. python tools/security_static_checks.py
+9. tester les ZIP et recalculer SHA256SUMS.
+
+LIVRABLES
+- HumanitarianDataPlatform_Archive_complete_v4.0.0.zip et .sha256 ;
+- HumanitarianDataPlatform_Windows_Portable_v4.0.0.zip ;
+- HumanitarianDataPlatform_Source_v4.0.0.zip ;
+- payload, scripts de démarrage, sauvegarde et restauration ;
+- documentation Markdown, HTML et PDF ;
+- matrice, validation, sécurité, limites, SBOM, manifeste et SHA256SUMS ;
+- sources de l’installateur et commande de construction.
+
+INSTALLATEUR WINDOWS
+Si Zig/MinGW et Windows sont disponibles, régénérer le payload, compiler
+HumanitarianDataPlatform_Setup_Native_GUI_v4.0.0.exe en PE32+ GUI x64, vérifier
+ASLR/NX, tester installation neuve et mise à niveau, puis signer uniquement avec
+le certificat éditeur. Sinon, ne pas renommer l’EXE 3.0.0 et ne pas prétendre
+qu’un EXE 4.0.0 existe : livrer le portable et consigner le blocage.
+
+PUBLICATION
+- Commit recommandé : feat: finalize Humanitarian Data Platform v4.0.0
+- Pousser la branche de finalisation et ouvrir une pull request privée.
+- Ne fusionner/taguer qu’après choix de licence et recette Windows si un EXE est
+  présenté comme final.
+- Les artefacts publiés doivent être identiques aux fichiers SHA256SUMS.
+
+CRITÈRE DE VÉRITÉ
+Un résultat n’est reproductible que si paramètres effectifs, versions des
+sources, empreintes des entrées, recette/code, moteur, rapport et empreinte de
+sortie permettent de le relancer ou d’expliquer une différence. Toute fonction
+non testée ou dépendante d’un accès externe doit être décrite comme telle.
+

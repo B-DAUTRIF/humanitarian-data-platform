@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Humanitarian Data Platform 4.0.0 - Documentation</title>
+<style>
+:root{--ink:#172536;--muted:#5f6f7c;--blue:#075985;--cyan:#0e7490;--pale:#e6f6f8;--line:#d5e0e5;}
+*{box-sizing:border-box} body{margin:0;background:#f4f7f8;color:var(--ink);font:16px/1.62 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:linear-gradient(135deg,#063b52,#0e7490);color:white;padding:72px max(7vw,28px)}
+header .kicker,.section-label{font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:.75rem}
+header h1{max-width:850px;font-size:clamp(2.4rem,6vw,5rem);line-height:1.02;margin:.4rem 0 1.2rem} header p{max-width:700px;font-size:1.15rem}
+main{display:grid;grid-template-columns:minmax(220px,300px) minmax(0,900px);gap:36px;max-width:1280px;margin:40px auto;padding:0 28px}
+nav{position:sticky;top:24px;align-self:start;background:white;border:1px solid var(--line);border-radius:16px;padding:22px} nav ol{padding-left:1.35rem;margin:0} nav a{color:var(--blue);text-decoration:none}
+article{min-width:0} section{background:white;border:1px solid var(--line);border-radius:18px;margin-bottom:30px;padding:clamp(24px,5vw,54px);box-shadow:0 12px 28px #1730420b}
+.section-label{color:var(--cyan)} h1,h2,h3,h4{line-height:1.2;color:#0c4863} h1{font-size:2.2rem} h2{margin-top:2.2rem;border-bottom:1px solid var(--line);padding-bottom:.45rem} code,pre{font-family:"DejaVu Sans Mono",Consolas,monospace} code{background:var(--pale);padding:.12rem .3rem;border-radius:4px} pre{background:#102b3b;color:#e9fbff;padding:18px;overflow:auto;border-radius:10px} table{border-collapse:collapse;width:100%;display:block;overflow:auto;margin:1.2rem 0} td{border:1px solid var(--line);padding:.55rem;vertical-align:top} tr:first-child{background:var(--pale);font-weight:700} a{color:var(--blue)}
+footer{text-align:center;color:var(--muted);padding:24px 24px 60px}
+@media(max-width:850px){main{display:block}nav{position:static;margin-bottom:24px}} @media print{body{background:white}nav{display:none}main{display:block;margin:0;max-width:none}section{box-shadow:none;border:0;page-break-before:always}header{page-break-after:always}}
+</style></head><body>
+<header><div class="kicker">Documentation de référence</div><h1>Humanitarian Data Platform</h1><p>Version 4.0.0 - utilisation, installation portable, architecture, API, sources, sécurité et limites.</p><p>Édition du 15 août 2026</p></header>
+<main><nav><strong>Sommaire</strong><ol><li><a href="#s1">Présentation générale</a></li><li><a href="#s2">Guide utilisateur</a></li><li><a href="#s3">Installation</a></li><li><a href="#s4">Architecture</a></li><li><a href="#s5">Référence API</a></li><li><a href="#s6">Matrice des sources</a></li><li><a href="#s7">Sauvegarde et restauration</a></li><li><a href="#s8">Revue de sécurité</a></li><li><a href="#s9">Limites connues</a></li><li><a href="#s10">Rapport de validation</a></li><li><a href="#s11">Historique</a></li></ol></nav><article><section id="s1"><div class="section-label">PARTIE 01</div><h1>Présentation générale</h1><h2>Humanitarian Data Platform 4.0.0</h2>
+<p>Application locale pour rechercher, télécharger, importer, organiser, planifier, traiter et cartographier des données humanitaires et de santé publique.</p>
+<h3>Fonctionnalités 4.0.0</h3>
+<ul>
+<li><strong>Recherche fédérée</strong> : une requête sur plusieurs des dix connecteurs actifs,</li>
+<p>critères communs, champs propres à chaque API et résultats partiels traçables.</p>
+<li><strong>Bibliothèque locale</strong> : import atomique de données, scripts et documents,</li>
+<p>contrôle du contenu et SHA-256, périodicité et planification par fichier.</p>
+<li><strong>Traitements reproductibles</strong> : recettes CSV/TSV guidées, profilage en flux,</li>
+<p>résultat dérivé, lignée et génération de scripts Python/R.</p>
+<li><strong>Carte multi-couches et SQL</strong> : GeoJSON vérifié dans PostGIS/Leaflet et vues</li>
+<p>du projet consultables en lecture seule sans exposer la connexion.</p>
+</ul>
+<ul>
+<li><strong>Exécution Python/R bornée</strong> : versions immuables, rapports SHA-256, délai et</li>
+<p>sortie limités, runners sans privilège et sans réseau ; R reste facultatif.</p>
+<li><strong>Veille RSS officielle</strong> : registre borné aux quatre flux ReliefWeb vérifiés,</li>
+<p>abonnements par projet, lecture immédiate ou planifiée, déduplication et   parsing XML durci.</p>
+<li><strong>Chronologie Gantt</strong> : acquisitions, planifications et exécutions de scripts</li>
+<p>sont réunies dans une vue temporelle du projet.</p>
+<li><strong>Cartographie locale</strong> : import GeoJSON dans PostGIS, rendu Leaflet local et</li>
+<p>exports prêts pour QGIS et R. Les tuiles OpenStreetMap ne sont chargées   qu&#x27;après action explicite.</p>
+<li><strong>GitHub à droits minimaux</strong> : politique de jeton affichée sans exposer le</li>
+<p>secret et recommandation d&#x27;un jeton finement granulé avec permission   d&#x27;administration du dépôt uniquement lorsque la création est utilisée.</p>
+<li><strong>Passerelle REST GitHub locale</strong> : lecture des dépôts, branches, commits,</li>
+<p>issues, pull requests, releases, workflows, contenus et quotas ; création   d&#x27;issues et déclenchement de workflows verrouillés par défaut.</p>
+</ul>
+<p>Leaflet 1.9.4 est embarqué : ouvrir l&#x27;interface ne provoque aucun chargement de code depuis un CDN.</p>
+<h3>Validation historique du socle 3.0.0</h3>
+<ul>
+<li>68 tests Python réussis ;</li>
+<li>API principale : 47 chemins et 63 opérations OpenAPI ;</li>
+<li>passerelle GitHub : 11 chemins et 12 opérations OpenAPI ;</li>
+<li>JavaScript inline et Compose/YAML analysés avec succès ;</li>
+<li>runner C17 compilé strictement et essayé sur une exécution isolée ;</li>
+<li>39 fichiers du payload reconstruits octet pour octet ;</li>
+<li>installateur PE32+ GUI x64 avec ASLR, NX et haute entropie.</li>
+</ul>
+<p>La recette Windows 10/11 avec Docker Desktop reste à exécuter sur une machine Windows réelle ; elle n&#x27;est pas confondue avec les validations locales ci-dessus.</p>
+<h3>Paramétrage des sources et bibliothèque</h3>
+<ul>
+<li><strong>Paramètres API versionnés</strong> : contrats distincts pour les 10 connecteurs,</li>
+<p>validés côté serveur et rendus dynamiquement dans l&#x27;interface.</p>
+<li><strong>Deux niveaux de configuration</strong> : activation/délai/reprises globalement,</li>
+<p>paramètres, limites et planification par projet et par source.</p>
+<li><strong>Prévisualisation sûre</strong> : URL et commande assainies affichées avant appel ;</li>
+<p>aucun secret n&#x27;est retourné.</p>
+<li><strong>Provenance enrichie</strong> : paramètres effectifs archivés avec les acquisitions</li>
+<p>et planifications ; bibliothèque filtrable par source, format, sujet,   organisme, localisation et dates.</p>
+<li><strong>Mise à niveau</strong> : migrations idempotentes enregistrées et conservation des</li>
+<p>variables inconnues de <code>.env</code>, des fichiers et du volume PostgreSQL.</p>
+<li><strong>Windows</strong> : le code de l’installateur cible 4.0.0 et préserve <code>.env</code>, mais</li>
+<p>aucun EXE 4.0.0 n’est revendiqué dans ce gel Linux. Le portable Compose est le   livrable Windows 4.0.0 jusqu’à recompilation et recette sur Windows x64.</p>
+</ul>
+<h3>Socle conservé de la version 2.5.0</h3>
+<ul>
+<li><strong>Sources sanitaires mondiales</strong> : catalogue intégré de 18 sources avec</li>
+<p>organisme, couverture, domaines, accès et liens officiels.</p>
+<li><strong>Cinq nouveaux connecteurs</strong> : WHO Global Health Observatory, World Bank</li>
+<p>Health Indicators, UNICEF Data Warehouse (SDMX), UN Global SDG Indicators et   DHS Program Indicator Data rejoignent HDX et ReliefWeb.</p>
+<li><strong>Capacités explicites</strong> : l&#x27;interface distingue 7 API interrogeables et</li>
+<p>planifiables de 11 portails de référence dont l&#x27;accès reste manuel, variable ou   soumis à inscription.</p>
+<li><strong>Provenance inchangée</strong> : la réponse distante originale est archivée avec son</li>
+<p>empreinte SHA-256 avant normalisation ; les téléchargements restent bornés par   les préférences du projet.</p>
+</ul>
+<ul>
+<li><strong>Liste des téléchargements officiels</strong> : COD-AB (limites administratives) et</li>
+<p>COD-PS (statistiques de population infranationales) sont sélectionnables par   projet. COD-CS est visible mais désactivé tant que son registre vérifié est   vide ; COD-HP est signalé comme retiré par OCHA.</p>
+<li><strong>Liste géographique contrôlée</strong> : chaque option est un pays ou une zone à la</li>
+<p>fois dans ONU M49 et dans les groupes HDX canoniques de toutes les familles   sélectionnées. Le 7 août 2026, HDP vérifie 163 options COD-AB, 146 COD-PS et   143 dans leur intersection.</p>
+<li><strong>Synchronisation atomique</strong> : HDP ne télécharge pas seulement une partie des</li>
+<p>familles demandées si le catalogue change. La réponse CKAN et la décision   restent archivées pour diagnostic.</p>
+<li><strong>Formats adaptés</strong> : format géospatial choisi pour COD-AB ; ressources</li>
+<p>CSV/XLSX pour COD-PS. La famille est conservée avec la provenance locale.</p>
+<li><strong>Dépôt GitHub par projet</strong> : paramètres distincts (propriétaire, nom, description et visibilité) et création réelle après confirmation. Le jeton reste global dans <code>.env</code> et n&#x27;est jamais exposé par l&#x27;API.</li>
+<li><strong>Migration explicite</strong> : un ancien profil déjà limité à un pays est conservé ;</li>
+<p>les anciens profils monde/région sont suspendus jusqu&#x27;au choix dans la nouvelle liste.</p>
+<li><strong>Reprise progressive</strong> : les ressources déjà téléchargées ne consomment plus le quota du passage ; les suivantes sont reportées proprement.</li>
+<li><strong>Socle 2.0 conservé</strong> : projets, ressources locales, préférences, scripts non exécutables et planifications restent isolés par projet.</li>
+</ul>
+<ul>
+<li><strong>Projets</strong> : chaque projet possède ses acquisitions, ressources, préférences, scripts et planifications.</li>
+<li><strong>Téléchargement automatique</strong> : option par recherche ou planification, avec limites de taille, de quantité et de formats.</li>
+<li><strong>Planificateur persistant</strong> : exécutions périodiques à partir de 15 minutes et historique conservé dans PostgreSQL.</li>
+<li><strong>Données locales</strong> : inventaire, téléchargement depuis l&#x27;interface, contrôle SHA-256 et suppression du fichier avec conservation de la trace.</li>
+<li><strong>Scripts par projet</strong> : création et modification de contenu Python, R, SQL ou autre. Seuls Python et R sont exécutables ; les autres langages restent stockés.</li>
+<li><strong>Migration 1.5</strong> : les acquisitions existantes rejoignent automatiquement le « Projet par défaut » ; <code>.env</code>, le volume PostgreSQL et <code>data/</code> sont conservés.</li>
+</ul>
+<h3>Installation Windows</h3>
+<ul>
+<li>Téléchargez <code>HumanitarianDataPlatform_Windows_Portable_v4.0.0.zip</code>.</li>
+<li>Décompressez l&#x27;archive.</li>
+<li>Vérifiez l’empreinte du ZIP depuis <code>SHA256SUMS.txt</code>.</li>
+<li>Créez <code>.env</code> à côté de <code>compose.yaml</code> avec au minimum un mot de passe</li>
+<p>PostgreSQL aléatoire.</p>
+<li>Lancez <code>start-hdp.cmd</code> ; Docker Desktop est nécessaire et R reste facultatif.</li>
+</ul>
+<p>L’EXE 3.0.0 conservé dans les archives historiques n’installe pas la version 4.0.0 et n’est pas inclus comme installateur final de ce gel.</p>
+<p>L&#x27;application s&#x27;ouvre sur <code>http://localhost:8080</code> ou sur un port libre entre <code>18080</code> et <code>18279</code>. Elle reste liée à <code>127.0.0.1</code>.</p>
+<p>Si les paramètres d&#x27;un projet affichent « <code>GITHUB_TOKEN absent : la création reste indisponible.</code> », utilisez le <a href="source/HDP_Configurer_GitHub_v3.0.0.cmd">correctif Windows automatisé</a>. Il configure le secret par saisie masquée, recrée uniquement l&#x27;API et vérifie le résultat sans révéler le jeton.</p>
+<h3>Documentation</h3>
+<ul>
+<li><a href="docs/USER_GUIDE_V4.0.0.md">Guide utilisateur 4.0.0</a></li>
+<li><a href="docs/INSTALLATION_V4.0.0.md">Installation portable 4.0.0</a></li>
+<li><a href="docs/ARCHITECTURE.md">Architecture, données et API</a></li>
+<li><a href="docs/MIGRATION_V2.md">Migration vers 3.0.0</a></li>
+<li><a href="docs/SECURITY_REVIEW_V4.0.0.md">Revue de sécurité 4.0.0</a></li>
+<li><a href="docs/BACKUP_RESTORE_V4.0.0.md">Sauvegarde et restauration</a></li>
+<li><a href="docs/KNOWN_LIMITATIONS_V4.0.0.md">Limites connues</a></li>
+<li><a href="docs/GITHUB_API.md">Passerelle REST GitHub</a></li>
+<li><a href="docs/CAHIER_DES_CHARGES_V3.0.0.md">Cahier des charges final</a></li>
+<li><a href="docs/API_REFERENCE_V4.0.0.md">Référence API 4.0.0</a></li>
+<li><a href="docs/SOURCE_CAPABILITY_MATRIX_V4.0.0.md">Matrice des sources</a></li>
+<li><a href="docs/VALIDATION_REPORT_V4.0.0.md">Rapport de validation</a></li>
+<li><a href="HDP_Prompt_production_global_v4.0.0.txt">Prompt global de production</a></li>
+<li><a href="docs/DEVELOPMENT.md">Développement et validation</a></li>
+<li><a href="docs/TROUBLESHOOTING.md">Dépannage</a></li>
+<li><a href="docs/ARTIFACTS.md">Inventaire des livrables et empreintes</a></li>
+<li><a href="CHANGELOG.md">Journal des versions</a></li>
+<li><a href="docs/PROMPT_RECONSTRUCTION_ETAT_ACTUEL_V2.5.0.md">Prompt historique de reconstruction de l’état v2.5.0</a></li>
+</ul>
+<p>FastAPI publie aussi une documentation interactive locale sur <code>/docs</code> lorsque l&#x27;application tourne.</p>
+<p>Le journal texte <code>CHANGELOG_HDP.log</code> est également embarqué dans l&#x27;installateur et copié à la racine de l&#x27;application Windows.</p>
+<h3>Sources prises en charge</h3>
+<table>
+<tr><td>Source</td><td>Recherche / planification</td><td>Accès</td></tr>
+<tr><td>HDX / CKAN</td><td>Oui</td><td>API publique ; ressources et COD selon la licence du jeu</td></tr>
+<tr><td>ReliefWeb</td><td>Oui</td><td><code>RELIEFWEB_APPNAME</code> pré-approuvé requis</td></tr>
+<tr><td>WHO Global Health Observatory</td><td>Oui</td><td>API OData publique</td></tr>
+<tr><td>World Bank Health Indicators</td><td>Oui</td><td>Indicators API v2 publique</td></tr>
+<tr><td>UNICEF Data Warehouse</td><td>Oui</td><td>API SDMX publique</td></tr>
+<tr><td>UN Global SDG Indicators</td><td>Oui</td><td>API publique</td></tr>
+<tr><td>DHS Program Indicator Data</td><td>Oui</td><td>Indicateurs agrégés publics ; microdonnées sur inscription</td></tr>
+<tr><td>HDX HAPI v2</td><td>Oui</td><td><code>HDX_HAPI_APP_IDENTIFIER</code> requis ; API bêta</td></tr>
+<tr><td>UNHCR Refugee Statistics</td><td>Oui</td><td>API publique, séries agrégées</td></tr>
+<tr><td>GDACS</td><td>Oui</td><td>API GeoJSON publique</td></tr>
+</table>
+<p>L&#x27;onglet « Sources sanitaires » référence aussi WHO Mortality Database, WHO GLASS, WHO FluNet/FluID, WHO Global Health Estimates, UNAIDS AIDSinfo, IHME GHDx, UNICEF MICS, UN World Population Prospects, Global.health, WorldPop et Our World in Data. Ces portails ne sont pas présentés comme des API actives.</p>
+<p>Voir les documentations officielles de l&#x27;<a href="https://docs.ckan.org/en/latest/api/">Action API CKAN</a> et de l&#x27;<a href="https://apidoc.reliefweb.int/">API ReliefWeb V2</a>. Les quotas, licences et conditions d&#x27;utilisation de chaque source restent applicables.</p>
+<h3>Organisation du dépôt</h3>
+<pre><code>
+source/          code FastAPI, interface, installateur Win32 et tests
+
+docs/            documentation Markdown consultable dans GitHub
+
+dist/v4.0.0/     payload portable, sources, documentation et empreintes
+
+dist/v3.0.0/     livrables finaux, installateur, documentation et empreintes
+
+dist/v2.5.0/     installateur, archives, empreintes et prompt de reprise
+
+dist/v2.4.0/     livrables historiques intacts
+
+dist/v2.3.2/     livrables historiques intacts
+
+dist/v2.3.1/     livrables historiques intacts
+
+dist/v2.0/       livrables historiques intacts
+
+dist/v1.5/       livrables historiques intacts
+
+tools/           génération de la notice PDF
+
+</code></pre>
+<h3>Sécurité et licence</h3>
+<p>HDP 4.0.0 est une application locale mono-utilisateur, sans authentification, et ne doit pas être exposée directement sur Internet. Les scripts exécutés restent du code local de confiance malgré les runners isolés. Un dépôt GitHub public ne doit être créé qu&#x27;après vérification du contenu et choix d’une licence.</p>
+<p>Aucune licence HDP explicite n&#x27;est incluse. Le dépôt doit rester privé tant qu&#x27;une licence n&#x27;a pas été choisie et ajoutée.</p></section><section id="s2"><div class="section-label">PARTIE 02</div><h1>Guide utilisateur</h1><h2>Guide utilisateur - Humanitarian Data Platform 4.0.0</h2>
+<h3>À quoi sert HDP ?</h3>
+<p>Humanitarian Data Platform (HDP) est une application locale pour rechercher, télécharger, organiser, vérifier, traiter et cartographier des données de santé publique et d’action humanitaire. Les éléments sont séparés par projet et conservés avec leur provenance et leur empreinte SHA-256.</p>
+<p>HDP est une application mono-utilisateur liée à <code>127.0.0.1</code>. Ne publiez pas son port sur un réseau et ne l’exposez pas directement à Internet.</p>
+<h3>Parcours recommandé</h3>
+<ul>
+<li>Ouvrez le titre <strong>Humanitarian Data Platform</strong> pour revenir à l’accueil.</li>
+<li>Créez ou sélectionnez un projet.</li>
+<li>Dans <strong>Recherche</strong>, cochez au moins deux sources, saisissez des mots-clés et,</li>
+<p>si nécessaire, une période et une localisation.</p>
+<li>Dépliez les champs propres à chaque source. L’interface indique leur contrat</li>
+<p>et l’API conserve les paramètres effectifs.</p>
+<li>Lancez la recherche. Une erreur d’une source ne supprime pas les résultats</li>
+<p>déjà obtenus sur les autres.</p>
+<li>Téléchargez les ressources compatibles ou importez vos propres fichiers dans</li>
+<p><strong>Données locales</strong>.</p>
+<li>Vérifiez l’empreinte d’un fichier et configurez sa mise à jour depuis sa</li>
+<p>fiche. Pour un import local sans URL distante, HDP crée une échéance de    remplacement manuel.</p>
+<li>Dans <strong>Scripts</strong>, choisissez un CSV/TSV et une recette guidée. Adaptez les</li>
+<p>noms de colonnes, puis créez un jeu dérivé. HDP conserve l’original, le    rapport, la recette, la lignée et un script Python ou R.</p>
+<li>Dans <strong>Carte</strong>, importez les GeoJSON vérifiés, affichez plusieurs couches et</li>
+<p>exportez un paquet GeoJSON/QGIS/R. Le fond OpenStreetMap n’est activé qu’à    votre demande.</p>
+<li>Dans <strong>Base SQL</strong>, interrogez uniquement les vues <code>hdp_*</code> du projet avec</li>
+<p>une requête de lecture bornée.</p>
+</ul>
+<h3>Sources actives</h3>
+<p>Les dix connecteurs actifs sont HDX/CKAN, ReliefWeb, WHO GHO, World Bank Health, UNICEF SDMX, UN SDG, DHS, HDX HAPI, UNHCR Refugee Statistics et GDACS. HAPI requiert <code>HDX_HAPI_APP_IDENTIFIER</code>; ReliefWeb requiert un <code>RELIEFWEB_APPNAME</code> pré-approuvé. Ces valeurs restent dans <code>.env</code> et ne sont jamais renvoyées par l’API.</p>
+<p>IOM DTM, WHO Disease Outbreak News, WHO Mortality, GLASS, FluNet, GHE, UNAIDS, IHME GHDx, MICS, WorldPop et d’autres catalogues sont présentés comme portails de référence lorsque HDP ne dispose pas d’un contrat public stable et testé.</p>
+<h3>Import depuis l’ordinateur</h3>
+<p>HDP sépare les catégories suivantes :</p>
+<ul>
+<li>données : CSV, TSV, JSON/JSONL, GeoJSON, XLSX, Parquet/GeoParquet,</li>
+<p>Arrow/Feather, GeoPackage et ZIP contrôlé ;</p>
+<li>scripts : Python, R, SQL et carnet Jupyter en stockage ;</li>
+<li>documents : texte/Markdown, PDF, DOCX/ODT/PPTX et images autorisées.</li>
+</ul>
+<p>Le serveur reçoit les fichiers en flux, limite leur taille, nettoie le nom, écrit d’abord un fichier <code>.part</code>, vérifie la signature ou la structure, refuse les macros, exécutables, liens et chemins dangereux dans les archives, puis publie atomiquement le fichier. Un script importé n’est jamais exécuté automatiquement.</p>
+<h3>Traitements guidés</h3>
+<p>Le moteur 4.0.0 accepte CSV et TSV. Il sait sélectionner ou renommer des colonnes, filtrer, remplir des valeurs manquantes, recoder, typer, calculer un taux, dédupliquer et agréger. Les opérations simples sont effectuées en flux ; les clés de déduplication et groupes d’agrégation ont des limites explicites.</p>
+<p>Les modèles incidence, létalité et couverture n’inventent aucun dénominateur : vous devez désigner les colonnes et vérifier les unités, périodes et populations. Une division par zéro produit une valeur vide. Les analyses d’enquête pondérée, la standardisation sur l’âge et les intervalles de confiance nécessitent un script métier documenté et les variables méthodologiques appropriées.</p>
+<h3>Carte</h3>
+<p>L’aperçu intégré accepte GeoJSON <code>Feature</code> ou <code>FeatureCollection</code> en SRID 4326, jusqu’à 20 Mio, 5 000 entités et 64 Kio de propriétés par entité. GeoPackage, GeoParquet et ZIP sont conservés et téléchargeables, mais doivent être convertis explicitement en GeoJSON pour Leaflet. Supprimer une couche PostGIS ne supprime jamais son fichier source.</p>
+<h3>Base SQL</h3>
+<p>Le navigateur ne reçoit aucune chaîne de connexion. L’API impose une transaction <code>READ ONLY</code>, un délai de cinq secondes, une limite de lignes et les vues <code>hdp_acquisitions</code>, <code>hdp_resources</code>, <code>hdp_schedules</code>, <code>hdp_artifacts</code>, <code>hdp_federated_searches</code> et <code>hdp_processing_runs</code>. DDL, DML, commandes de session, requêtes multiples, fichiers et fonctions dangereuses sont refusés.</p>
+<h3>Sauvegarde et restauration</h3>
+<p>Exécutez <code>backup-hdp.ps1</code> depuis le dossier installé. La sauvegarde contient la base, <code>data/</code> et <code>.env</code> : elle contient donc des secrets et doit rester hors du dépôt. La restauration exige la valeur explicite <code>RESTORE-HDP</code>, crée d’abord une sauvegarde de sécurité et conserve les anciens <code>.env</code> et <code>data/</code> sous un nom daté. Voir <code>BACKUP_RESTORE_V4.0.0.md</code>.</p>
+<h3>Limites importantes</h3>
+<ul>
+<li>aucune authentification multi-utilisateur ni exposition réseau ;</li>
+<li>aucun contournement des comptes, licences ou quotas des sources ;</li>
+<li>l’accès au catalogue ne garantit pas que chaque source propose toutes ses</li>
+<p>observations avec les mêmes dimensions ;</p>
+<li>l’EXE Windows 4.0.0 doit être recompilé et qualifié sur Windows x64 avant de</li>
+<p>pouvoir être déclaré signé et validé ;</p>
+<li>HDP aide à travailler avec des données, mais ne valide pas une décision</li>
+<p>clinique, épidémiologique ou opérationnelle.</p>
+</ul></section><section id="s3"><div class="section-label">PARTIE 03</div><h1>Installation</h1><h2>Installation portable - HDP 4.0.0</h2>
+<h3>Prérequis</h3>
+<ul>
+<li>Windows 10/11 x64 ;</li>
+<li>Docker Desktop avec Compose v2 ;</li>
+<li>PowerShell pour les contrôles, sauvegardes et restaurations ;</li>
+<li>au moins 4 Gio de mémoire disponible et un espace disque adapté aux données.</li>
+</ul>
+<h3>Installation</h3>
+<ul>
+<li>Téléchargez <code>HumanitarianDataPlatform_Windows_Portable_v4.0.0.zip</code> et son</li>
+<p>empreinte depuis l’archive globale.</p>
+<li>Contrôlez le fichier :</li>
+</ul>
+<p>``<code>powershell    Get-FileHash .\HumanitarianDataPlatform_Windows_Portable_v4.0.0.zip -Algorithm SHA256    </code>``</p>
+<ul>
+<li>Décompressez-le dans un dossier utilisateur non synchronisé publiquement.</li>
+<li>Copiez <code>.env.example</code> vers <code>.env</code> et remplacez <code>POSTGRES_PASSWORD</code> par une</li>
+<p>valeur aléatoire longue. Renseignez facultativement <code>RELIEFWEB_APPNAME</code>,    <code>HDX_HAPI_APP_IDENTIFIER</code> et <code>GITHUB_TOKEN</code>.</p>
+<li>Lancez <code>start-hdp.cmd</code>. L’application ouvre <code>http://localhost:8080</code> ou le</li>
+<p>port indiqué par <code>HDP_PORT</code>.</p>
+<li>Activez R avec <code>start-hdp-with-r.cmd</code> uniquement si nécessaire.</li>
+</ul>
+<p>PostgreSQL n’est pas publié et les services HTTP sont liés à <code>127.0.0.1</code>.</p>
+<h3>Mise à niveau depuis 3.0.0</h3>
+<p>Sauvegardez d’abord avec <code>backup-hdp.ps1</code>. Conservez l’ancien dossier, copiez le nouveau payload dans un dossier distinct, reportez <code>.env</code> et <code>data/</code>, puis démarrez 4.0.0. Les migrations sont idempotentes et ne suppriment pas les tables historiques. Ne lancez jamais <code>docker compose down -v</code>.</p>
+<p>L’installateur natif 4.0.0 est fourni sous forme de sources mais n’a pas été compilé dans ce gel. N’utilisez pas l’EXE 3.0.0 comme preuve d’installation de 4.0.0.</p>
+<h3>Diagnostic</h3>
+<ul>
+<li><code>docker compose ps</code> : état des services ;</li>
+<li><code>docker compose logs --tail 200 api</code> : journaux API à relire avant partage ;</li>
+<li><code>/api/health</code> : version, base, planificateur et runners ;</li>
+<li><code>python tools/security_static_checks.py</code> : invariants de configuration dans</li>
+<p>une copie des sources.</p>
+</ul></section><section id="s4"><div class="section-label">PARTIE 04</div><h1>Architecture</h1><h2>Architecture, données et API</h2>
+<h3>Vue d&#x27;ensemble</h3>
+<pre><code>
+flowchart TD
+
+    U[&quot;Interface web locale&quot;] --&gt; A[&quot;FastAPI 4.0.0&quot;]
+
+    A --&gt; P[&quot;PostgreSQL + PostGIS&quot;]
+
+    A --&gt; F[&quot;Fichiers et rapports&quot;]
+
+    A --&gt; X[&quot;Sources distantes&quot;]
+
+    U --&gt; G[&quot;Passerelle GitHub locale&quot;]
+
+    A --&gt; Q[&quot;Spool d&#x27;exécution&quot;]
+
+    Q --&gt; Y[&quot;Runner Python sans réseau&quot;]
+
+    Q -. facultatif .-&gt; R[&quot;Runner R sans réseau&quot;]
+
+</code></pre>
+<p>Docker Compose orchestre l&#x27;API, PostgreSQL/PostGIS, le runner Python et les services R facultatifs. Les ports HTTP de l&#x27;API et de la passerelle GitHub sont publiés uniquement sur <code>127.0.0.1</code>. PostgreSQL et R/plumber restent dans le réseau interne Compose ; les deux runners utilisent <code>network_mode: none</code>.</p>
+<h3>Modèle par projets</h3>
+<table>
+<tr><td>Entité</td><td>Rôle</td><td>Suppression</td></tr>
+<tr><td><code>projects</code></td><td>Conteneur fonctionnel</td><td>Archivage logique ; le projet par défaut est protégé</td></tr>
+<tr><td><code>project_preferences</code></td><td>Limites et téléchargement automatique par défaut</td><td>Suit le projet</td></tr>
+<tr><td><code>project_github_settings</code></td><td>Propriétaire, dépôt, description, visibilité et URL créée ; aucun jeton</td><td>Suit le projet</td></tr>
+<tr><td><code>project_geodata_settings</code></td><td>Familles COD, pays/zone M49, politique, format et cycle</td><td>Automatisation désactivée à l&#x27;archivage</td></tr>
+<tr><td><code>source_global_settings</code></td><td>Activation, délai et reprises par connecteur</td><td>Conservé globalement</td></tr>
+<tr><td><code>project_source_settings</code></td><td>Contrat API, valeurs et planification par projet/source</td><td>Suit le projet</td></tr>
+<tr><td><code>schema_migrations</code></td><td>Historique des migrations appliquées</td><td>Conservé</td></tr>
+<tr><td><code>acquisitions</code></td><td>Provenance de chaque réponse distante</td><td>Conservée</td></tr>
+<tr><td><code>local_resources</code></td><td>URL, empreinte et provenance famille/M49/ISO3/COD/licence</td><td>Fichier supprimé, ligne marquée <code>deleted</code></td></tr>
+<tr><td><code>project_scripts</code></td><td>État courant des scripts par projet</td><td>Archivage logique</td></tr>
+<tr><td><code>project_execution_settings</code></td><td>Activation Python/R et limites du projet</td><td>Suit le projet</td></tr>
+<tr><td><code>script_versions</code></td><td>Versions immuables et empreintes du code</td><td>Conservées avec le script</td></tr>
+<tr><td><code>script_executions</code></td><td>État, sorties et rapport SHA-256</td><td>Historique conservé</td></tr>
+<tr><td><code>rss_subscriptions</code> / <code>rss_items</code></td><td>Veille officielle et éléments dédupliqués</td><td>Abonnement archivable</td></tr>
+<tr><td><code>map_layers</code> / <code>map_features</code></td><td>Couches et géométries PostGIS SRID 4326</td><td>Suit le projet</td></tr>
+<tr><td><code>schedules</code></td><td>Définition périodique d&#x27;une acquisition</td><td>Désactivation et archivage logique</td></tr>
+<tr><td><code>schedule_runs</code></td><td>Historique des passages</td><td>Conservé avec statut et erreur éventuelle</td></tr>
+<tr><td><code>federated_searches</code> / <code>federated_search_members</code></td><td>Recherche multi-sources et acquisitions filles</td><td>Historique conservé</td></tr>
+<tr><td><code>data_artifacts</code> / <code>lineage_edges</code></td><td>Artefacts raw/normalized/derived et filiation</td><td>Historique conservé</td></tr>
+<tr><td><code>resource_refresh_schedules</code> / <code>resource_refresh_runs</code></td><td>Mise à jour par fichier</td><td>Planification archivable</td></tr>
+<tr><td><code>processing_recipes</code> / <code>processing_runs</code></td><td>Recettes, rapports et résultats dérivés</td><td>Historique conservé</td></tr>
+</table>
+<p>Le projet par défaut utilise l&#x27;UUID stable <code>00000000-0000-4000-8000-000000000001</code>. Le démarrage crée les nouvelles tables de façon idempotente, ajoute <code>project_id</code> et <code>schedule_id</code> à l&#x27;historique v1.5, puis rattache les lignes sans projet.</p>
+<h3>Intégrations de projet 4.0.0</h3>
+<p>Le registre <code>source_registry.py</code> décrit chaque API au moyen d&#x27;un contrat versionné inspiré de JSON Schema. L&#x27;interface génère les champs depuis ce contrat. L&#x27;API valide à nouveau toutes les valeurs, fusionne le modèle du projet avec les valeurs d&#x27;exécution, applique les limites globales et archive la configuration effective avec la réponse brute.</p>
+<p>La création GitHub utilise <code>POST /user/repos</code> lorsque le propriétaire est vide ou correspond au compte du jeton, sinon <code>POST /orgs/{org}/repos</code>. Le dépôt est privé par défaut et initialisé avec un README. <code>GITHUB_TOKEN</code> demeure une variable d&#x27;environnement globale ; il ne transite jamais dans les modèles de réponse.</p>
+<p>Le profil appelle <code>package_search</code> pour les catalogues canoniques <code>cod-ab-*</code> et <code>cod-ps-*</code>. Chaque jeu doit correspondre à la série officielle ou à l&#x27;identifiant exact <code>&lt;famille&gt;-&lt;iso3&gt;</code>, avec un unique groupe ISO3 connu de ONU M49. COD-AB exige <code>cod-enhanced</code> ou <code>cod-standard</code>; COD-PS accepte l&#x27;absence de ce champ, qui n&#x27;est pas publié uniformément pour cette série.</p>
+<p><code>GET /api/cod/availability</code> calcule l&#x27;intersection des ISO3 valides pour les familles sélectionnées, la convertit en pays ou zones M49 et met les catalogues en cache pendant 30 minutes. Au 7 août 2026, la même règle retourne 163 pays ou zones COD-AB, 146 COD-PS et 143 dans leur intersection. COD-CS utilise un registre versionné, actuellement vide et donc non sélectionnable. COD-HP est explicitement retiré et ne peut pas être ajouté au profil.</p>
+<p>Lorsqu&#x27;une famille, un pays, une politique COD ou un format change, le dernier résultat est invalidé (<code>sync_required</code>) avant toute nouvelle synchronisation. L&#x27;interface ne peut ainsi pas associer l&#x27;erreur d&#x27;un ancien pays au nouveau périmètre.</p>
+<p>Les réponses CKAN complètes, le pays M49, les familles, les jeux retenus, les absences et les formats manquants sont archivés sous <code>hdx-geodata</code>. Si une famille sélectionnée manque, aucun sous-ensemble n&#x27;est téléchargé. Une ressource déjà complète ne consomme pas le quota ; les suivantes obtiennent le compte <code>deferred</code> et sont reprises lors d&#x27;un passage ultérieur.</p>
+<h3>Flux d&#x27;acquisition et de téléchargement</h3>
+<ul>
+<li>L&#x27;API valide le projet, la source, la requête et la limite.</li>
+<li>Elle appelle le connecteur choisi : ReliefWeb, HDX/CKAN, OMS/GHO,</li>
+<p>Banque mondiale/WDI, UNICEF/SDMX, ONU/ODD ou DHS.</p>
+<li>La réponse brute est sérialisée en UTF-8, archivée et hachée en SHA-256.</li>
+<li>Une ligne <code>acquisitions</code> conserve la provenance.</li>
+<li>Si le téléchargement est actif, l&#x27;API extrait les ressources référencées.</li>
+<li>Elle applique les préférences : nombre maximal, taille maximale et formats autorisés.</li>
+<li>Chaque URL et chaque redirection doivent viser une adresse IP publique.</li>
+<li>Le fichier est écrit sous forme <code>.part</code>, contrôlé pendant le flux, puis renommé atomiquement.</li>
+<li>Le chemin relatif, la taille, le type de contenu et l&#x27;empreinte SHA-256 sont enregistrés.</li>
+</ul>
+<pre><code>
+data/raw/&lt;project_uuid&gt;/&lt;source&gt;/&lt;horodatage&gt;_&lt;requete&gt;_&lt;acquisition_uuid&gt;.json
+
+data/projects/&lt;project_uuid&gt;/resources/&lt;acquisition_uuid&gt;/&lt;resource_uuid&gt;_&lt;nom&gt;
+
+</code></pre>
+<h3>Exécution locale des scripts</h3>
+<p>L&#x27;API écrit atomiquement un job dans un volume spool. Un runner C distinct le réclame par renommage, lance directement Python ou R avec <code>execve</code> - jamais via un shell - puis écrit statut, sortie et horodatages. Le collecteur persiste le résultat et un rapport JSON sous <code>data/projects/&lt;projet&gt;/executions</code>.</p>
+<p>Les conteneurs sont non privilégiés, en lecture seule hors <code>/tmp</code> et du spool, sans réseau, avec limites de processus, mémoire, CPU, durée, descripteurs et taille de sortie. Cette frontière vise une application locale mono-utilisateur : elle ne transforme pas HDP en plateforme d&#x27;exécution de code hostile.</p>
+<h3>RSS, cartographie et chronologie</h3>
+<p>Le registre RSS ne contient que quatre URL ReliefWeb vérifiées. Les lectures sont bornées, suivent uniquement les hôtes autorisés, utilisent ETag et Last-Modified, refusent DTD/entités XML et dédupliquent par identifiant externe.</p>
+<p>L&#x27;import cartographique accepte un Feature ou FeatureCollection GeoJSON borné, stocke les géométries en PostGIS et expose un FeatureCollection limité à 5 000 entités. Leaflet 1.9.4 est servi depuis le payload local. Le fond OSM reste opt-in. L&#x27;export produit GeoJSON et scripts d&#x27;import QGIS/R.</p>
+<h3>Passerelle GitHub</h3>
+<p>Le service <code>github-api</code> expose sur le port local 8091 un sous-ensemble explicite de l&#x27;API REST GitHub. Les lectures couvrent dépôt, branches, commits, issues, pull requests, releases, workflows, contenus et quota. Les deux écritures admises - création d&#x27;issue et déclenchement manuel de workflow - passent par un verrou serveur désactivé par défaut. Le jeton n&#x27;est jamais renvoyé au client.</p>
+<p>Cette passerelle est séparée de la création confirmée d&#x27;un dépôt dans l&#x27;API principale. Son conteneur est non privilégié, en lecture seule et lié à <code>127.0.0.1</code>. Elle ne doit pas être exposée sur un réseau partagé.</p>
+<h3>Planificateur</h3>
+<p>Le planificateur est une tâche de fond de l&#x27;unique processus Uvicorn. Il interroge PostgreSQL toutes les 20 secondes, collecte les jobs Python/R et revendique les acquisitions, synchronisations géographiques ou lectures RSS dues avec <code>FOR UPDATE SKIP LOCKED</code>. Le prochain passage est avancé avant l&#x27;appel distant et le résultat est persisté.</p>
+<p>L&#x27;intervalle est compris entre 15 minutes et 30 jours. Une erreur de base temporaire ne termine pas définitivement la boucle. L&#x27;architecture suppose un seul processus API ; déployer plusieurs workers nécessiterait un service de tâches dédié.</p>
+<h3>API locale principale</h3>
+<table>
+<tr><td>Méthode et route</td><td>Fonction</td></tr>
+<tr><td><code>GET /api/health</code></td><td>Santé SQL, version et état du planificateur</td></tr>
+<tr><td><code>GET /api/sources</code></td><td>Catalogue des connecteurs actifs et portails de référence</td></tr>
+<tr><td><code>GET/POST /api/projects</code></td><td>Liste et création des projets</td></tr>
+<tr><td><code>PATCH/DELETE /api/projects/{id}</code></td><td>Modification ou archivage logique</td></tr>
+<tr><td><code>GET/PUT /api/projects/{id}/preferences</code></td><td>Préférences de téléchargement</td></tr>
+<tr><td><code>GET/PUT /api/projects/{id}/github</code></td><td>Paramètres GitHub sans secret</td></tr>
+<tr><td><code>POST /api/projects/{id}/github/repository</code></td><td>Création confirmée du dépôt</td></tr>
+<tr><td><code>GET/PUT /api/projects/{id}/geodata</code></td><td>Profil géographique et état de synchronisation</td></tr>
+<tr><td><code>POST /api/projects/{id}/geodata/sync</code></td><td>Synchronisation HDX immédiate</td></tr>
+<tr><td><code>GET /api/cod/families</code></td><td>Liste, état sélectionnable/retiré et registre COD-CS</td></tr>
+<tr><td><code>GET /api/cod/availability</code></td><td>Intersection pays/zone ONU M49 × familles HDX</td></tr>
+<tr><td><code>GET /api/un-m49/entities</code></td><td>Nomenclature hiérarchique M49 et source d&#x27;autorité</td></tr>
+<tr><td><code>GET /api/search</code></td><td>Acquisition manuelle et téléchargement optionnel</td></tr>
+<tr><td><code>GET /api/acquisitions?project_id=...</code></td><td>Historique du projet</td></tr>
+<tr><td><code>GET /api/resources?project_id=...</code></td><td>Inventaire local</td></tr>
+<tr><td><code>GET /api/resources/{id}/file</code></td><td>Téléchargement depuis le stockage local</td></tr>
+<tr><td><code>POST /api/resources/{id}/verify</code></td><td>Recalcul SHA-256 en flux</td></tr>
+<tr><td><code>DELETE /api/resources/{id}</code></td><td>Suppression locale avec trace conservée</td></tr>
+<tr><td><code>GET/POST /api/projects/{id}/scripts</code></td><td>Bibliothèque de scripts</td></tr>
+<tr><td><code>PATCH/DELETE /api/scripts/{id}</code></td><td>Modification ou archivage d&#x27;un script</td></tr>
+<tr><td><code>GET /api/scripts/{id}/versions</code></td><td>Versions immuables</td></tr>
+<tr><td><code>GET/POST /api/scripts/{id}/executions</code></td><td>Historique et lancement Python/R</td></tr>
+<tr><td><code>GET /api/executions/{id}</code></td><td>État et sortie d&#x27;un job</td></tr>
+<tr><td><code>GET /api/executions/{id}/report</code></td><td>Rapport JSON de l&#x27;exécution</td></tr>
+<tr><td><code>GET/PUT /api/projects/{id}/execution-settings</code></td><td>Limites et activation des runners</td></tr>
+<tr><td><code>GET /api/rss/catalog</code></td><td>Registre RSS officiel</td></tr>
+<tr><td><code>GET/POST /api/projects/{id}/rss/subscriptions</code></td><td>Abonnements du projet</td></tr>
+<tr><td><code>POST /api/rss/subscriptions/{id}/fetch</code></td><td>Lecture RSS immédiate</td></tr>
+<tr><td><code>POST /api/resources/{id}/map/import</code></td><td>Import GeoJSON dans PostGIS</td></tr>
+<tr><td><code>GET /api/projects/{id}/map/layers</code></td><td>Couches cartographiques</td></tr>
+<tr><td><code>GET /api/map/layers/{id}/geojson</code></td><td>Couche GeoJSON bornée</td></tr>
+<tr><td><code>GET /api/map/layers/{id}/export</code></td><td>Archive QGIS/R</td></tr>
+<tr><td><code>GET /api/projects/{id}/timeline</code></td><td>Événements Gantt</td></tr>
+<tr><td><code>GET/POST /api/projects/{id}/schedules</code></td><td>Liste et création des planifications</td></tr>
+<tr><td><code>PATCH/DELETE /api/schedules/{id}</code></td><td>Modification ou archivage</td></tr>
+<tr><td><code>POST /api/schedules/{id}/run</code></td><td>Exécution manuelle immédiate</td></tr>
+<tr><td><code>GET /api/schedules/{id}/runs</code></td><td>Historique d&#x27;exécution</td></tr>
+<tr><td><code>GET /docs</code></td><td>Swagger UI générée par FastAPI</td></tr>
+</table>
+<p><code>GET /api/search</code> et <code>POST /api/schedules/{id}/run</code> ont des effets : ils créent une acquisition et peuvent télécharger des fichiers.</p>
+<h3>Service R</h3>
+<p>Le profil <code>analytics</code> fournit R/plumber avec <code>/health</code> et <code>/summary</code>, ainsi que le runner R sans réseau. Les deux restent facultatifs.</p>
+<h3>Références des sources distantes</h3>
+<ul>
+<li><a href="https://docs.ckan.org/en/latest/api/">CKAN Action API</a> : actions <code>package_search</code>, réponses <code>success/result</code> et métadonnées de ressources ;</li>
+<li><a href="https://unstats.un.org/unsd/methodology/m49/overview/">ONU M49</a> : nomenclature statistique du monde, des régions, pays et zones ;</li>
+<li><a href="https://knowledge.base.unocha.org/wiki/spaces/imtoolbox/pages/2557378679/Administrative%2BBoundaries%2BCOD-AB">OCHA COD-AB</a> : limites administratives communes ;</li>
+<li><a href="https://knowledge.base.unocha.org/wiki/spaces/imtoolbox/pages/42045911/Common%2BOperational%2BDatasets%2BCODs">OCHA Common Operational Datasets</a> : familles COD actuelles et retrait de COD-HP ;</li>
+<li><a href="https://knowledge.base.unocha.org/wiki/spaces/imtoolbox/pages/2965897217/Country-specific%2BCODs%2BCOD-CS">OCHA COD-CS</a> : nature contextuelle des données spécifiques au pays ;</li>
+<li><a href="https://docs.github.com/en/rest/repos/repos">GitHub REST - repositories</a> : création pour un utilisateur ou une organisation ;</li>
+<li><a href="https://reliefweb.int/rss">ReliefWeb RSS</a> : flux officiels enregistrés ;</li>
+<li><a href="https://leafletjs.com/download.html">Leaflet 1.9.4</a> et <a href="https://operations.osmfoundation.org/policies/tiles/">politique des tuiles OpenStreetMap</a> : rendu embarqué et fond opt-in ;</li>
+<li><a href="https://apidoc.reliefweb.int/">ReliefWeb API V2</a> et <a href="https://apidoc.reliefweb.int/parameters">paramètres</a> : appname, profils, requêtes, limites et quotas.</li>
+<li><a href="https://www.who.int/data/gho/info/gho-odata-api">WHO GHO OData API</a>,</li>
+<p><a href="https://datahelpdesk.worldbank.org/knowledgebase/articles/889392-about-the-indicators-api-documentation">World Bank Indicators API</a>,   <a href="https://data.unicef.org/sdmx-api-documentation/">UNICEF SDMX API</a>,   <a href="https://unstats.un.org/sdgapi/swagger/">UN SDG API</a> et   <a href="https://api.dhsprogram.com/">DHS Program API</a> : catalogues d&#x27;indicateurs et   flux sanitaires ajoutés en 2.5.0.</p>
+</ul></section><section id="s5"><div class="section-label">PARTIE 05</div><h1>Référence API</h1><h2>Référence API - Humanitarian Data Platform 4.0.0</h2>
+<p>L’API principale FastAPI écoute uniquement sur l’adresse locale publiée par Compose. Les UUID sont ceux du projet actif. Les erreurs de validation utilisent les statuts HTTP 4xx ; un connecteur configuré sans secret requis retourne 503.</p>
+<h3>Santé et catalogue</h3>
+<table>
+<tr><td>Méthode</td><td>Chemin</td><td>Fonction</td></tr>
+<tr><td>GET</td><td><code>/api/health</code></td><td>version, base, planificateur et runners</td></tr>
+<tr><td>GET</td><td><code>/api/sources</code></td><td>catalogue enrichi et contrats de capacités</td></tr>
+<tr><td>GET</td><td><code>/api/source-settings</code></td><td>configuration expurgée des connecteurs</td></tr>
+<tr><td>GET/PUT</td><td><code>/api/projects/{project_id}/sources/{source_id}</code></td><td>paramètres par projet</td></tr>
+<tr><td>POST</td><td><code>/api/projects/{project_id}/sources/{source_id}/preview</code></td><td>requête prévisualisée sans secret</td></tr>
+</table>
+<h3>Recherche et acquisitions</h3>
+<p><code>POST /api/projects/{project_id}/federated-search</code> reçoit :</p>
+<pre><code>
+{
+
+  &quot;sources&quot;: [&quot;hdx&quot;, &quot;who-gho&quot;, &quot;gdacs&quot;],
+
+  &quot;query&quot;: &quot;cholera&quot;,
+
+  &quot;date_from&quot;: &quot;2026-01-01&quot;,
+
+  &quot;date_to&quot;: &quot;2026-08-15&quot;,
+
+  &quot;location&quot;: &quot;Mozambique&quot;,
+
+  &quot;result_limit_per_source&quot;: 25,
+
+  &quot;auto_download&quot;: false,
+
+  &quot;source_parameters&quot;: {&quot;gdacs&quot;: {&quot;event_types&quot;: [&quot;FL&quot;]}}
+
+}
+
+</code></pre>
+<p>La réponse contient un identifiant parent, un statut <code>completed</code>, <code>partial</code> ou <code>failed</code>, un résultat par source, les acquisitions filles et une vue agrégée. Chaque réponse brute est stockée séparément avec SHA-256.</p>
+<p>Autres chemins : <code>POST /api/acquisitions</code>, <code>GET /api/acquisitions</code> et <code>GET /api/projects/{project_id}/federated-searches</code>.</p>
+<h3>Bibliothèque et import</h3>
+<table>
+<tr><td>Méthode</td><td>Chemin</td><td>Fonction</td></tr>
+<tr><td>POST</td><td><code>/api/projects/{project_id}/uploads</code></td><td>import multipart d’un fichier</td></tr>
+<tr><td>GET</td><td><code>/api/resources?project_id=...</code></td><td>bibliothèque filtrable</td></tr>
+<tr><td>GET</td><td><code>/api/resources/{resource_id}/file</code></td><td>téléchargement local</td></tr>
+<tr><td>POST</td><td><code>/api/resources/{resource_id}/verify</code></td><td>recalcul SHA-256</td></tr>
+<tr><td>DELETE</td><td><code>/api/resources/{resource_id}</code></td><td>suppression du fichier, trace conservée</td></tr>
+<tr><td>POST/PATCH/DELETE</td><td><code>/api/resources/{resource_id}/refresh-schedule</code></td><td>périodicité par fichier</td></tr>
+</table>
+<p>Champs multipart : <code>file</code>, <code>category</code>, <code>title</code>, <code>geographic_scope</code> et <code>update_frequency</code>. La limite est <code>HDP_MAX_UPLOAD_BYTES</code>, bornée côté serveur entre 1 Mio et 2 Gio.</p>
+<h3>Traitements et lignée</h3>
+<p><code>GET /api/processing/operations</code> publie la version du moteur, les opérations et les limites. <code>POST /api/projects/{project_id}/processing-runs</code> reçoit une ressource CSV/TSV, un nom, un fichier de sortie, le langage du script et une recette JSON.</p>
+<pre><code>
+{
+
+  &quot;resource_id&quot;: &quot;00000000-0000-4000-8000-000000000002&quot;,
+
+  &quot;name&quot;: &quot;Incidence&quot;,
+
+  &quot;output_title&quot;: &quot;incidence.csv&quot;,
+
+  &quot;script_language&quot;: &quot;python&quot;,
+
+  &quot;recipe&quot;: {&quot;steps&quot;: [{&quot;operation&quot;: &quot;derive_rate&quot;, &quot;numerator&quot;: &quot;cases&quot;, &quot;denominator&quot;: &quot;population&quot;, &quot;output&quot;: &quot;incidence_per_100000&quot;, &quot;multiplier&quot;: 100000}]}
+
+}
+
+</code></pre>
+<p>Le résultat inclut les comptes de lignes, le profil d’entrée, le SHA-256 de sortie et les identifiants de la ressource dérivée et du script. L’historique est exposé par <code>GET /api/projects/{project_id}/processing-runs</code>.</p>
+<h3>Carte</h3>
+<ul>
+<li><code>GET /api/projects/{project_id}/map/layers</code> ;</li>
+<li><code>POST /api/resources/{resource_id}/map/import</code> ;</li>
+<li><code>GET /api/map/layers/{layer_id}/geojson</code> ;</li>
+<li><code>GET /api/map/layers/{layer_id}/export</code> ;</li>
+<li><code>DELETE /api/map/layers/{layer_id}</code>.</li>
+</ul>
+<p>L’import vérifie le SHA-256 avant de lire le GeoJSON. La suppression porte sur la couche dérivée et ses entités PostGIS, jamais sur la ressource locale.</p>
+<h3>SQL</h3>
+<p><code>GET /api/projects/{project_id}/sql/schema</code> décrit les vues autorisées. <code>POST /api/projects/{project_id}/sql/query</code> reçoit <code>query</code> et <code>max_rows</code> (1 à 1 000). Le texte est validé, la transaction est read-only et la requête est journalisée par empreinte, statut, durée et nombre de lignes.</p>
+<h3>Scripts, planifications et RSS</h3>
+<p>Les routes existantes <code>/api/projects/{project_id}/scripts</code>, <code>/api/scripts/{script_id}/executions</code>, <code>/api/projects/{project_id}/schedules</code> et <code>/api/projects/{project_id}/rss/*</code> restent disponibles. Python et R s’exécutent dans des runners sans réseau, sans privilège et avec limites de temps/sortie.</p></section><section id="s6"><div class="section-label">PARTIE 06</div><h1>Matrice des sources</h1><h2>Matrice des sources - HDP 4.0.0</h2>
+<p>Vérification documentaire : 15 août 2026. <code>Natif</code> signifie que le critère est traduit vers l’API. <code>Local</code> signifie qu’il est appliqué aux métadonnées normalisées après la réponse. Les limites et modalités de réutilisation restent celles de chaque producteur.</p>
+<table>
+<tr><td>Source</td><td>État HDP</td><td>Mots-clés</td><td>Dates</td><td>Localisation</td><td>Ressource</td><td>Fréquence affichée</td></tr>
+<tr><td>HDX/CKAN</td><td>actif</td><td>natif</td><td>local</td><td>local</td><td>fichiers publiés</td><td>métadonnée du jeu</td></tr>
+<tr><td>ReliefWeb</td><td>actif, appname</td><td>natif</td><td>local</td><td>local</td><td>pièces jointes référencées</td><td>non publiée</td></tr>
+<tr><td>WHO GHO</td><td>actif</td><td>natif catalogue</td><td>local</td><td>local</td><td>JSON par indicateur</td><td>variable</td></tr>
+<tr><td>World Bank Health</td><td>actif</td><td>local catalogue</td><td>local</td><td>local</td><td>archive CSV</td><td>variable</td></tr>
+<tr><td>UNICEF SDMX</td><td>actif</td><td>local flux</td><td>local</td><td>local</td><td>CSV du flux</td><td>variable</td></tr>
+<tr><td>UN SDG</td><td>actif</td><td>local indicateurs</td><td>local</td><td>local</td><td>série JSON</td><td>variable</td></tr>
+<tr><td>DHS</td><td>actif, agrégats</td><td>local indicateurs</td><td>local</td><td>local</td><td>données JSON</td><td>enquêtes</td></tr>
+<tr><td>HDX HAPI v2</td><td>expérimental, identifiant</td><td>local</td><td>sous-domaine/local</td><td>code natif</td><td>réponse brute</td><td>hebdomadaire à annuelle</td></tr>
+<tr><td>UNHCR</td><td>actif</td><td>local</td><td>année native</td><td>origine/asile natifs</td><td>extraction JSON</td><td>annuelle</td></tr>
+<tr><td>GDACS</td><td>actif</td><td>local</td><td>natif</td><td>local</td><td>GeoJSON</td><td>quasi temps réel</td></tr>
+</table>
+<p>Les paramètres propres à chaque source sont publiés par JSON Schema et rendus directement sous la source sélectionnée. Un critère commun non natif n’est jamais présenté comme natif : son mode reste dans le contrat et la provenance.</p>
+<h3>Portails référencés, non automatisés</h3>
+<p>WHO Disease Outbreak News, IOM DTM, WHO Mortality, GLASS, FluNet/FluID, Global Health Estimates, UNAIDS, IHME GHDx, UNICEF MICS, UN WPP, Global.health, WorldPop et Our World in Data sont référencés sans scraping ni contournement d’accès.</p>
+<h3>Références officielles</h3>
+<ul>
+<li>HDX HAPI : https://hapi.humdata.org/ et https://hdx-hapi.readthedocs.io/</li>
+<li>UNHCR : https://api.unhcr.org/docs/refugee-statistics.html</li>
+<li>GDACS : https://www.gdacs.org/gdacsapi/swagger/index.html</li>
+<li>IOM DTM : https://dtm.iom.int/data-and-analysis</li>
+<li>WHO GHO : https://www.who.int/data/gho/info/gho-odata-api</li>
+<li>WorldPop API : https://api.worldpop.org/v2/</li>
+</ul></section><section id="s7"><div class="section-label">PARTIE 07</div><h1>Sauvegarde et restauration</h1><h2>Sauvegarde et restauration - HDP 4.0.0</h2>
+<h3>Sauvegarder</h3>
+<p>Depuis PowerShell dans le dossier HDP :</p>
+<pre><code>
+Set-ExecutionPolicy -Scope Process Bypass
+
+.\backup-hdp.ps1
+
+</code></pre>
+<p>Le script exporte PostgreSQL, copie <code>data/</code> et <code>.env</code>, calcule les empreintes et crée une archive datée dans <code>backups/</code>. Elle contient les secrets de <code>.env</code> : ne la publiez pas, chiffrez son stockage et limitez-en l’accès.</p>
+<h3>Restaurer</h3>
+<p>La restauration remplace volontairement la base et les données courantes. Elle exige une confirmation, commence par une nouvelle sauvegarde et renomme les données courantes au lieu de les supprimer.</p>
+<pre><code>
+.\restore-hdp.ps1 -Archive .\backups\HDP_backup_YYYYMMDDTHHMMSSZ.zip -Confirmation RESTORE-HDP
+
+</code></pre>
+<p>Après restauration, vérifiez <code>/api/health</code>, le projet, la bibliothèque, un SHA-256, les couches et une requête SQL. Conservez <code>data.before-restore-*</code> et <code>.env.before-restore-*</code> jusqu’à validation complète.</p>
+<p>Les scripts sont livrés, mais une restauration réelle sur Windows/Docker et un jeu représentatif reste une recette externe à consigner.</p></section><section id="s8"><div class="section-label">PARTIE 08</div><h1>Revue de sécurité</h1><h2>Revue de sécurité interne - HDP 4.0.0</h2>
+<p>Date : 15 août 2026. Cette revue est une auto-évaluation technique, pas un audit indépendant ni une certification.</p>
+<h3>Contrôles vérifiés</h3>
+<ul>
+<li>services HTTP publiés uniquement sur <code>127.0.0.1</code> ; PostgreSQL non publié ;</li>
+<li>runners Python/R sans réseau, non privilégiés, en lecture seule, capacités</li>
+<p>supprimées, limites CPU/mémoire/PID/temps/sortie ;</p>
+<li>URL de téléchargement limitées à HTTP(S), sans identifiants et vers des</li>
+<p>adresses IP publiques ;</p>
+<li>noms et chemins confinés sous <code>DATA_DIR</code>, SHA-256 et écriture atomique ;</li>
+<li>validation extension + signature/structure, archives sans extraction, liens,</li>
+<p>macros et exécutables refusés ;</p>
+<li>HAPI et ReliefWeb injectent leurs identifiants côté serveur ;</li>
+<li>SQL sur vues de projet, fonctions/relations autorisées, transaction</li>
+<p><code>READ ONLY</code>, délai et limite de lignes, audit par empreinte ;</p>
+<li>carte : SHA-256 contrôlé, GeoJSON borné et propriétés par DOM sûr ;</li>
+<li>sauvegarde de <code>.env</code>, variables inconnues préservées et aucune commande</li>
+<p><code>docker compose down -v</code>.</p>
+</ul>
+<h3>Risques résiduels</h3>
+<ul>
+<li>modèle local mono-utilisateur, sans authentification ni TLS ;</li>
+<li>scripts considérés comme code local de confiance malgré l’isolation ;</li>
+<li>dépendance aux schémas, quotas, licences et disponibilités externes ;</li>
+<li>absence d’antivirus embarqué ; documents stockés mais non rendus ;</li>
+<li>validation SQL défensive sans rôle PostgreSQL applicatif séparé ;</li>
+<li>traitements guidés synchrones pouvant occuper un worker près des limites ;</li>
+<li>audit indépendant, test d’intrusion et recette Windows non réalisés ici.</li>
+</ul>
+<h3>Rotation des secrets</h3>
+<p>Arrêtez l’application, sauvegardez <code>.env</code>, remplacez individuellement <code>POSTGRES_PASSWORD</code>, <code>RELIEFWEB_APPNAME</code>, <code>HDX_HAPI_APP_IDENTIFIER</code> ou <code>GITHUB_TOKEN</code>, recréez les services concernés et contrôlez leur santé. La rotation PostgreSQL exige de synchroniser le rôle et <code>DATABASE_URL</code>. Ne placez jamais <code>.env</code>, une URL signée ou un jeton dans GitHub ou une archive publique.</p></section><section id="s9"><div class="section-label">PARTIE 09</div><h1>Limites connues</h1><h2>Limites connues - HDP 4.0.0</h2>
+<ul>
+<li>L’aperçu Leaflet importe GeoJSON en SRID 4326. GeoPackage, GeoParquet, KML et</li>
+<p>Shapefile ne sont pas convertis automatiquement.</p>
+<li>Le géocodage CSV/XLSX et les jointures spatiales guidées ne sont pas livrés.</li>
+<li>Le traitement guidé couvre CSV/TSV. Parquet/GeoParquet/Arrow demandent un</li>
+<p>script adapté.</p>
+<li>Les recettes guidées sont synchrones et non annulables depuis l’interface.</li>
+<li>Les sept connecteurs historiques passent du catalogue à une ressource, mais</li>
+<p>toutes les dimensions d’observation ne sont pas encore des champs guidés.</p>
+<li>IOM DTM et WHO DON sont des références non automatisées. WorldPop v2 est une</li>
+<p>API polygonale et n’est pas simulée comme catalogue.</p>
+<li>La planification par fichier utilise un intervalle en minutes ; calendrier,</li>
+<p>fuseaux, ETag, versions physiques et rétention restent à étendre.</p>
+<li>La vue SQL n’exporte pas encore directement CSV/JSON/GeoJSON et n’annule pas</li>
+<p>une requête depuis l’interface.</p>
+<li>Aucun mode multi-utilisateur, exposition réseau ou mise à jour automatique.</li>
+<li>L’installateur Windows 4.0.0 n’a pas pu être compilé, signé ou exécuté dans</li>
+<p>cet environnement Linux. L’EXE 3.0.0 historique n’est pas présenté comme un   installateur 4.0.0.</p>
+<li>La licence doit être choisie par le propriétaire avant publication publique ;</li>
+<p>le dépôt reste privé jusque-là.</p>
+</ul></section><section id="s10"><div class="section-label">PARTIE 10</div><h1>Rapport de validation</h1><h2>Rapport de validation - HDP 4.0.0</h2>
+<p>Branche <code>codex/finalize-hdp-v4</code>, issue de la photographie GitHub <code>6eff2065fadc8070be398ecce7560c6d2db44084</code>.</p>
+<h3>Contrôles réussis dans l’environnement de construction</h3>
+<ul>
+<li>90 tests Python <code>unittest</code> ;</li>
+<li>compilation des modules API, passerelle, tests et outils ;</li>
+<li>analyse de tous les scripts JavaScript inline ;</li>
+<li>contrôle statique réseau, runners, SQL, import, SSRF et <code>.env</code> ;</li>
+<li>SBOM CycloneDX 1.5 reproductible ;</li>
+<li>recettes testées sur filtre, taux, déduplication et agrégation ;</li>
+<li>parseurs testés sur les dix contrats de connecteurs ;</li>
+<li>payload et archives déterministes avec inventaire et SHA-256.</li>
+</ul>
+<h3>Contrôles non attestés</h3>
+<ul>
+<li>démarrage Compose/PostGIS : Docker indisponible ;</li>
+<li>appels directs aux API : réseau de test non ouvert aux domaines ;</li>
+<li>compilation PE32+ : aucun Zig/MinGW installé ;</li>
+<li>installation/mise à niveau sur Windows 10/11 et Docker Desktop ;</li>
+<li>signature Authenticode : certificat non fourni ;</li>
+<li>audit indépendant et choix de licence : décisions externes.</li>
+</ul>
+<h3>Décision</h3>
+<p>Le code, le payload portable, les tests, scripts de construction, documentation et manifestes 4.0.0 sont livrables. Aucun EXE 4.0.0 ne doit être annoncé comme compilé ou validé. L’archive historique 3.0.0 reste inchangée.</p></section><section id="s11"><div class="section-label">PARTIE 11</div><h1>Historique</h1><h2>Journal des versions</h2>
+<h3>4.0.0 - gel fonctionnel - 15 août 2026</h3>
+<ul>
+<li>recherche fédérée, critères communs et champs spécifiques ;</li>
+<li>dix connecteurs actifs avec HAPI, UNHCR et GDACS ;</li>
+<li>import atomique, périodicité et planification par ressource ;</li>
+<li>accueil, carte multi-couches et SQL en lecture seule ;</li>
+<li>recettes CSV/TSV, scripts Python/R et lignée dérivée ;</li>
+<li>CI, SBOM, sauvegarde/restauration et documentation 4.0.0 ;</li>
+<li>installateur Windows laissé à recompiler et qualifier faute de</li>
+<p>compilateur/Windows/certificat.</p>
+</ul>
+<h3>3.0.0 - version finale - 15 août 2026</h3>
+<ul>
+<li>Gel du contrat applicatif et suppression des libellés de préversion.</li>
+<li>Intégration complète de la passerelle REST GitHub apparue sur <code>main</code> en 2.4.1,</li>
+<p>renforcée par un conteneur non privilégié et des écritures désactivées par défaut.</p>
+<li>Documentation finale consolidée : cahier des charges, architecture, sécurité,</li>
+<p>référence API, guide HTML/PDF et prompt global de production.</p>
+<li>Reconstruction de l&#x27;installateur Windows, des archives source/utilisateur et</li>
+<p>de l&#x27;archive complète avec manifeste et empreintes SHA-256.</p>
+</ul>
+<h3>3.0.0 - itération 2 - 15 août 2026</h3>
+<ul>
+<li>Exécution Python/R par versions immuables dans des runners distincts,</li>
+<p>non privilégiés, sans réseau et avec limites de temps, processus et sortie.</p>
+<li>Rapports JSON d&#x27;exécution avec empreintes SHA-256 et historique par script.</li>
+<li>Registre de quatre flux RSS officiels ReliefWeb, abonnements planifiés,</li>
+<p>déduplication, requêtes conditionnelles et parseur XML durci.</p>
+<li>Vue chronologique de type Gantt par projet.</li>
+<li>Import GeoJSON dans PostGIS, visualisation Leaflet 1.9.4 embarquée et exports</li>
+<p>QGIS/R ; fond OpenStreetMap activé uniquement à la demande.</p>
+<li>Politique GitHub actualisée pour les jetons finement granulés et l&#x27;API REST</li>
+<p>versionnée 2026-03-10.</p>
+<li>47 chemins et 63 opérations dans le contrat OpenAPI généré.</li>
+</ul>
+<h3>3.0.0 - itération 1 - 14 août 2026</h3>
+<ul>
+<li>Registre versionné des paramètres pour les sept connecteurs API.</li>
+<li>Paramètres globaux et modèles propres à chaque source et projet.</li>
+<li>Prévisualisation assainie des URL/commandes sans appel réseau.</li>
+<li>Paramètres effectifs archivés avec acquisitions et planifications.</li>
+<li>Métadonnées et filtres initiaux de bibliothèque.</li>
+<li>Migrations idempotentes enregistrées, conservation renforcée de <code>.env</code>.</li>
+<li>Chaîne Windows portée en 3.0.0 ; recette réelle reportée au jalon final selon D09=B.</li>
+<li>52 tests Python réussis, plus syntaxe Python/JavaScript et roundtrip du payload.</li>
+</ul>
+<h3>2.5.0 - 7 août 2026</h3>
+<ul>
+<li>Catalogue intégré de 18 sources sanitaires et épidémiologiques mondiales.</li>
+<li>Connecteurs interrogeables et planifiables ajoutés pour OMS/GHO, Banque</li>
+<p>mondiale/WDI, UNICEF/SDMX, ONU/ODD et DHS, en plus de HDX et ReliefWeb.</p>
+<li>Archivage SHA-256 de la réponse distante brute conservé pour tous les nouveaux</li>
+<p>connecteurs ; normalisation des indicateurs et flux vers le modèle HDP.</p>
+<li>Onglet « Sources sanitaires » distinguant 7 API actives de 11 portails de</li>
+<p>référence avec accès, domaines, inscription et liens officiels.</p>
+<li>36 tests unitaires, compilation Python et syntaxe JavaScript validés.</li>
+</ul>
+<h3>2.4.1 - 14 août 2026</h3>
+<ul>
+<li>Passerelle locale <code>github-api</code> vers l&#x27;API REST GitHub classique.</li>
+<li>Lectures de dépôt, branches, commits, issues, pull requests, releases,</li>
+<p>workflows, contenus et quotas.</p>
+<li>Création d&#x27;issues et déclenchement de workflows désactivés par défaut.</li>
+<li>Jeton conservé côté serveur et version REST configurable.</li>
+</ul>
+<h3>2.4.0 - 7 août 2026</h3>
+<ul>
+<li>Présentation des téléchargements officiels sous forme de liste par famille :</li>
+<p>COD-AB et COD-PS sont sélectionnables dans un même profil de projet.</p>
+<li>COD-CS reste visible mais désactivé tant que son registre vérifié embarqué ne</li>
+<p>contient aucun jeu ; COD-HP est visible comme famille retirée par OCHA.</p>
+<li>Remplacement du périmètre hiérarchique libre par une liste de pays ou zones</li>
+<p>appartenant simultanément à ONU M49 et à tous les catalogues HDX sélectionnés.</p>
+<li>Vérification réelle du 7 août 2026 : 163 pays/zones COD-AB, 146 COD-PS et</li>
+<p>143 options dans leur intersection ; Soudan admissible aux deux, Algérie au   seul COD-AB.</p>
+<li>Téléchargement atomique par ensemble de familles : si une famille devient</li>
+<p>absente, la preuve CKAN est archivée mais aucun sous-ensemble n&#x27;est téléchargé.</p>
+<li>Ajout de <code>cod_families</code> aux profils et de <code>cod_family</code> à la provenance locale ;</li>
+<p>migration sûre des anciens profils pays, suspension explicite des profils   monde/région jusqu&#x27;au choix dans la nouvelle liste.</p>
+<li>Ajout des routes <code>/api/cod/families</code> et <code>/api/cod/availability</code>, avec cache HDX</li>
+<p>de 30 minutes et registre COD-CS versionné.</p>
+<li>Validation : 29 tests unitaires, contrôle JavaScript et recette catalogue HDX</li>
+<p>en direct sur COD-AB/COD-PS.</p>
+</ul>
+<h3>2.3.2 - 7 août 2026</h3>
+<ul>
+<li>Correction de la découverte HDX : le catalogue est interrogé par identifiant</li>
+<p>canonique <code>cod-ab-*</code> et niveau COD, puis chaque résultat est contrôlé contre   son groupe ISO3 ONU M49.</p>
+<li>Compatibilité avec les réponses CKAN qui indexent la série officielle mais</li>
+<p>n&#x27;exposent plus <code>dataseries_name</code> dans le JSON retourné.</p>
+<li>Invalidation du dernier statut, de la dernière erreur et de l&#x27;acquisition</li>
+<p>affichés lorsqu&#x27;un profil change de périmètre M49, de politique ou de format.</p>
+<li>Affichage explicite « synchronisation requise » et échéance immédiate lorsque</li>
+<p>le téléchargement automatique est actif sur un profil modifié.</p>
+<li>Régressions vérifiées sur les COD-AB officiels du Soudan (<code>M49 729</code>, <code>SDN</code>)</li>
+<p>et de l&#x27;Algérie (<code>M49 012</code>, <code>DZA</code>).</p>
+</ul>
+<h3>2.3.1 - 7 août 2026</h3>
+<ul>
+<li>Remplacement de l&#x27;échelle opérationnelle « terrain → monde » par la nomenclature</li>
+<p>officielle ONU M49 embarquée et hiérarchisée.</p>
+<li>Suppression de l&#x27;identifiant HDX libre dans le module géographique.</li>
+<li>Limitation stricte aux jeux OCHA/HDX de la série officielle</li>
+<p><code>COD - Subnational Administrative Boundaries</code>, marqués <code>cod-enhanced</code> ou   <code>cod-standard</code>.</p>
+<li>Ajout des politiques « amélioré uniquement » et « amélioré avec standard en</li>
+<p>repli ».</p>
+<li>Archivage de la provenance : code M49, ISO3, niveau COD, éditeur, licence et</li>
+<p>date des métadonnées.</p>
+<li>Migration sûre : les anciens profils monde deviennent M49 <code>001</code>; les profils</li>
+<p>plus étroits sont suspendus jusqu&#x27;au choix explicite d&#x27;un territoire M49.</p>
+<li>Correction de la limite d&#x27;acquisition : les fichiers déjà présents ne</li>
+<p>consomment plus le quota et les ressources restantes sont reportées, pas   assimilées à des échecs.</p>
+</ul>
+<h3>2.3.0 - 7 août 2026</h3>
+<ul>
+<li>Paramètres GitHub par projet et création de dépôt.</li>
+<li>Profil géographique HDX, synchronisation planifiée et téléchargement local.</li>
+<li>Correctif Windows de configuration sûre de <code>GITHUB_TOKEN</code>.</li>
+</ul>
+<p>Les journaux détaillés historiques restent également inclus dans leurs archives de remise respectives sous <code>dist/</code>.</p></section></article></main>
+<footer>Humanitarian Data Platform 4.0.0 - documentation consolidée</footer></body></html>

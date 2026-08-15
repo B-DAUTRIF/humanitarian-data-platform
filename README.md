@@ -1,8 +1,18 @@
-# Humanitarian Data Platform 3.0.0 — version finale
+# Humanitarian Data Platform 4.0.0
 
-Application locale Windows pour rechercher des données humanitaires publiques, télécharger leurs ressources, les organiser par projets et automatiser les acquisitions géographiques.
+Application locale pour rechercher, télécharger, importer, organiser, planifier,
+traiter et cartographier des données humanitaires et de santé publique.
 
-## Fonctionnalités finales 3.0.0
+## Fonctionnalités 4.0.0
+
+- **Recherche fédérée** : une requête sur plusieurs des dix connecteurs actifs,
+  critères communs, champs propres à chaque API et résultats partiels traçables.
+- **Bibliothèque locale** : import atomique de données, scripts et documents,
+  contrôle du contenu et SHA-256, périodicité et planification par fichier.
+- **Traitements reproductibles** : recettes CSV/TSV guidées, profilage en flux,
+  résultat dérivé, lignée et génération de scripts Python/R.
+- **Carte multi-couches et SQL** : GeoJSON vérifié dans PostGIS/Leaflet et vues
+  du projet consultables en lecture seule sans exposer la connexion.
 
 - **Exécution Python/R bornée** : versions immuables, rapports SHA-256, délai et
   sortie limités, runners sans privilège et sans réseau ; R reste facultatif.
@@ -24,7 +34,7 @@ Application locale Windows pour rechercher des données humanitaires publiques, 
 Leaflet 1.9.4 est embarqué : ouvrir l'interface ne provoque aucun chargement de
 code depuis un CDN.
 
-## État de validation final
+## Validation historique du socle 3.0.0
 
 - 68 tests Python réussis ;
 - API principale : 47 chemins et 63 opérations OpenAPI ;
@@ -39,7 +49,7 @@ Windows réelle ; elle n'est pas confondue avec les validations locales ci-dessu
 
 ## Paramétrage des sources et bibliothèque
 
-- **Paramètres API versionnés** : contrats distincts pour les 7 connecteurs,
+- **Paramètres API versionnés** : contrats distincts pour les 10 connecteurs,
   validés côté serveur et rendus dynamiquement dans l'interface.
 - **Deux niveaux de configuration** : activation/délai/reprises globalement,
   paramètres, limites et planification par projet et par source.
@@ -50,9 +60,9 @@ Windows réelle ; elle n'est pas confondue avec les validations locales ci-dessu
   organisme, localisation et dates.
 - **Mise à niveau** : migrations idempotentes enregistrées et conservation des
   variables inconnues de `.env`, des fichiers et du volume PostgreSQL.
-- **Windows** : EXE 3.0.0 réellement compilé en PE32+ GUI x64 ; détection de
-  mise à niveau, sauvegarde de `.env`, ASLR/NX et payload contrôlés. L'essai sur
-  Windows avec Docker reste obligatoire.
+- **Windows** : le code de l’installateur cible 4.0.0 et préserve `.env`, mais
+  aucun EXE 4.0.0 n’est revendiqué dans ce gel Linux. Le portable Compose est le
+  livrable Windows 4.0.0 jusqu’à recompilation et recette sur Windows x64.
 
 ## Socle conservé de la version 2.5.0
 
@@ -96,16 +106,20 @@ Windows réelle ; elle n'est pas confondue avec les validations locales ci-dessu
 
 ## Installation Windows
 
-1. Téléchargez `HumanitarianDataPlatform_Windows_v3.0.0.zip`.
+1. Téléchargez `HumanitarianDataPlatform_Windows_Portable_v4.0.0.zip`.
 2. Décompressez l'archive.
-3. Vérifiez l'empreinte :
+3. Vérifiez l’empreinte du ZIP depuis `SHA256SUMS.txt`.
+4. Créez `.env` à côté de `compose.yaml` avec au minimum un mot de passe
+   PostgreSQL aléatoire.
+5. Lancez `start-hdp.cmd` ; Docker Desktop est nécessaire et R reste facultatif.
 
-   ```powershell
-   Get-FileHash .\HumanitarianDataPlatform_Setup_Native_GUI_v3.0.0.exe -Algorithm SHA256
-   ```
+L’EXE 3.0.0 conservé dans les archives historiques n’installe pas la version
+4.0.0 et n’est pas inclus comme installateur final de ce gel.
 
-4. Comparez-la au fichier `.exe.sha256`, puis lancez l'installateur.
-5. Docker Desktop est nécessaire ; le module R reste facultatif.
+Le véritable EXE 4.0.0 est construit sur un runner Windows x64 par le workflow
+`HDP Windows installer`. Il est publié avec son empreinte SHA-256 comme artefact
+GitHub Actions ; il reste non signé tant qu’aucun certificat Authenticode n’est
+fourni.
 
 L'application s'ouvre sur `http://localhost:8080` ou sur un port libre entre `18080` et `18279`. Elle reste liée à `127.0.0.1`.
 
@@ -113,18 +127,23 @@ Si les paramètres d'un projet affichent « `GITHUB_TOKEN absent : la création 
 
 ## Documentation
 
-- [Guide utilisateur](docs/USER_GUIDE.md)
-- [Installation et mise à niveau](docs/INSTALLATION.md)
+- [Guide utilisateur 4.0.0](docs/USER_GUIDE_V4.0.0.md)
+- [Installation portable 4.0.0](docs/INSTALLATION_V4.0.0.md)
 - [Architecture, données et API](docs/ARCHITECTURE.md)
 - [Migration vers 3.0.0](docs/MIGRATION_V2.md)
-- [Sécurité et confidentialité](docs/SECURITY.md)
+- [Revue de sécurité 4.0.0](docs/SECURITY_REVIEW_V4.0.0.md)
+- [Sauvegarde et restauration](docs/BACKUP_RESTORE_V4.0.0.md)
+- [Limites connues](docs/KNOWN_LIMITATIONS_V4.0.0.md)
 - [Passerelle REST GitHub](docs/GITHUB_API.md)
 - [Cahier des charges final](docs/CAHIER_DES_CHARGES_V3.0.0.md)
-- [Référence API](docs/API_REFERENCE_V3.0.0.md)
-- [Prompt global de production](HDP_Prompt_production_global_v3.0.0.txt)
+- [Référence API 4.0.0](docs/API_REFERENCE_V4.0.0.md)
+- [Matrice des sources](docs/SOURCE_CAPABILITY_MATRIX_V4.0.0.md)
+- [Rapport de validation](docs/VALIDATION_REPORT_V4.0.0.md)
+- [Prompt global de production](HDP_Prompt_production_global_v4.0.0.txt)
 - [Développement et validation](docs/DEVELOPMENT.md)
 - [Dépannage](docs/TROUBLESHOOTING.md)
-- [Inventaire des livrables et empreintes](docs/ARTIFACTS.md)
+- [Livrables et vérification 4.0.0](docs/ARTIFACTS_V4.0.0.md)
+- [Inventaire historique des livrables](docs/ARTIFACTS.md)
 - [Journal des versions](CHANGELOG.md)
 - [Prompt historique de reconstruction de l’état v2.5.0](docs/PROMPT_RECONSTRUCTION_ETAT_ACTUEL_V2.5.0.md)
 
@@ -144,6 +163,9 @@ et copié à la racine de l'application Windows.
 | UNICEF Data Warehouse | Oui | API SDMX publique |
 | UN Global SDG Indicators | Oui | API publique |
 | DHS Program Indicator Data | Oui | Indicateurs agrégés publics ; microdonnées sur inscription |
+| HDX HAPI v2 | Oui | `HDX_HAPI_APP_IDENTIFIER` requis ; API bêta |
+| UNHCR Refugee Statistics | Oui | API publique, séries agrégées |
+| GDACS | Oui | API GeoJSON publique |
 
 L'onglet « Sources sanitaires » référence aussi WHO Mortality Database, WHO
 GLASS, WHO FluNet/FluID, WHO Global Health Estimates, UNAIDS AIDSinfo, IHME
@@ -157,6 +179,7 @@ Voir les documentations officielles de l'[Action API CKAN](https://docs.ckan.org
 ```text
 source/          code FastAPI, interface, installateur Win32 et tests
 docs/            documentation Markdown consultable dans GitHub
+dist/v4.0.0/     payload portable, sources, documentation et empreintes
 dist/v3.0.0/     livrables finaux, installateur, documentation et empreintes
 dist/v2.5.0/     installateur, archives, empreintes et prompt de reprise
 dist/v2.4.0/     livrables historiques intacts
@@ -169,6 +192,9 @@ tools/           génération de la notice PDF
 
 ## Sécurité et licence
 
-HDP 3.0.0 est une application locale mono-utilisateur, sans authentification, et ne doit pas être exposée directement sur Internet. Les téléchargements refusent les URL non HTTP(S), les identifiants intégrés et les destinations réseau non publiques ; chaque projet impose des limites. Les scripts exécutés doivent être considérés comme du code local de confiance, même si les runners sont sans réseau et bornés. Les groupements M49 sont statistiques et n'impliquent aucune position politique. Un dépôt GitHub public ne doit être créé qu'après vérification de son contenu et de sa licence.
+HDP 4.0.0 est une application locale mono-utilisateur, sans authentification,
+et ne doit pas être exposée directement sur Internet. Les scripts exécutés
+restent du code local de confiance malgré les runners isolés. Un dépôt GitHub
+public ne doit être créé qu'après vérification du contenu et choix d’une licence.
 
 Aucune licence HDP explicite n'est incluse. Le dépôt doit rester privé tant qu'une licence n'a pas été choisie et ajoutée.

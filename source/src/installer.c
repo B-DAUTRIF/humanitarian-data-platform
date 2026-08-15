@@ -20,7 +20,7 @@
 #include "payload_generated.h"
 
 #define APP_NAME L"Humanitarian Data Platform"
-#define APP_VERSION L"3.0.0"
+#define APP_VERSION L"4.0.0"
 #define MAIN_CLASS L"HDP_NATIVE_INSTALLER_30"
 
 #define ID_PATH 1001
@@ -630,7 +630,8 @@ static BOOL secret_line_is_valid(const wchar_t *secret) {
 
 static BOOL is_managed_environment_line(const char *line, size_t length) {
     static const char *keys[] = {
-        "POSTGRES_PASSWORD", "RELIEFWEB_APPNAME", "GITHUB_TOKEN", "HDP_PORT"
+        "POSTGRES_PASSWORD", "RELIEFWEB_APPNAME", "HDX_HAPI_APP_IDENTIFIER",
+        "GITHUB_TOKEN", "HDP_PORT"
     };
     for (size_t index = 0; index < sizeof(keys) / sizeof(keys[0]); index++) {
         size_t key_length = strlen(keys[index]);
@@ -655,13 +656,14 @@ static BOOL write_environment(const wchar_t *install_dir, const wchar_t *reliefw
     _snwprintf(env_path, sizeof(env_path) / sizeof(wchar_t), L"%ls\\.env", install_dir);
     char password[128] = {0};
     char existing_appname[256] = {0};
+    char existing_hapi_identifier[512] = {0};
     char existing_github_token[2048] = {0};
     DWORD existing_size = 0;
     char *existing = read_file_bytes(env_path, &existing_size);
     if (existing) {
         wchar_t backup_path[MAX_PATH * 4];
         _snwprintf(backup_path, sizeof(backup_path) / sizeof(wchar_t),
-                   L"%ls\\.env.backup-before-v3.0.0", install_dir);
+                   L"%ls\\.env.backup-before-v4.0.0", install_dir);
         if (!CopyFileW(env_path, backup_path, FALSE)) {
             HeapFree(GetProcessHeap(), 0, existing);
             return FALSE;
@@ -669,6 +671,8 @@ static BOOL write_environment(const wchar_t *install_dir, const wchar_t *reliefw
         post_log(L"Sauvegarde de .env créée avant la mise à niveau.\r\n");
         extract_env_value(existing, "POSTGRES_PASSWORD", password, sizeof(password));
         extract_env_value(existing, "RELIEFWEB_APPNAME", existing_appname, sizeof(existing_appname));
+        extract_env_value(existing, "HDX_HAPI_APP_IDENTIFIER", existing_hapi_identifier,
+                          sizeof(existing_hapi_identifier));
         extract_env_value(existing, "GITHUB_TOKEN", existing_github_token, sizeof(existing_github_token));
     }
     if (!password[0] && !generate_secret(password, sizeof(password))) return FALSE;
@@ -709,8 +713,9 @@ static BOOL write_environment(const wchar_t *install_dir, const wchar_t *reliefw
     char managed[4096];
     int managed_length = _snprintf(
         managed, sizeof(managed),
-        "POSTGRES_PASSWORD=%s\r\nRELIEFWEB_APPNAME=%s\r\nGITHUB_TOKEN=%s\r\nHDP_PORT=%u\r\n",
-        password, appname_utf8, github_token_utf8, host_port
+        "POSTGRES_PASSWORD=%s\r\nRELIEFWEB_APPNAME=%s\r\n"
+        "HDX_HAPI_APP_IDENTIFIER=%s\r\nGITHUB_TOKEN=%s\r\nHDP_PORT=%u\r\n",
+        password, appname_utf8, existing_hapi_identifier, github_token_utf8, host_port
     );
     if (managed_length <= 0 || managed_length >= (int)sizeof(managed)) ok = FALSE;
     if (ok) {
@@ -1163,7 +1168,7 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
         case WM_CREATE: {
             g_font = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
             HWND header = create_control(L"STATIC", L"Humanitarian Data Platform", SS_LEFT, 0, window);
-            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 3.0.0 — données humanitaires et sanitaires", SS_LEFT, 0, window);
+            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 4.0.0 — données humanitaires et sanitaires", SS_LEFT, 0, window);
             HWND path_label = create_control(L"STATIC", L"Dossier d'installation", SS_LEFT, 0, window);
             HWND relief_label = create_control(L"STATIC", L"Appname ReliefWeb", SS_LEFT, 0, window);
             HWND github_label = create_control(L"STATIC", L"Jeton GitHub", SS_LEFT, 0, window);

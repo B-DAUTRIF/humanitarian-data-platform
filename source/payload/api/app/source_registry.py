@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import re
 from copy import deepcopy
+from datetime import date
 from typing import Any
 from urllib.parse import urlencode
 
 
-REGISTRY_VERSION = "3.0.0-iteration-1"
-VERIFIED_AT = "2026-08-14"
+REGISTRY_VERSION = "4.0.0"
+VERIFIED_AT = "2026-08-15"
 
 
 def field(
@@ -76,6 +77,27 @@ COMMON_PROJECT_PROPERTIES: dict[str, Any] = {
         min_length=0,
         max_length=200,
         description="Mots-clés transmis ou utilisés pour filtrer le catalogue (2 caractères minimum lors de l’exécution).",
+    ),
+    "date_from": field(
+        "string",
+        "Date de début",
+        default="",
+        pattern=r"^$|^\d{4}-\d{2}-\d{2}$",
+        description="Critère commun ISO 8601. Filtré après normalisation si l’API ne l’expose pas nativement.",
+    ),
+    "date_to": field(
+        "string",
+        "Date de fin",
+        default="",
+        pattern=r"^$|^\d{4}-\d{2}-\d{2}$",
+        description="Critère commun ISO 8601 inclusif.",
+    ),
+    "location": field(
+        "string",
+        "Localisation",
+        default="",
+        max_length=160,
+        description="Pays, territoire, zone ou lieu recherché dans les métadonnées normalisées.",
     ),
     "result_limit": field(
         "integer", "Nombre maximal de résultats", default=25, minimum=1, maximum=100
@@ -250,6 +272,118 @@ CONNECTORS: dict[str, dict[str, Any]] = {
             }
         ),
     },
+    "hdx-hapi": {
+        "version": "2.0.0",
+        "base_url": "https://hapi.humdata.org/api/v2",
+        "allowed_hosts": ["hapi.humdata.org"],
+        "secret_environment_variable": "HDX_HAPI_APP_IDENTIFIER",
+        "documentation_evidence": [
+            "https://hapi.humdata.org/",
+            "https://hdx-hapi.readthedocs.io/en/latest/examples/",
+            "https://hdx-hapi.readthedocs.io/en/latest/changelog/",
+        ],
+        "capability_overrides": {
+            "resource_download": False,
+            "update_frequency": "variable selon le sous-domaine; hebdomadaire à annuelle",
+            "criteria": {"query": "normalized_post_filter"},
+        },
+        "project_schema": project_schema(
+            {
+                "endpoint": field(
+                    "string",
+                    "Sous-domaine HAPI",
+                    default="affected-people/idps",
+                    enum=[
+                        "affected-people/idps",
+                        "affected-people/refugees-persons-of-concern",
+                        "affected-people/returnees",
+                        "affected-people/humanitarian-needs",
+                        "coordination-context/operational-presence",
+                        "coordination-context/funding",
+                        "coordination-context/conflict-events",
+                        "coordination-context/national-risk",
+                        "food-security-nutrition-poverty/food-security",
+                        "food-security-nutrition-poverty/food-prices-market-monitor",
+                        "food-security-nutrition-poverty/poverty-rate",
+                        "geography-infrastructure/baseline-population",
+                        "climate/hazards-rainfall",
+                    ],
+                ),
+                "location_code": field(
+                    "string", "Code ISO3 HAPI", default="",
+                    pattern=r"^$|^[A-Z]{3}$",
+                ),
+                "admin_level": field(
+                    "integer", "Niveau administratif", default=0,
+                    enum=[0, 1, 2],
+                ),
+                "offset": field("integer", "Décalage", default=0, minimum=0, maximum=100000),
+            }
+        ),
+    },
+    "unhcr": {
+        "version": "1.0.0",
+        "base_url": "https://api.unhcr.org/population/v1/population/",
+        "allowed_hosts": ["api.unhcr.org"],
+        "secret_environment_variable": None,
+        "documentation_evidence": [
+            "https://api.unhcr.org/docs/refugee-statistics.html",
+            "https://www.unhcr.org/refugee-statistics/insights/explainers/forcibly-displaced-api.html",
+        ],
+        "capability_overrides": {
+            "update_frequency": "annuelle",
+            "criteria": {
+                "query": "normalized_post_filter",
+                "date_from": "native_year",
+                "date_to": "native_year",
+            },
+        },
+        "project_schema": project_schema(
+            {
+                "page": field("integer", "Page", default=1, minimum=1, maximum=10000),
+                "year_from": field("integer", "Année de début", default=2001, minimum=1951, maximum=2100),
+                "year_to": field("integer", "Année de fin", default=2026, minimum=1951, maximum=2100),
+                "country_of_origin": field(
+                    "string", "Pays d’origine ISO3", default="",
+                    pattern=r"^$|^[A-Z]{3}(,[A-Z]{3})*$",
+                ),
+                "country_of_asylum": field(
+                    "string", "Pays d’asile ISO3", default="",
+                    pattern=r"^$|^[A-Z]{3}(,[A-Z]{3})*$",
+                ),
+            }
+        ),
+    },
+    "gdacs": {
+        "version": "1.0.0",
+        "base_url": "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH",
+        "allowed_hosts": ["www.gdacs.org", "gdacs.org"],
+        "secret_environment_variable": None,
+        "documentation_evidence": [
+            "https://www.gdacs.org/gdacsapi/swagger/index.html",
+            "https://www.gdacs.org/",
+        ],
+        "capability_overrides": {
+            "update_frequency": "temps quasi réel; polling recommandé sans usage d’alerte vitale",
+            "criteria": {
+                "query": "normalized_post_filter",
+                "date_from": "native",
+                "date_to": "native",
+            },
+        },
+        "project_schema": project_schema(
+            {
+                "event_types": field(
+                    "array", "Types d’événements", default=[], max_length=7,
+                    items=field("string", "Type", enum=["EQ", "FL", "TC", "TS", "VO", "DR", "WF"]),
+                ),
+                "alert_levels": field(
+                    "array", "Niveaux d’alerte", default=["Green", "Orange", "Red"], max_length=3,
+                    items=field("string", "Niveau", enum=["Green", "Orange", "Red"]),
+                ),
+            }
+        ),
+    },
 }
 
 
@@ -266,6 +400,23 @@ def connector_definition(source_id: str) -> dict[str, Any]:
         definition = deepcopy(CONNECTORS[source_id])
     except KeyError as exc:
         raise ValueError(f"Source non interrogeable : {source_id}") from exc
+    capability_overrides = definition.pop("capability_overrides", {})
+    capabilities = {
+        "contract_version": "4.0.0",
+        "catalog_search": True,
+        "parallel_search": True,
+        "resource_download": True,
+        "scheduling": True,
+        "criteria": {
+            "query": "native",
+            "date_from": "normalized_post_filter",
+            "date_to": "normalized_post_filter",
+            "location": "normalized_post_filter",
+            "source_specific": "native",
+        },
+    }
+    capabilities["criteria"].update(capability_overrides.pop("criteria", {}))
+    capabilities.update(capability_overrides)
     definition.update(
         {
             "id": source_id,
@@ -274,6 +425,7 @@ def connector_definition(source_id: str) -> dict[str, Any]:
             "global_settings_schema": deepcopy(GLOBAL_SCHEMA),
             "global_defaults": _defaults(GLOBAL_SCHEMA),
             "project_defaults": _defaults(definition["project_schema"]),
+            "capabilities": capabilities,
         }
     )
     return definition
@@ -364,6 +516,11 @@ def validate_values(
         missing = [name for name in schema.get("required", []) if name not in result]
         if missing:
             raise ValueError(f"Paramètres obligatoires absents : {', '.join(missing)}")
+        if scope != "global":
+            start = date.fromisoformat(result["date_from"]) if result.get("date_from") else None
+            end = date.fromisoformat(result["date_to"]) if result.get("date_to") else None
+            if start and end and start > end:
+                raise ValueError("date_from doit être antérieure ou égale à date_to")
     return result
 
 
@@ -415,6 +572,41 @@ def request_preview(source_id: str, parameters: dict[str, Any]) -> dict[str, Any
             query["surveyYears"] = ",".join(map(str, values["survey_years"]))
         if values["breakdown"]:
             query["breakdown"] = values["breakdown"]
+    elif source_id == "hdx-hapi":
+        url = f"{url}/{values['endpoint']}"
+        query = {
+            "output_format": "json",
+            "app_identifier": "<HDX_HAPI_APP_IDENTIFIER>",
+            "limit": values["result_limit"],
+            "offset": values["offset"],
+            "admin_level": values["admin_level"],
+        }
+        if values["location_code"]:
+            query["location_code"] = values["location_code"]
+    elif source_id == "unhcr":
+        year_from = int(values["date_from"][:4]) if values["date_from"] else values["year_from"]
+        year_to = int(values["date_to"][:4]) if values["date_to"] else values["year_to"]
+        query = {
+            "limit": values["result_limit"],
+            "page": values["page"],
+            "yearFrom": year_from,
+            "yearTo": year_to,
+            "cf_type": "ISO",
+        }
+        if values["country_of_origin"]:
+            query["coo"] = values["country_of_origin"]
+        if values["country_of_asylum"]:
+            query["coa"] = values["country_of_asylum"]
+    elif source_id == "gdacs":
+        query = {}
+        if values["date_from"]:
+            query["fromDate"] = values["date_from"]
+        if values["date_to"]:
+            query["toDate"] = values["date_to"]
+        if values["event_types"]:
+            query["eventlist"] = ",".join(values["event_types"])
+        if values["alert_levels"]:
+            query["alertlevel"] = ";".join(values["alert_levels"])
     encoded = urlencode(query, doseq=True, safe="<>")
     display_url = f"{url}?{encoded}" if encoded else url
     return {
