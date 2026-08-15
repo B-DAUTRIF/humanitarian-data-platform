@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import shutil
 import stat
+import struct
 import subprocess
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -96,7 +98,46 @@ def require_inputs(paths: list[Path]) -> None:
             raise FileNotFoundError(path)
 
 
+def verify_windows_installer(path: Path) -> None:
+    data = path.read_bytes()
+    if len(data) < 0x100 or data[:2] != b"MZ":
+        raise ValueError(f"installateur Windows invalide : {path}")
+    pe_offset = struct.unpack_from("<I", data, 0x3C)[0]
+    if pe_offset + 0x5E > len(data) or data[pe_offset : pe_offset + 4] != b"PE\0\0":
+        raise ValueError(f"signature PE absente : {path}")
+    machine = struct.unpack_from("<H", data, pe_offset + 4)[0]
+    optional = pe_offset + 24
+    magic = struct.unpack_from("<H", data, optional)[0]
+    subsystem = struct.unpack_from("<H", data, optional + 68)[0]
+    characteristics = struct.unpack_from("<H", data, optional + 70)[0]
+    required = 0x20 | 0x40 | 0x100  # haute entropie, ASLR et NX
+    if machine != 0x8664 or magic != 0x20B or subsystem != 2:
+        raise ValueError("l'installateur doit être un PE32+ GUI x64")
+    if characteristics & required != required:
+        raise ValueError("ASLR, NX et haute entropie doivent être activés")
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--installer",
+        required=True,
+        type=Path,
+        help="EXE 4.0.0 compilé et vérifié par le workflow Windows",
+    )
+    parser.add_argument(
+        "--installer-commit",
+        default="9188db4a772d6c540dab33a091cf4bd6d7ba5780",
+        help="commit GitHub ayant produit l'installateur",
+    )
+    args = parser.parse_args()
+    installer = args.installer.resolve()
+    installer_name = f"HumanitarianDataPlatform_Setup_Native_GUI_v{VERSION}.exe"
+    if installer.name != installer_name:
+        raise ValueError(f"nom d'installateur attendu : {installer_name}")
+    require_inputs([installer])
+    verify_windows_installer(installer)
+
     if DIST.exists():
         raise FileExistsError(
             f"répertoire de sortie déjà présent : {DIST}; le déplacer avant un nouveau gel"
@@ -128,6 +169,11 @@ def main() -> None:
     DIST.mkdir(parents=True)
     for source in direct_docs:
         shutil.copy2(source, DIST / source.name)
+    shutil.copy2(installer, DIST / installer_name)
+    installer_sha = sha256(DIST / installer_name)
+    (DIST / f"{installer_name}.sha256").write_text(
+        f"{installer_sha}  {installer_name}\n", encoding="ascii", newline="\n"
+    )
 
     portable_name = f"HumanitarianDataPlatform_Windows_Portable_v{VERSION}.zip"
     portable_root = f"HumanitarianDataPlatform_Windows_Portable_v{VERSION}"
@@ -170,8 +216,12 @@ VALIDATIONS LOCALES
 - notice PDF : 27 pages rendues, aucune page vide ou tronquée
 
 LIVRABLE WINDOWS
+- {installer_name}
+- SHA-256 : {installer_sha}
+- compilé par GitHub Actions au commit {args.installer_commit}
+- PE32+ GUI x64, ASLR, NX et haute entropie contrôlés
+- non signé Authenticode ; recette Windows 10/11 manuelle encore requise
 - {portable_name}
-- aucun EXE 4.0.0 compilé, signé ou présenté comme validé
 - l'EXE historique 3.0.0 n'est ni copié ni renommé dans ce gel
 
 CONTRÔLES EXTERNES RESTANTS
@@ -180,7 +230,7 @@ CONTRÔLES EXTERNES RESTANTS
 - appels directs aux API : réseau de test restreint
 - signature Authenticode : certificat non fourni
 - audit indépendant et choix de licence : décisions externes
-- publication GitHub : dépend de l'outil et des droits du compte connecté
+- publication GitHub : version source publiée sur la branche privée main
 
 INTÉGRITÉ
 - SHA256SUMS.txt couvre les livrables antérieurs à l'archive globale

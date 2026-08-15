@@ -60,9 +60,10 @@ Windows réelle ; elle n'est pas confondue avec les validations locales ci-dessu
   organisme, localisation et dates.
 - **Mise à niveau** : migrations idempotentes enregistrées et conservation des
   variables inconnues de `.env`, des fichiers et du volume PostgreSQL.
-- **Windows** : le code de l’installateur cible 4.0.0 et préserve `.env`, mais
-  aucun EXE 4.0.0 n’est revendiqué dans ce gel Linux. Le portable Compose est le
-  livrable Windows 4.0.0 jusqu’à recompilation et recette sur Windows x64.
+- **Windows** : l’installateur 4.0.0 préserve `.env`, `data/` et le volume
+  PostgreSQL lors d’une mise à niveau. L’EXE PE32+ GUI x64 est compilé et
+  contrôlé par GitHub Actions, puis livré avec son empreinte SHA-256. Il reste
+  non signé et sa recette manuelle Windows 10/11 demeure à réaliser.
 
 ## Socle conservé de la version 2.5.0
 
@@ -106,20 +107,22 @@ Windows réelle ; elle n'est pas confondue avec les validations locales ci-dessu
 
 ## Installation Windows
 
-1. Téléchargez `HumanitarianDataPlatform_Windows_Portable_v4.0.0.zip`.
-2. Décompressez l'archive.
-3. Vérifiez l’empreinte du ZIP depuis `SHA256SUMS.txt`.
-4. Créez `.env` à côté de `compose.yaml` avec au minimum un mot de passe
-   PostgreSQL aléatoire.
-5. Lancez `start-hdp.cmd` ; Docker Desktop est nécessaire et R reste facultatif.
+1. Téléchargez `HumanitarianDataPlatform_Setup_Native_GUI_v4.0.0.exe` et son
+   fichier `.sha256`, puis contrôlez l’empreinte.
+2. Double-cliquez sur l’EXE, choisissez le dossier et les composants, puis
+   lancez **Installer / mettre à niveau**. Docker Desktop est requis et le
+   module R reste facultatif.
+3. Si votre politique interdit un EXE non signé, utilisez
+   `HumanitarianDataPlatform_Windows_Portable_v4.0.0.zip`, vérifiez son
+   empreinte, décompressez-le et lancez `start-hdp.cmd`.
 
 L’EXE 3.0.0 conservé dans les archives historiques n’installe pas la version
 4.0.0 et n’est pas inclus comme installateur final de ce gel.
 
 Le véritable EXE 4.0.0 est construit sur un runner Windows x64 par le workflow
 `HDP Windows installer`. Il est publié avec son empreinte SHA-256 comme artefact
-GitHub Actions ; il reste non signé tant qu’aucun certificat Authenticode n’est
-fourni.
+GitHub Actions et dans les livrables versionnés ; il reste non signé tant
+qu’aucun certificat Authenticode n’est fourni.
 
 L'application s'ouvre sur `http://localhost:8080` ou sur un port libre entre `18080` et `18279`. Elle reste liée à `127.0.0.1`.
 
