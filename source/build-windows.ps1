@@ -41,14 +41,15 @@ try {
     # A temporary batch file avoids cmd.exe /S /C quote stripping, which can
     # otherwise pass the compiler commands themselves to vcvars64.bat.
     $buildScript = Join-Path $OutputDirectory "build-msvc.cmd"
+    $compilerCommand = 'cl.exe /nologo /O2 /W4 /WX /std:c17 /D_CRT_SECURE_NO_WARNINGS "src\installer.c" "src\installer.res" ' +
+        "/link /OUT:`"$installerPath`" /SUBSYSTEM:WINDOWS /MACHINE:X64 " +
+        '/DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA comctl32.lib shell32.lib ' +
+        'advapi32.lib winhttp.lib ws2_32.lib bcrypt.lib gdi32.lib user32.lib || exit /b 1'
     $commands = @(
         '@echo off'
         ('call "{0}" || exit /b 1' -f $vcvars)
         'rc.exe /nologo /c 65001 /fo "src\installer.res" "src\installer.rc" || exit /b 1'
-        ('cl.exe /nologo /O2 /W4 /WX /std:c17 /D_CRT_SECURE_NO_WARNINGS "src\installer.c" "src\installer.res" ' +
-            '/link /OUT:"{0}" /SUBSYSTEM:WINDOWS /MACHINE:X64 ' +
-            '/DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA comctl32.lib shell32.lib ' +
-            'advapi32.lib winhttp.lib ws2_32.lib bcrypt.lib gdi32.lib user32.lib || exit /b 1' -f $installerPath)
+        $compilerCommand
     )
     Set-Content -LiteralPath $buildScript -Encoding ascii -Value $commands
 
