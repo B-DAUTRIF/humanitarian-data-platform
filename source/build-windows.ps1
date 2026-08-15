@@ -43,7 +43,7 @@ try {
     $buildScript = Join-Path $OutputDirectory "build-msvc.cmd"
     $commands = @(
         '@echo off'
-        ('call "{0}" -no_logo || exit /b 1' -f $vcvars)
+        ('call "{0}" || exit /b 1' -f $vcvars)
         'rc.exe /nologo /c 65001 /fo "src\installer.res" "src\installer.rc" || exit /b 1'
         ('cl.exe /nologo /O2 /W4 /WX /std:c17 /D_CRT_SECURE_NO_WARNINGS "src\installer.c" "src\installer.res" ' +
             '/Fe:"{0}" /link /SUBSYSTEM:WINDOWS /MACHINE:X64 ' +
