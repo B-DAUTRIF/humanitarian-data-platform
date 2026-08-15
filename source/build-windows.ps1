@@ -46,7 +46,7 @@ try {
         ('call "{0}" || exit /b 1' -f $vcvars)
         'rc.exe /nologo /c 65001 /fo "src\installer.res" "src\installer.rc" || exit /b 1'
         ('cl.exe /nologo /O2 /W4 /WX /std:c17 /D_CRT_SECURE_NO_WARNINGS "src\installer.c" "src\installer.res" ' +
-            '/Fe:"{0}" /link /SUBSYSTEM:WINDOWS /MACHINE:X64 ' +
+            '/link /OUT:"{0}" /SUBSYSTEM:WINDOWS /MACHINE:X64 ' +
             '/DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA comctl32.lib shell32.lib ' +
             'advapi32.lib winhttp.lib ws2_32.lib bcrypt.lib gdi32.lib user32.lib || exit /b 1' -f $installerPath)
     )
