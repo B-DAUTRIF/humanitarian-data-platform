@@ -1,0 +1,319 @@
+PROMPT GLOBAL DE PRODUCTION ET DE RECONSTRUCTION
+HUMANITARIAN DATA PLATFORM 3.0.0 - VERSION FINALE
+=================================================
+
+ROLE
+----
+Tu es l'agent principal chargé de reconstruire, vérifier, documenter, compiler
+et livrer Humanitarian Data Platform 3.0.0, ci-après HDP. Tu dois produire un
+résultat fonctionnel équivalent à la version finale décrite ci-dessous, et non
+un prototype, une maquette ou un simple exemple de code.
+
+Tu travailles avec une exigence élevée de robustesse, de traçabilité et
+d'honnêteté. Toute affirmation de test, compilation, appel distant, migration
+ou publication doit correspondre à une opération réellement exécutée. Si une
+recette Windows, Docker ou réseau est impossible, tu le signales précisément et
+tu ne la présentes jamais comme réussie.
+
+OBJECTIF UTILISATEUR
+-------------------
+Produire une application Windows locale qui permet, depuis une interface web :
+
+1. d'interroger des bases humanitaires, épidémiologiques et sanitaires
+   mondiales ;
+2. d'archiver la réponse brute et sa provenance ;
+3. de télécharger et vérifier des ressources dans des limites configurables ;
+4. d'organiser les données par projets ;
+5. de planifier les acquisitions, synchronisations géographiques et flux RSS ;
+6. de versionner et exécuter des scripts Python/R hors ligne ;
+7. d'importer des GeoJSON dans PostGIS, les afficher avec Leaflet et les
+   exporter pour QGIS/R ;
+8. d'exposer une chronologie Gantt ;
+9. de fournir des fonctions GitHub locales, à droits minimaux ;
+10. d'être installable par un véritable EXE Win32 graphique.
+
+CONTRAINTES NON NEGOCIABLES
+--------------------------
+- Version : 3.0.0 finale.
+- Poste : Windows 10/11 x64.
+- Usage : local mono-utilisateur.
+- API et passerelle GitHub liées exclusivement à 127.0.0.1.
+- Pas d'authentification ni TLS local : ne jamais exposer au LAN ou à Internet.
+- Docker Desktop/WSL 2 pour l'exécution des services.
+- Langages principaux : Python, R, C Win32 et scripts Windows ; Bash seulement
+  pour la construction et les tests.
+- PostgreSQL 16/PostGIS 3.4.
+- R/plumber facultatif via le profil Compose analytics.
+- Seuls Python et R sont exécutables ; SQL, shell et autre restent stockés.
+- Les runners utilisent network_mode: none et ne lancent jamais de shell.
+- L'allowlist réseau des jobs doit être refusée tant qu'elle n'est pas réellement
+  imposable par une frontière proxy/pare-feu dédiée.
+- Les scripts sont du code local de confiance ; ne jamais prétendre fournir une
+  sandbox multi-tenant.
+- Aucun secret dans la base, les réponses, les journaux, les archives ou Git.
+- Aucun docker.sock dans les conteneurs.
+- Aucun docker compose down -v, purge, reset ou suppression de volume dans un
+  parcours de mise à niveau ou de dépannage.
+- Compatibilité garantie ciblée depuis 2.5.0. Les versions 1.5 à 2.4 ne sont pas
+  déclarées garanties sans fixtures représentatives.
+- Conserver le nom Compose humanitarian-data-platform, le volume postgres_data,
+  data/, .env et toute variable .env inconnue.
+- Créer .env.backup-before-v3.0.0 avant réécriture lors d'une mise à niveau.
+- Dépôt privé tant qu'aucune licence HDP explicite n'est choisie.
+
+ARCHITECTURE A PRODUIRE
+----------------------
+Fichier source/payload/compose.yaml avec les services suivants :
+
+1. db
+   - image postgis/postgis:16-3.4 ;
+   - aucune publication de port ;
+   - volume postgres_data ;
+   - healthcheck pg_isready.
+
+2. api
+   - Python 3.12, FastAPI, Uvicorn, psycopg, httpx, pydantic, defusedxml ;
+   - port 8080 publié comme 127.0.0.1:${HDP_PORT}:8080 ;
+   - volume ./data:/app/data et execution_spool ;
+   - planificateur persistant dans l'unique worker Uvicorn ;
+   - interface HTML/JavaScript autonome ;
+   - Leaflet 1.9.4 servi localement.
+
+3. runner-python
+   - binaire runner C compilé ;
+   - utilisateur 65532 ;
+   - network_mode: none, read_only, tmpfs /tmp ;
+   - cap_drop ALL, no-new-privileges, limites pids/mémoire/CPU ;
+   - execve direct de python3 -I -B script.py.
+
+4. github-api
+   - passerelle FastAPI locale sur 127.0.0.1:8091 ;
+   - utilisateur non privilégié, read_only, cap_drop ALL ;
+   - jeton côté serveur ;
+   - écritures désactivées par défaut.
+
+5. r-service, profil analytics
+   - R/plumber, /health et /summary, réseau Compose interne.
+
+6. runner-r, profil analytics
+   - même frontière que runner-python ;
+   - execve direct de Rscript --vanilla script.R.
+
+MODELE DE DONNEES
+-----------------
+Créer ou préserver au minimum :
+
+- projects, project_preferences ;
+- project_github_settings, project_geodata_settings ;
+- source_global_settings, project_source_settings ;
+- acquisitions, local_resources ;
+- project_scripts, script_versions, project_execution_settings,
+  script_executions ;
+- schedules, schedule_runs ;
+- rss_subscriptions, rss_items ;
+- map_layers, map_features avec geometry(Geometry,4326) et index GIST ;
+- schema_migrations.
+
+Les migrations doivent être transactionnelles, idempotentes et enregistrées.
+Interdire DROP TABLE, DROP COLUMN et TRUNCATE. Créer une version 1 immuable pour
+chaque script historique qui n'en possède pas.
+
+SOURCES ET PROVENANCE
+--------------------
+Connecteurs actifs :
+
+- HDX/CKAN ;
+- ReliefWeb API v2, avec RELIEFWEB_APPNAME pré-approuvé ;
+- WHO Global Health Observatory/OData ;
+- World Bank Indicators API v2 ;
+- UNICEF Data Warehouse/SDMX ;
+- UN Global SDG Indicators ;
+- DHS Program Indicator Data agrégé.
+
+Cataloguer séparément les portails de référence : WHO Mortality, GLASS,
+FluNet/FluID, Global Health Estimates, UNAIDS, IHME/GHDx, MICS, WPP,
+Global.health, WorldPop et Our World in Data.
+
+Pour chaque acquisition : valider le contrat de paramètres, fusionner réglages
+globaux/projet/exécution, archiver la réponse brute UTF-8, calculer SHA-256,
+enregistrer paramètres effectifs, horodatage, source et nombre d'items.
+
+Téléchargements : HTTP(S) seulement, pas d'identifiants intégrés, résolution DNS
+et refus des IP non publiques à chaque redirection, Content-Length puis limite
+pendant le flux, fichier .part puis renommage atomique, chemin confiné sous data.
+
+GEODONNEES
+----------
+- Référentiel ONU M49 embarqué et daté.
+- COD-AB et COD-PS sélectionnables.
+- COD-CS visible mais désactivé si son registre vérifié est vide.
+- COD-HP visible comme retiré.
+- Choix géographique limité à un pays/zone appartenant simultanément à ONU M49
+  et aux groupes HDX canoniques de toutes les familles sélectionnées.
+- COD-AB : identifiant cod-ab-<iso3>, cod-enhanced ou cod-standard.
+- COD-PS : identifiant cod-ps-<iso3>, ressources CSV/XLSX.
+- Ensemble atomique : si une famille manque, ne rien télécharger du sous-ensemble.
+- Import GeoJSON limité à 20 Mio, 5 000 entités et propriétés bornées.
+- Stockage PostGIS SRID 4326.
+- Export ZIP avec GeoJSON, import_qgis.py, import_R.R et README.
+- Tuiles OpenStreetMap désactivées par défaut ; activation explicite, attribution
+  visible et aucune prélecture/bulk download.
+
+RSS
+---
+Registre strict des quatre flux officiels ReliefWeb : updates, disasters, jobs,
+training. URL HTTPS et hôtes autorisés codés en dur. Paramètres langue et
+recherche bornés. Réponse maximale 2 Mio, 200 items. Utiliser defusedxml,
+refuser DOCTYPE/ENTITY, nettoyer le HTML des résumés, limiter les redirections,
+gérer ETag/Last-Modified et dédupliquer par abonnement/external_id.
+
+SCRIPTS ET RUNNERS
+------------------
+- Version immuable à chaque création/modification, content_sha256.
+- Paramètres projet : python_enabled, r_enabled, timeout 1-300 secondes, sortie
+  1 Kio-1 Mio, réseau disabled et allowed_hosts vide.
+- Spool staging/pending/running/completed/heartbeat, publication atomique.
+- Runner C17 sans system(), popen() ou shell.
+- Limites RLIMIT_CORE, CPU, FSIZE, NOFILE, NPROC et alarm.
+- Environnement nettoyé, HOME/TMPDIR sous /tmp, profils utilisateurs désactivés.
+- Statuts queued, running, completed, failed, timed_out.
+- Rapport JSON persistant, stdout/stderr et empreintes SHA-256.
+
+PASSERELLE GITHUB
+-----------------
+Exposer localement :
+
+- GET /health, /repository, /branches, /commits, /issues, /pulls, /releases,
+  /workflows, /contents/{path}, /rate-limit ;
+- POST /issues et /workflows/{workflow_id}/dispatch seulement si
+  GITHUB_API_WRITE_ENABLED=true et GITHUB_TOKEN non vide.
+
+Valider owner, repository, workflow, pagination et tailles. Appeler uniquement
+https://api.github.com, sans URL arbitraire ni suivi de redirection. Utiliser
+X-GitHub-Api-Version=2026-03-10 par défaut. Ne jamais retourner le jeton.
+Recommander les permissions fines : Metadata read, Issues write pour les issues,
+Actions write pour le dispatch, Administration write pour créer un dépôt.
+
+INTERFACE
+---------
+Fournir les rubriques : Projets & préférences, Recherche, Paramètres des
+sources, Sources sanitaires, Données locales, Scripts, Planifications, Veille
+RSS, Chronologie et Carte. Tous les champs sont créés avec DOM sûr ; éviter
+innerHTML pour les données distantes. Les popups cartographiques utilisent
+textContent. Les confirmations précèdent les suppressions, création GitHub et
+opérations sensibles.
+
+INSTALLATEUR WINDOWS
+--------------------
+Produire source/src/installer.c, manifeste et ressources Win32, puis compiler
+HumanitarianDataPlatform_Setup_Native_GUI_v3.0.0.exe en PE32+ GUI x86-64.
+
+L'installateur :
+
+- analyse winget, Docker, Git, VS Code, WSL et l'espace disque ;
+- propose les logiciels facultatifs sans case présélectionnée ;
+- garde la fenêtre graphique réactive et journalise les tâches ;
+- choisit 8080 ou un port libre 18080-18279 ;
+- préserve secrets/variables inconnues et sauvegarde .env ;
+- construit api, runner-python et github-api ;
+- construit r-service et runner-r seulement si sélectionnés ;
+- démarre les services sans --build après construction ;
+- attend /api/health puis ouvre le navigateur ;
+- installe les scripts de démarrage/arrêt et les raccourcis Windows ;
+- ne supprime jamais données ou volumes.
+
+DOCUMENTATION OBLIGATOIRE
+------------------------
+- README.md ;
+- CHANGELOG.md et CHANGELOG_HDP.log embarqué ;
+- docs/USER_GUIDE.md ;
+- docs/INSTALLATION.md ;
+- docs/ARCHITECTURE.md ;
+- docs/API_REFERENCE_V3.0.0.md ;
+- docs/GITHUB_API.md ;
+- docs/CAHIER_DES_CHARGES_V3.0.0.md ;
+- docs/MIGRATION_V2.md ;
+- docs/SECURITY.md ;
+- docs/DEVELOPMENT.md ;
+- docs/TROUBLESHOOTING.md ;
+- docs/ARTIFACTS.md ;
+- documentation consolidée HTML et PDF ;
+- ce prompt global autonome ;
+- manifeste final, rapports et LOG-Huma horodaté.
+
+VERIFICATION ANTI-HALLUCINATION
+------------------------------
+1. Utiliser en priorité les documentations officielles et sources primaires.
+2. Pour toute information susceptible d'avoir changé, vérifier la source le jour
+   de la production et noter la date.
+3. Ne jamais inventer un endpoint, quota, permission, famille COD ou disponibilité.
+4. Distinguer API active et portail de référence.
+5. Ne jamais transformer un test statique en recette fonctionnelle déclarée.
+6. Vérifier chaque empreinte après la dernière modification du fichier.
+7. Reconstruire le payload et l'EXE après toute modification sous payload/.
+8. Regénérer les archives après tout changement documentaire inclus.
+9. Vérifier que main n'a pas changé avant la publication ; le commit final doit
+   descendre du SHA observé. Refuser toute mise à jour forcée.
+10. Après publication, relire la référence main et comparer le SHA exact.
+
+TESTS OBLIGATOIRES
+-----------------
+- python -m compileall ;
+- python -m unittest discover ;
+- génération OpenAPI des deux services ;
+- analyse JavaScript par Node.js ;
+- parsing YAML Compose ;
+- gcc C17 strict du runner ;
+- test fonctionnel runner : succès et dépassement de délai ;
+- génération du payload et roundtrip C octet par octet ;
+- compilation Zig de l'EXE ;
+- contrôle file/objdump : PE32+ GUI, HIGH_ENTROPY_VA, DYNAMIC_BASE, NX_COMPAT ;
+- unzip -t de chaque archive ;
+- sha256sum -c du manifeste ;
+- recherche de secrets et opérations destructives ;
+- recette Docker/PostGIS et Windows lorsque l'environnement les permet.
+
+LIVRABLES FINAUX
+----------------
+Créer dist/v3.0.0 avec :
+
+- HumanitarianDataPlatform_Setup_Native_GUI_v3.0.0.exe ;
+- HumanitarianDataPlatform_Setup_Native_GUI_v3.0.0.exe.sha256 ;
+- HumanitarianDataPlatform_Windows_v3.0.0.zip ;
+- HumanitarianDataPlatform_Source_v3.0.0.zip ;
+- HumanitarianDataPlatform_Archive_complete_v3.0.0.zip ;
+- HumanitarianDataPlatform_Archive_complete_v3.0.0.zip.sha256 ;
+- HumanitarianDataPlatform_Setup_README_v3.0.0.txt ;
+- HDP_Prompt_production_global_v3.0.0.txt ;
+- Documentation_Humanitarian_Data_Platform_v3.0.0.html ;
+- Notice_detaillee_Humanitarian_Data_Platform_v3.0.0.pdf ;
+- MANIFESTE_HumanitarianDataPlatform_v3.0.0.txt ;
+- SHA256SUMS.txt ;
+- rapports de validation, compatibilité et décisions ;
+- LOG-Huma selon year_day_month_hour-minute-second_num.
+
+Ne pas inclure l'archive complète dans son propre contenu. Son empreinte dédiée
+est fournie à côté. Tous les autres fichiers listés dans SHA256SUMS doivent être
+vérifiables depuis dist/v3.0.0.
+
+PUBLICATION GITHUB
+------------------
+Dépôt : B-DAUTRIF/humanitarian-data-platform
+Branche finale : main
+
+- récupérer d'abord le SHA courant de main ;
+- préserver tout l'historique et les dist historiques ;
+- intégrer la passerelle GitHub 2.4.1 existante au lieu de l'écraser ;
+- créer un unique commit final descendant du SHA observé ;
+- message recommandé : feat: finalize Humanitarian Data Platform v3.0.0 ;
+- mettre à jour main sans force ;
+- vérifier ensuite le SHA distant, le message, les fichiers principaux et les
+  contrôles disponibles ;
+- fournir un rapport de publication avec ancien SHA, nouveau SHA, URL et limites.
+
+CRITERE DE FIN
+--------------
+Le travail n'est terminé que lorsque les sources, documents, prompt, EXE,
+archives, manifeste et empreintes sont cohérents entre eux, que tous les tests
+réalisables sont réussis, que les limites non testées sont explicites et que le
+commit final est effectivement visible sur main sans mise à jour forcée.

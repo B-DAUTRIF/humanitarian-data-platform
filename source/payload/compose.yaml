@@ -28,6 +28,49 @@ services:
       timeout: 5s
       retries: 12
 
+  runner-python:
+    build:
+      context: ./runner
+      dockerfile: Dockerfile.python
+    restart: unless-stopped
+    network_mode: none
+    environment:
+      HDP_SPOOL: /spool
+      HDP_RUNNER_LANGUAGE: python
+      HDP_RUNNER_COMMAND: /usr/local/bin/python3
+    volumes:
+      - execution_spool:/spool
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 1.0
+
+  runner-r:
+    build:
+      context: ./runner
+      dockerfile: Dockerfile.r
+    restart: unless-stopped
+    profiles: ["analytics"]
+    network_mode: none
+    environment:
+      HDP_SPOOL: /spool
+      HDP_RUNNER_LANGUAGE: r
+      HDP_RUNNER_COMMAND: /usr/local/bin/Rscript
+    volumes:
+      - execution_spool:/spool
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 768m
+    cpus: 1.0
+
   github-api:
     build: ./github-api
     restart: unless-stopped
@@ -40,6 +83,14 @@ services:
       GITHUB_API_TIMEOUT_SECONDS: ${GITHUB_API_TIMEOUT_SECONDS:-20}
     ports:
       - "127.0.0.1:${HDP_GITHUB_API_PORT:-8091}:8091"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.5
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8091/health', timeout=3)\""]
       interval: 10s
@@ -56,8 +107,11 @@ services:
       RELIEFWEB_APPNAME: ${RELIEFWEB_APPNAME:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GITHUB_API_SERVICE_URL: http://github-api:8091
+      EXECUTION_SPOOL_DIR: /app/execution_spool
+      HDP_TILE_URL: ${HDP_TILE_URL:-https://tile.openstreetmap.org/{z}/{x}/{y}.png}
     volumes:
       - ./data:/app/data
+      - execution_spool:/app/execution_spool
     ports:
       - "127.0.0.1:${HDP_PORT:-8080}:8080"
     depends_on:
@@ -73,3 +127,4 @@ services:
 
 volumes:
   postgres_data:
+  execution_spool:

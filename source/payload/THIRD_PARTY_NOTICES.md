@@ -1,5 +1,34 @@
 # Composants et données tiers
 
+## Leaflet 1.9.4
+
+Le code de rendu cartographique Leaflet 1.9.4 est embarqué sous
+`api/static/vendor/leaflet`. Sa licence BSD-2-Clause complète est conservée dans
+`api/static/vendor/leaflet/LICENSE`.
+
+- Projet : <https://leafletjs.com/>
+- Version : 1.9.4
+- Téléchargement : paquet npm officiel `leaflet@1.9.4`
+
+## OpenStreetMap
+
+Aucune tuile OpenStreetMap n'est incorporée. Le fond facultatif utilise
+`https://tile.openstreetmap.org/{z}/{x}/{y}.png` uniquement après activation par
+l'utilisateur, avec attribution visible. La politique du service s'applique :
+<https://operations.osmfoundation.org/policies/tiles/>.
+
+## defusedxml 0.7.1
+
+Le parseur RSS utilise `defusedxml` 0.7.1 pour renforcer le traitement XML.
+Le paquet est distribué sous licence PSF :
+<https://github.com/tiran/defusedxml/blob/main/LICENSE>.
+
+## Flux RSS ReliefWeb
+
+Le registre embarque uniquement les URL publiques officielles documentées par
+ReliefWeb pour les mises à jour, catastrophes, emplois et formations. Aucun
+contenu de flux n'est incorporé : <https://reliefweb.int/rss>.
+
 ## Référentiel ONU M49
 
 Le fichier `api/app/un_m49_snapshot.json` reproduit la nomenclature publiée par la
@@ -52,3 +81,30 @@ pas être assimilé à une série HDX canonique universelle.
 
 Ces références n'accordent aucun droit supplémentaire sur les jeux téléchargés.
 La licence et les conditions de chaque fiche HDX restent applicables.
+
+## Catalogues sanitaires et épidémiologiques
+
+HDP 3.0.0 contient uniquement les métadonnées descriptives, liens et adaptateurs
+nécessaires à l'interrogation des services ci-dessous. Aucun jeu de données de
+ces organismes n'est incorporé à l'application. Les réponses et fichiers restent
+soumis aux licences, conditions, quotas et politiques d'accès de leur éditeur.
+
+- WHO Global Health Observatory : <https://www.who.int/data/gho/info/gho-odata-api>
+- World Bank Indicators API : <https://datahelpdesk.worldbank.org/knowledgebase/articles/889392-about-the-indicators-api-documentation>
+- UNICEF SDMX API : <https://data.unicef.org/sdmx-api-documentation/>
+- UN Global SDG API : <https://unstats.un.org/sdgapi/swagger/>
+- DHS Program API : <https://api.dhsprogram.com/>
+- WHO Mortality Database : <https://www.who.int/data/data-collection-tools/who-mortality-database>
+- WHO GLASS : <https://www.who.int/initiatives/glass>
+- WHO FluNet / FluID : <https://www.who.int/tools/flunet>
+- WHO Global Health Estimates : <https://www.who.int/data/global-health-estimates>
+- UNAIDS AIDSinfo : <https://www.unaids.org/en/topic/data>
+- IHME Global Health Data Exchange : <https://ghdx.healthdata.org/>
+- UNICEF MICS : <https://mics.unicef.org/>
+- UN World Population Prospects : <https://population.un.org/wpp/>
+- Global.health : <https://global.health/>
+- WorldPop : <https://www.worldpop.org/>
+- Our World in Data : <https://ourworldindata.org/health-meta>
+
+L'entrée Our World in Data est identifiée comme agrégateur secondaire : la
+source primaire et sa licence doivent être vérifiées avant réutilisation.

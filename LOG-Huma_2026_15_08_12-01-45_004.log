@@ -1,0 +1,25 @@
+[2026-08-15 12:01:45 CEST] LOG-Huma 004 — gel final HDP 3.0.0
+
+PORTÉE
+- reprise de la branche main distante au parent d99cad9026dd57eb7dddbe71a62ac12e6d1e6502 ;
+- intégration manuelle de toutes les mises à jour 3.0.0 ;
+- mise à jour du prompt global et de la documentation ;
+- reconstruction de l'installateur et préparation des livrables finaux.
+
+VALIDATIONS RÉUSSIES
+- 68 tests Python ;
+- OpenAPI principal 47 chemins / 63 opérations ;
+- OpenAPI GitHub 11 chemins / 12 opérations ;
+- JavaScript et YAML valides ;
+- runner C17 : compilation, succès, heartbeat et timeout ;
+- payload : 39 fichiers restitués octet pour octet ;
+- EXE : PE32+ GUI x64, 773632 octets, ASLR/NX/haute entropie ;
+- SHA-256 EXE : 9018d3d17866fcd246bf2b20a17f88dc5f9bcafea9adbde50a385502b3d0bb97 ;
+- PDF : 36 pages A4, aucune page vide, rendu inspecté.
+
+LIMITES
+- Docker absent : aucune recette Compose/PostGIS exécutée ;
+- Windows absent : aucune recette d'installation/mise à niveau réelle exécutée ;
+- publication GitHub et vérification des archives à consigner après conditionnement.
+
+Aucun secret n'a été ajouté au dépôt ou aux livrables.

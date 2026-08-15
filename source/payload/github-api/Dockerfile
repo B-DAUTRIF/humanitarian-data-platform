@@ -8,5 +8,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 
+USER 65532:65532
 EXPOSE 8091
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8091"]

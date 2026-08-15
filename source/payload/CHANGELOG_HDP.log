@@ -1,6 +1,56 @@
 Humanitarian Data Platform — journal applicatif des versions
 =============================================================
 
+[2026-08-15] Version 3.0.0 — finale
+-----------------------------------
+- Gel du contrat applicatif et des libellés de version.
+- Intégration de la passerelle REST GitHub locale de main : lectures classiques,
+  création d'issues et déclenchement de workflows verrouillés par défaut.
+- Renforcement du conteneur GitHub : utilisateur non privilégié, lecture seule,
+  capacités supprimées et limites de ressources.
+- Documentation consolidée, prompt global autonome, manifeste et livrables finaux.
+
+[2026-08-15] Version 3.0.0 — itération 2
+----------------------------------------
+- Ajout des versions immuables et des exécutions Python/R par runners C
+  non privilégiés, sans réseau, sans shell et avec limites de ressources.
+- Rapports JSON, sorties et empreintes SHA-256 conservés par projet.
+- Registre de quatre flux RSS ReliefWeb officiels, abonnements planifiés,
+  déduplication et parsing XML borné/durci.
+- Chronologie Gantt des acquisitions, planifications et exécutions.
+- Import GeoJSON dans PostGIS, rendu Leaflet embarqué et exports QGIS/R.
+- Fond OpenStreetMap désactivé par défaut et chargé uniquement à la demande.
+- Politique GitHub actualisée pour les jetons finement granulés.
+
+[2026-08-14] Version 3.0.0 — itération 1
+----------------------------------------
+- Ajout d'un registre versionné et validé des paramètres des sept connecteurs.
+- Exposition séparée des paramètres globaux et des paramètres source par projet.
+- Prévisualisation locale et assainie des URL et commandes sans exécution réseau.
+- Acquisition et planification enrichies par les paramètres complets et leur provenance.
+- Migration idempotente des réglages de sources et des métadonnées de bibliothèque.
+- Filtres initiaux par source, format, sujet, organisme, localisation et dates.
+- Chaîne Windows portée en 3.0.0 ; mise à niveau conservant les variables `.env`
+  inconnues, les secrets existants, les fichiers locaux et le volume PostgreSQL.
+- Validation locale : 49 tests Python, syntaxe Python/JavaScript et restitution
+  exacte des 22 fichiers du payload embarqué. La recette Windows reste finale.
+
+[2026-08-07] Version 2.5.0
+--------------------------
+- Ajout d'un catalogue intégré de 18 sources épidémiologiques et sanitaires
+  mondiales, avec organisme, couverture, domaines, modalités d'accès et liens.
+- Sept sources sont interrogeables et planifiables : HDX, ReliefWeb, OMS/GHO,
+  Banque mondiale/WDI, UNICEF/SDMX, ONU/ODD et DHS.
+- Les réponses distantes originales des cinq nouveaux connecteurs sont archivées
+  avec leur empreinte SHA-256 avant normalisation des indicateurs et flux.
+- Onze portails sans API publique stable documentée, ou dont l'accès varie selon
+  le jeu, sont affichés explicitement comme références et jamais comme API active.
+- L'interface ajoute un onglet « Sources sanitaires », peuple les sélecteurs
+  depuis l'API et expose les contraintes de compte ou d'identifiant.
+- Validation de livraison : 36 tests unitaires, compilation Python et contrôle
+  syntaxique JavaScript ; les appels réels restent soumis à la disponibilité et
+  aux conditions des services tiers.
+
 [2026-08-07] Version 2.4.0
 --------------------------
 - Les téléchargements officiels sont exposés sous forme de liste : COD-AB et

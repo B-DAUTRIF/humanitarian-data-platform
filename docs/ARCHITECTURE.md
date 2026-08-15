@@ -4,16 +4,21 @@
 
 ```mermaid
 flowchart TD
-    U["Interface web locale"] --> A["FastAPI 2.4.0"]
+    U["Interface web locale"] --> A["FastAPI 3.0.0"]
     A --> P["PostgreSQL + PostGIS"]
-    A --> F["JSON et ressources locales"]
-    A --> X["ReliefWeb et HDX/CKAN"]
-    A --> S["Planificateur persistant"]
-    A --> G["API GitHub"]
-    A -. facultatif .-> R["R / plumber"]
+    A --> F["Fichiers et rapports"]
+    A --> X["Sources distantes"]
+    U --> G["Passerelle GitHub locale"]
+    A --> Q["Spool d'exécution"]
+    Q --> Y["Runner Python sans réseau"]
+    Q -. facultatif .-> R["Runner R sans réseau"]
 ```
 
-Docker Compose orchestre l'API, PostgreSQL/PostGIS et le service R facultatif. Seul le port HTTP de l'API est publié sur `127.0.0.1`. PostgreSQL et R restent dans le réseau interne Compose.
+Docker Compose orchestre l'API, PostgreSQL/PostGIS, le runner Python et les
+services R facultatifs. Les ports HTTP de l'API et de la passerelle GitHub sont
+publiés uniquement sur `127.0.0.1`.
+PostgreSQL et R/plumber restent dans le réseau interne Compose ; les deux
+runners utilisent `network_mode: none`.
 
 ## Modèle par projets
 
@@ -23,15 +28,29 @@ Docker Compose orchestre l'API, PostgreSQL/PostGIS et le service R facultatif. S
 | `project_preferences` | Limites et téléchargement automatique par défaut | Suit le projet |
 | `project_github_settings` | Propriétaire, dépôt, description, visibilité et URL créée ; aucun jeton | Suit le projet |
 | `project_geodata_settings` | Familles COD, pays/zone M49, politique, format et cycle | Automatisation désactivée à l'archivage |
+| `source_global_settings` | Activation, délai et reprises par connecteur | Conservé globalement |
+| `project_source_settings` | Contrat API, valeurs et planification par projet/source | Suit le projet |
+| `schema_migrations` | Historique des migrations appliquées | Conservé |
 | `acquisitions` | Provenance de chaque réponse distante | Conservée |
 | `local_resources` | URL, empreinte et provenance famille/M49/ISO3/COD/licence | Fichier supprimé, ligne marquée `deleted` |
-| `project_scripts` | Contenu de scripts par projet | Archivage logique ; aucune exécution |
+| `project_scripts` | État courant des scripts par projet | Archivage logique |
+| `project_execution_settings` | Activation Python/R et limites du projet | Suit le projet |
+| `script_versions` | Versions immuables et empreintes du code | Conservées avec le script |
+| `script_executions` | État, sorties et rapport SHA-256 | Historique conservé |
+| `rss_subscriptions` / `rss_items` | Veille officielle et éléments dédupliqués | Abonnement archivable |
+| `map_layers` / `map_features` | Couches et géométries PostGIS SRID 4326 | Suit le projet |
 | `schedules` | Définition périodique d'une acquisition | Désactivation et archivage logique |
 | `schedule_runs` | Historique des passages | Conservé avec statut et erreur éventuelle |
 
 Le projet par défaut utilise l'UUID stable `00000000-0000-4000-8000-000000000001`. Le démarrage crée les nouvelles tables de façon idempotente, ajoute `project_id` et `schedule_id` à l'historique v1.5, puis rattache les lignes sans projet.
 
-## Intégrations de projet 2.4.0
+## Intégrations de projet 3.0.0
+
+Le registre `source_registry.py` décrit chaque API au moyen d'un contrat
+versionné inspiré de JSON Schema. L'interface génère les champs depuis ce
+contrat. L'API valide à nouveau toutes les valeurs, fusionne le modèle du projet
+avec les valeurs d'exécution, applique les limites globales et archive la
+configuration effective avec la réponse brute.
 
 La création GitHub utilise `POST /user/repos` lorsque le propriétaire est vide ou correspond au compte du jeton, sinon `POST /orgs/{org}/repos`. Le dépôt est privé par défaut et initialisé avec un README. `GITHUB_TOKEN` demeure une variable d'environnement globale ; il ne transite jamais dans les modèles de réponse.
 
@@ -61,7 +80,8 @@ déjà complète ne consomme pas le quota ; les suivantes obtiennent le compte
 ## Flux d'acquisition et de téléchargement
 
 1. L'API valide le projet, la source, la requête et la limite.
-2. Elle appelle ReliefWeb V2 ou l'Action API CKAN de HDX.
+2. Elle appelle le connecteur choisi : ReliefWeb, HDX/CKAN, OMS/GHO,
+   Banque mondiale/WDI, UNICEF/SDMX, ONU/ODD ou DHS.
 3. La réponse brute est sérialisée en UTF-8, archivée et hachée en SHA-256.
 4. Une ligne `acquisitions` conserve la provenance.
 5. Si le téléchargement est actif, l'API extrait les ressources référencées.
@@ -75,9 +95,48 @@ data/raw/<project_uuid>/<source>/<horodatage>_<requete>_<acquisition_uuid>.json
 data/projects/<project_uuid>/resources/<acquisition_uuid>/<resource_uuid>_<nom>
 ```
 
+## Exécution locale des scripts
+
+L'API écrit atomiquement un job dans un volume spool. Un runner C distinct le
+réclame par renommage, lance directement Python ou R avec `execve` — jamais via
+un shell — puis écrit statut, sortie et horodatages. Le collecteur persiste le
+résultat et un rapport JSON sous `data/projects/<projet>/executions`.
+
+Les conteneurs sont non privilégiés, en lecture seule hors `/tmp` et du spool,
+sans réseau, avec limites de processus, mémoire, CPU, durée, descripteurs et
+taille de sortie. Cette frontière vise une application locale mono-utilisateur :
+elle ne transforme pas HDP en plateforme d'exécution de code hostile.
+
+## RSS, cartographie et chronologie
+
+Le registre RSS ne contient que quatre URL ReliefWeb vérifiées. Les lectures
+sont bornées, suivent uniquement les hôtes autorisés, utilisent ETag et
+Last-Modified, refusent DTD/entités XML et dédupliquent par identifiant externe.
+
+L'import cartographique accepte un Feature ou FeatureCollection GeoJSON borné,
+stocke les géométries en PostGIS et expose un FeatureCollection limité à
+5 000 entités. Leaflet 1.9.4 est servi depuis le payload local. Le fond OSM reste
+opt-in. L'export produit GeoJSON et scripts d'import QGIS/R.
+
+## Passerelle GitHub
+
+Le service `github-api` expose sur le port local 8091 un sous-ensemble explicite
+de l'API REST GitHub. Les lectures couvrent dépôt, branches, commits, issues,
+pull requests, releases, workflows, contenus et quota. Les deux écritures
+admises - création d'issue et déclenchement manuel de workflow - passent par un
+verrou serveur désactivé par défaut. Le jeton n'est jamais renvoyé au client.
+
+Cette passerelle est séparée de la création confirmée d'un dépôt dans l'API
+principale. Son conteneur est non privilégié, en lecture seule et lié à
+`127.0.0.1`. Elle ne doit pas être exposée sur un réseau partagé.
+
 ## Planificateur
 
-Le planificateur est une tâche de fond de l'unique processus Uvicorn. Il interroge PostgreSQL toutes les 20 secondes. Une planification ou synchronisation géographique due est revendiquée dans une transaction avec `FOR UPDATE SKIP LOCKED`; son prochain passage est avancé avant l'appel distant. Le résultat et l'erreur éventuelle sont persistés.
+Le planificateur est une tâche de fond de l'unique processus Uvicorn. Il
+interroge PostgreSQL toutes les 20 secondes, collecte les jobs Python/R et
+revendique les acquisitions, synchronisations géographiques ou lectures RSS
+dues avec `FOR UPDATE SKIP LOCKED`. Le prochain passage est avancé avant l'appel
+distant et le résultat est persisté.
 
 L'intervalle est compris entre 15 minutes et 30 jours. Une erreur de base temporaire ne termine pas définitivement la boucle. L'architecture suppose un seul processus API ; déployer plusieurs workers nécessiterait un service de tâches dédié.
 
@@ -86,6 +145,7 @@ L'intervalle est compris entre 15 minutes et 30 jours. Une erreur de base tempor
 | Méthode et route | Fonction |
 |---|---|
 | `GET /api/health` | Santé SQL, version et état du planificateur |
+| `GET /api/sources` | Catalogue des connecteurs actifs et portails de référence |
 | `GET/POST /api/projects` | Liste et création des projets |
 | `PATCH/DELETE /api/projects/{id}` | Modification ou archivage logique |
 | `GET/PUT /api/projects/{id}/preferences` | Préférences de téléchargement |
@@ -104,6 +164,19 @@ L'intervalle est compris entre 15 minutes et 30 jours. Une erreur de base tempor
 | `DELETE /api/resources/{id}` | Suppression locale avec trace conservée |
 | `GET/POST /api/projects/{id}/scripts` | Bibliothèque de scripts |
 | `PATCH/DELETE /api/scripts/{id}` | Modification ou archivage d'un script |
+| `GET /api/scripts/{id}/versions` | Versions immuables |
+| `GET/POST /api/scripts/{id}/executions` | Historique et lancement Python/R |
+| `GET /api/executions/{id}` | État et sortie d'un job |
+| `GET /api/executions/{id}/report` | Rapport JSON de l'exécution |
+| `GET/PUT /api/projects/{id}/execution-settings` | Limites et activation des runners |
+| `GET /api/rss/catalog` | Registre RSS officiel |
+| `GET/POST /api/projects/{id}/rss/subscriptions` | Abonnements du projet |
+| `POST /api/rss/subscriptions/{id}/fetch` | Lecture RSS immédiate |
+| `POST /api/resources/{id}/map/import` | Import GeoJSON dans PostGIS |
+| `GET /api/projects/{id}/map/layers` | Couches cartographiques |
+| `GET /api/map/layers/{id}/geojson` | Couche GeoJSON bornée |
+| `GET /api/map/layers/{id}/export` | Archive QGIS/R |
+| `GET /api/projects/{id}/timeline` | Événements Gantt |
 | `GET/POST /api/projects/{id}/schedules` | Liste et création des planifications |
 | `PATCH/DELETE /api/schedules/{id}` | Modification ou archivage |
 | `POST /api/schedules/{id}/run` | Exécution manuelle immédiate |
@@ -114,7 +187,8 @@ L'intervalle est compris entre 15 minutes et 30 jours. Une erreur de base tempor
 
 ## Service R
 
-Le profil `analytics` fournit toujours R/plumber avec `/health` et `/summary`. Il reste facultatif et séparé du planificateur Python.
+Le profil `analytics` fournit R/plumber avec `/health` et `/summary`, ainsi que
+le runner R sans réseau. Les deux restent facultatifs.
 
 ## Références des sources distantes
 
@@ -123,5 +197,13 @@ Le profil `analytics` fournit toujours R/plumber avec `/health` et `/summary`. I
 - [OCHA COD-AB](https://knowledge.base.unocha.org/wiki/spaces/imtoolbox/pages/2557378679/Administrative%2BBoundaries%2BCOD-AB) : limites administratives communes ;
 - [OCHA Common Operational Datasets](https://knowledge.base.unocha.org/wiki/spaces/imtoolbox/pages/42045911/Common%2BOperational%2BDatasets%2BCODs) : familles COD actuelles et retrait de COD-HP ;
 - [OCHA COD-CS](https://knowledge.base.unocha.org/wiki/spaces/imtoolbox/pages/2965897217/Country-specific%2BCODs%2BCOD-CS) : nature contextuelle des données spécifiques au pays ;
-- [GitHub REST — repositories](https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28) : création pour un utilisateur ou une organisation ;
+- [GitHub REST — repositories](https://docs.github.com/en/rest/repos/repos) : création pour un utilisateur ou une organisation ;
+- [ReliefWeb RSS](https://reliefweb.int/rss) : flux officiels enregistrés ;
+- [Leaflet 1.9.4](https://leafletjs.com/download.html) et [politique des tuiles OpenStreetMap](https://operations.osmfoundation.org/policies/tiles/) : rendu embarqué et fond opt-in ;
 - [ReliefWeb API V2](https://apidoc.reliefweb.int/) et [paramètres](https://apidoc.reliefweb.int/parameters) : appname, profils, requêtes, limites et quotas.
+- [WHO GHO OData API](https://www.who.int/data/gho/info/gho-odata-api),
+  [World Bank Indicators API](https://datahelpdesk.worldbank.org/knowledgebase/articles/889392-about-the-indicators-api-documentation),
+  [UNICEF SDMX API](https://data.unicef.org/sdmx-api-documentation/),
+  [UN SDG API](https://unstats.un.org/sdgapi/swagger/) et
+  [DHS Program API](https://api.dhsprogram.com/) : catalogues d'indicateurs et
+  flux sanitaires ajoutés en 2.5.0.

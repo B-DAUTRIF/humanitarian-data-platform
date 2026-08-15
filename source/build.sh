@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$script_dir"
+
 zig_bin="${1:-../toolchain/node_modules/@oven/zig/zig}"
 cache_root="${2:-../zig-build-cache}"
 
@@ -18,5 +21,5 @@ ZIG_LOCAL_CACHE_DIR="$cache_root/local" \
     -Wall -Wextra -Werror \
     -Wl,/subsystem:windows \
     src/installer.c src/installer.res \
-    -o HumanitarianDataPlatform_Setup_Native_GUI_v2.4.0.exe \
+    -o HumanitarianDataPlatform_Setup_Native_GUI_v3.0.0.exe \
     -lcomctl32 -lshell32 -ladvapi32 -lwinhttp -lws2_32 -lbcrypt -lgdi32

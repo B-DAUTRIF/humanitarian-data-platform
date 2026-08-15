@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Humanitarian Data Platform 2.4.0</title>
+  <title>Humanitarian Data Platform 3.0.0</title>
+  <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
   <style>
     :root {
       color-scheme: dark; --bg:#07111f; --panel:#0f1d30; --panel2:#13243a; --line:#29415e;
@@ -78,13 +79,33 @@
     code { color:#bae6fd; word-break:break-all; }
     .result-title { color:var(--text); text-decoration:none; }
     .result-title:hover { color:var(--accent); }
-    @media(max-width:900px) { .grid,.grid.equal { grid-template-columns:1fr; } .header-inner { align-items:flex-start; padding:15px 0; flex-direction:column; } .context { min-width:0; width:100%; } header { position:static; } .metrics { grid-template-columns:1fr 1fr; } }
+    .source-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .source-grid .item { min-height:190px; }
+    .source-links { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; font-size:12px; }
+    .schema-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; }
+    .schema-grid .wide { grid-column:1 / -1; }
+    .schema-help { margin:4px 0 0; color:var(--muted); font-size:11px; line-height:1.35; }
+    .request-preview { margin:14px 0 0; padding:12px; min-height:90px; overflow:auto; white-space:pre-wrap; border:1px solid var(--line); border-radius:9px; background:#06101d; color:#bae6fd; }
+    .filters { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin:12px 0 16px; }
+    #map-canvas { height:560px; border:1px solid var(--line); border-radius:12px; background:#081421; color:#111; }
+    .map-fallback { height:100%; display:grid; place-items:center; color:var(--muted); padding:20px; text-align:center; }
+    .gantt { display:grid; gap:8px; overflow:auto; }
+    .gantt-row { display:grid; grid-template-columns:minmax(180px,280px) minmax(620px,1fr); gap:10px; align-items:center; }
+    .gantt-label { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .gantt-track { position:relative; height:28px; border:1px solid var(--line); border-radius:7px; background:repeating-linear-gradient(90deg,#0a1729 0,#0a1729 calc(10% - 1px),#1a2b42 calc(10% - 1px),#1a2b42 10%); }
+    .gantt-bar { position:absolute; top:4px; height:18px; min-width:5px; border-radius:5px; background:var(--accent); }
+    .gantt-bar.script { background:var(--accent2); }
+    .gantt-bar.scheduled { background:var(--warn); }
+    .gantt-bar.failed,.gantt-bar.timed_out { background:var(--danger); }
+    .output { max-height:220px; overflow:auto; white-space:pre-wrap; padding:10px; border:1px solid var(--line); border-radius:8px; background:#050c16; color:#dbeafe; font:12px ui-monospace,SFMono-Regular,Consolas,monospace; }
+    @media(max-width:900px) { .grid,.grid.equal { grid-template-columns:1fr; } .header-inner { align-items:flex-start; padding:15px 0; flex-direction:column; } .context { min-width:0; width:100%; } header { position:static; } .metrics { grid-template-columns:1fr 1fr; } .filters { grid-template-columns:1fr 1fr; } }
+    @media(max-width:680px) { .source-grid { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
 <header>
   <div class="header-inner">
-    <div class="brand"><h1>Humanitarian Data Platform</h1><p>Projets, dépôts GitHub et téléchargements COD officiels · version 2.4.0</p></div>
+    <div class="brand"><h1>Humanitarian Data Platform</h1><p>Données humanitaires, épidémiologiques et sanitaires mondiales · version finale 3.0.0</p></div>
     <div class="context">
       <select id="project-select" aria-label="Projet actif"></select>
       <span id="health" class="badge">Vérification…</span>
@@ -94,8 +115,13 @@
 <main>
   <nav aria-label="Rubriques">
     <button class="active" data-view="search">Recherche</button>
+    <button data-view="sources">Sources sanitaires</button>
+    <button data-view="source-settings">Paramètres des sources</button>
     <button data-view="projects">Projets & préférences</button>
     <button data-view="data">Données locales</button>
+    <button data-view="rss">Flux RSS</button>
+    <button data-view="timeline">Chronologie</button>
+    <button data-view="map">Carte</button>
     <button data-view="scripts">Scripts</button>
     <button data-view="schedules">Planifications</button>
   </nav>
@@ -107,7 +133,8 @@
         <p class="intro">Recherchez et archivez la réponse brute dans le projet actif.</p>
         <form id="search-form">
           <label for="search-source">Source publique</label>
-          <select id="search-source"><option value="hdx">HDX / CKAN</option><option value="reliefweb">ReliefWeb</option></select>
+          <select id="search-source"><option value="hdx">HDX / CKAN</option></select>
+          <div id="search-source-info" class="status"></div>
           <label for="search-query">Mots-clés</label>
           <input id="search-query" minlength="2" maxlength="200" placeholder="Ex. choléra Mozambique" required>
           <label for="search-limit">Nombre maximal de jeux ou rapports</label>
@@ -122,6 +149,56 @@
         <h2>Résultats</h2>
         <div id="search-results" class="empty">Lancez une recherche dans le projet actif.</div>
       </div>
+    </div>
+  </section>
+
+  <section id="view-source-settings" class="view">
+    <div class="grid equal">
+      <div class="card">
+        <h2>Paramètres globaux du connecteur</h2>
+        <p class="intro">Ces limites techniques s’appliquent à tous les projets. Les secrets restent dans les variables d’environnement.</p>
+        <form id="global-source-form">
+          <label for="global-source-select">Source</label>
+          <select id="global-source-select"></select>
+          <div id="global-source-fields" class="schema-grid"></div>
+          <div class="actions"><button type="submit">Enregistrer globalement</button></div>
+        </form>
+        <div id="global-source-secret" class="notice"></div>
+        <div id="global-source-status" class="status"></div>
+      </div>
+      <div class="card">
+        <h2>Paramètres de la source pour le projet</h2>
+        <p class="intro">Le modèle est propre à chaque API et reste attaché au projet actif.</p>
+        <form id="project-source-form">
+          <label for="project-source-select">Source interrogeable</label>
+          <select id="project-source-select"></select>
+          <label class="check"><input id="project-source-enabled" type="checkbox" checked> Autoriser cette source dans le projet</label>
+          <div id="project-source-fields" class="schema-grid"></div>
+          <h3 style="margin-top:18px">Valeurs par défaut des planifications</h3>
+          <div class="schema-grid">
+            <div><label for="project-source-interval">Intervalle (minutes)</label><input id="project-source-interval" type="number" min="15" max="43200" value="1440"></div>
+            <label class="check"><input id="project-source-schedule-enabled" type="checkbox" checked> Planification active par défaut</label>
+            <label class="check"><input id="project-source-schedule-download" type="checkbox"> Téléchargement automatique par défaut</label>
+          </div>
+          <div class="actions"><button type="submit">Enregistrer pour le projet</button><button id="project-source-preview" class="secondary" type="button">Prévisualiser la requête</button></div>
+        </form>
+        <pre id="project-source-request" class="request-preview">Aucune prévisualisation.</pre>
+        <div id="project-source-status" class="status"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-sources" class="view">
+    <div class="card">
+      <div class="item-head"><div><h2>Sources épidémiologiques et sanitaires mondiales</h2><p class="intro">Le catalogue distingue les connecteurs API réellement interrogeables des portails de référence dont l’accès reste manuel ou soumis à inscription.</p></div></div>
+      <div class="metrics">
+        <div class="metric"><strong id="sources-total">0</strong><span>sources cataloguées</span></div>
+        <div class="metric"><strong id="sources-live">0</strong><span>connecteurs API</span></div>
+        <div class="metric"><strong id="sources-reference">0</strong><span>portails référencés</span></div>
+        <div class="metric"><strong id="sources-auth">0</strong><span>accès avec compte ou identifiant</span></div>
+      </div>
+      <div id="source-catalog-status" class="status"></div>
+      <div id="source-catalog" class="source-grid"></div>
     </div>
   </section>
 
@@ -150,8 +227,22 @@
             <label for="pref-formats">Formats autorisés, séparés par des virgules (vide = tous)</label><input id="pref-formats" placeholder="csv, json, geojson, xlsx">
             <div class="actions"><button type="submit">Enregistrer les préférences</button></div>
           </form>
-          <div class="notice warn">Les scripts sont stockés dans le projet mais leur exécution reste désactivée. Cela évite qu’une planification exécute du code non vérifié.</div>
+          <div class="notice">Les limites de téléchargement restent indépendantes des limites d’exécution des traitements.</div>
           <div id="preferences-status" class="status"></div>
+        </div>
+
+        <div class="card">
+          <h2>Exécution contrôlée Python / R</h2>
+          <p class="intro">Les traitements s’exécutent dans un conteneur non privilégié, sans réseau, sans socket Docker et sans Shell.</p>
+          <form id="execution-settings-form">
+            <label class="check"><input id="exec-python-enabled" type="checkbox" checked> Autoriser Python</label>
+            <label class="check"><input id="exec-r-enabled" type="checkbox"> Autoriser R lorsque le profil analytique est démarré</label>
+            <label for="exec-timeout">Durée maximale (1 à 300 secondes)</label><input id="exec-timeout" type="number" min="1" max="300" value="60">
+            <label for="exec-output">Sortie maximale (Kio)</label><input id="exec-output" type="number" min="1" max="1024" value="256">
+            <div class="actions"><button type="submit">Enregistrer les limites</button></div>
+          </form>
+          <div class="notice warn">Le réseau est techniquement coupé par <code>network_mode: none</code>. Les allowlists ne sont pas simulées : elles restent indisponibles tant qu’un proxy d’egress dédié n’est pas intégré.</div>
+          <div id="execution-settings-status" class="status"></div>
         </div>
 
         <div class="card">
@@ -203,8 +294,63 @@
         <div class="metric"><strong id="storage-complete">0</strong><span>terminées</span></div>
         <div class="metric"><strong id="storage-failed">0</strong><span>en erreur</span></div>
       </div>
+      <div class="filters" aria-label="Filtres de la bibliothèque">
+        <div><label for="resource-filter-source">Source</label><input id="resource-filter-source" placeholder="Ex. hdx"></div>
+        <div><label for="resource-filter-format">Format</label><input id="resource-filter-format" placeholder="Ex. csv"></div>
+        <div><label for="resource-filter-subject">Sujet</label><input id="resource-filter-subject" placeholder="Mots du sujet"></div>
+        <div><label for="resource-filter-organization">Organisme</label><input id="resource-filter-organization" placeholder="Éditeur ou organisme"></div>
+        <div><label for="resource-filter-geography">Localisation</label><input id="resource-filter-geography" placeholder="Pays ou zone"></div>
+      </div>
       <div id="resource-status" class="status"></div>
       <div id="resource-list" class="list"><div class="empty">Aucune ressource chargée.</div></div>
+    </div>
+  </section>
+
+  <section id="view-rss" class="view">
+    <div class="grid">
+      <div class="card">
+        <h2>Nouvel abonnement RSS</h2>
+        <p class="intro">Le registre ne contient que des points d’entrée ReliefWeb officiels vérifiés. Chaque abonnement appartient au projet actif.</p>
+        <form id="rss-form">
+          <label for="rss-registry">Flux officiel</label><select id="rss-registry"></select>
+          <label for="rss-name">Nom dans le projet</label><input id="rss-name" minlength="2" maxlength="120" required>
+          <label for="rss-query">Recherche ReliefWeb facultative</label><input id="rss-query" maxlength="200" placeholder="Ex. cholera Mozambique">
+          <label for="rss-language">Langue</label><select id="rss-language"><option value="en">Anglais</option><option value="fr">Français</option><option value="es">Espagnol</option></select>
+          <label for="rss-interval">Intervalle en minutes</label><input id="rss-interval" type="number" min="15" max="43200" value="360">
+          <label class="check"><input id="rss-enabled" type="checkbox" checked> Activer immédiatement</label>
+          <div class="actions"><button type="submit">Créer l’abonnement</button></div>
+        </form>
+        <div class="notice">Flux XML limité à 2 Mio, DTD et entités interdites, redirections bornées et hôtes limités au registre.</div>
+        <div id="rss-status" class="status"></div>
+      </div>
+      <div>
+        <div class="card"><h2>Abonnements du projet</h2><div id="rss-subscription-list" class="list"></div></div>
+        <div class="card"><h2>Éléments récents</h2><div id="rss-item-list" class="list"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-timeline" class="view">
+    <div class="card">
+      <div class="item-head"><div><h2>Chronologie / Gantt</h2><p class="intro">Acquisitions, traitements Python/R, exécutions planifiées et prochaines échéances.</p></div><div class="actions"><select id="timeline-days" aria-label="Fenêtre temporelle"><option value="7">7 jours</option><option value="30" selected>30 jours</option><option value="90">90 jours</option></select><button id="timeline-refresh" class="secondary">Actualiser</button></div></div>
+      <div id="timeline-status" class="status"></div>
+      <div id="timeline-gantt" class="gantt"></div>
+    </div>
+  </section>
+
+  <section id="view-map" class="view">
+    <div class="grid">
+      <div class="card">
+        <h2>Couches PostGIS</h2>
+        <p class="intro">Importez une ressource GeoJSON depuis Données locales, visualisez-la, puis exportez un paquet pour QGIS et R/sf.</p>
+        <div id="map-layer-list" class="list"></div>
+        <div class="notice">Le fond OpenStreetMap n’est chargé qu’après action explicite. Aucun préchargement ou téléchargement en masse de tuiles n’est effectué.</div>
+        <div id="map-status" class="status"></div>
+      </div>
+      <div class="card">
+        <div class="item-head"><h2>Prévisualisation Leaflet</h2><div class="actions"><button id="map-enable-tiles" class="secondary">Activer le fond OSM</button></div></div>
+        <div id="map-canvas"><div class="map-fallback">Sélectionnez une couche PostGIS.</div></div>
+      </div>
     </div>
   </section>
 
@@ -221,7 +367,10 @@
         </form>
         <div id="script-status" class="status"></div>
       </div>
-      <div class="card"><h2>Bibliothèque du projet</h2><div class="notice warn">Stockage et édition uniquement. Aucun script n'est exécuté par l'application.</div><div id="script-list" class="list" style="margin-top:14px"></div></div>
+      <div>
+        <div class="card"><h2>Bibliothèque du projet</h2><div class="notice warn">Seuls Python et R sont exécutables. SQL, Shell et « autre » restent du contenu stocké. Le réseau est toujours coupé.</div><div id="script-list" class="list" style="margin-top:14px"></div></div>
+        <div class="card"><h2>Rapport du dernier traitement</h2><pre id="script-output" class="output">Aucune exécution sélectionnée.</pre></div>
+      </div>
     </div>
   </section>
 
@@ -231,7 +380,7 @@
         <h2>Nouvelle planification</h2>
         <form id="schedule-form">
           <label for="schedule-name">Nom</label><input id="schedule-name" minlength="2" maxlength="120" required>
-          <label for="schedule-source">Source</label><select id="schedule-source"><option value="hdx">HDX / CKAN</option><option value="reliefweb">ReliefWeb</option></select>
+          <label for="schedule-source">Source</label><select id="schedule-source"><option value="hdx">HDX / CKAN</option></select>
           <label for="schedule-query">Recherche</label><input id="schedule-query" minlength="2" maxlength="200" required>
           <label for="schedule-limit">Résultats maximaux</label><input id="schedule-limit" type="number" min="1" max="100" value="25">
           <label for="schedule-interval">Intervalle en minutes (minimum 15)</label><input id="schedule-interval" type="number" min="15" max="43200" value="1440">
@@ -246,8 +395,9 @@
     </div>
   </section>
 </main>
+<script src="/static/vendor/leaflet/leaflet.js"></script>
 <script>
-  const state={projects:[],projectId:null,editingScriptId:null,codFamilies:[],codAvailability:null};
+  const state={projects:[],projectId:null,editingScriptId:null,codFamilies:[],codAvailability:null,sources:[],sourceSettings:[],rssCatalog:[],leafletMap:null,leafletLayer:null,tileLayer:null,mapConfig:null};
   const q=selector=>document.querySelector(selector);
   const els={project:q('#project-select'),health:q('#health')};
   const escapeText=value=>String(value??'');
@@ -261,16 +411,69 @@
   document.querySelectorAll('nav button').forEach(tab=>tab.addEventListener('click',()=>{
     document.querySelectorAll('nav button').forEach(item=>item.classList.toggle('active',item===tab));
     document.querySelectorAll('.view').forEach(view=>view.classList.toggle('active',view.id===`view-${tab.dataset.view}`));
-    if(tab.dataset.view==='data')loadResources();if(tab.dataset.view==='scripts')loadScripts();if(tab.dataset.view==='schedules')loadSchedules();if(tab.dataset.view==='projects')loadProjectSettings();
+    if(tab.dataset.view==='data')loadResources();if(tab.dataset.view==='scripts')loadScripts();if(tab.dataset.view==='schedules')loadSchedules();if(tab.dataset.view==='projects')loadProjectSettings();if(tab.dataset.view==='sources')renderSources();if(tab.dataset.view==='source-settings')loadSourceSettings();if(tab.dataset.view==='rss')loadRss();if(tab.dataset.view==='timeline')loadTimeline();if(tab.dataset.view==='map')loadMapLayers();
   }));
 
-  async function loadHealth(){try{const data=await api('/api/health');els.health.textContent=`Opérationnel · v${data.version} · planificateur ${data.scheduler==='running'?'actif':'arrêté'}`;}catch(error){els.health.textContent='Service indisponible';els.health.style.color='var(--danger)';}}
+  async function loadHealth(){try{const data=await api('/api/health');const python=data.runners?.python?.available?'Python prêt':'Python en attente';els.health.textContent=`Opérationnel · v${data.version} · ${python} · planificateur ${data.scheduler==='running'?'actif':'arrêté'}`;}catch(error){els.health.textContent='Service indisponible';els.health.style.color='var(--danger)';}}
+  async function loadSources(){
+    state.sources=await api('/api/sources');const searchable=state.sources.filter(source=>source.searchable);const scheduled=state.sources.filter(source=>source.schedule_supported);const search=q('#search-source'),schedule=q('#schedule-source');search.innerHTML='';schedule.innerHTML='';
+    searchable.forEach(source=>{const option=document.createElement('option');option.value=source.id;option.textContent=`${source.name} — ${source.access}`;search.appendChild(option);});
+    scheduled.forEach(source=>{const option=document.createElement('option');option.value=source.id;option.textContent=source.name;schedule.appendChild(option);});
+    if(searchable.some(source=>source.id==='hdx'))search.value='hdx';if(scheduled.some(source=>source.id==='hdx'))schedule.value='hdx';searchSourceChanged();renderSources();prepareSourceSettingsSelectors();
+  }
+  function searchSourceChanged(){const source=state.sources.find(item=>item.id===q('#search-source').value);setStatus('#search-source-info',source?`${source.organization} · ${source.category} · ${source.access}${source.notes?'\n'+source.notes:''}`:'');}
+  q('#search-source').addEventListener('change',searchSourceChanged);
+  function sourceLink(label,url){const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener';link.textContent=label;return link;}
+  function renderSources(){
+    const items=state.sources,container=q('#source-catalog');container.innerHTML='';q('#sources-total').textContent=items.length;q('#sources-live').textContent=items.filter(item=>item.mode==='live_api').length;q('#sources-reference').textContent=items.filter(item=>item.mode==='reference_portal').length;q('#sources-auth').textContent=items.filter(item=>item.requires_auth).length;
+    if(!items.length)return empty(container,'Catalogue indisponible.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=item.mode==='live_api'?'API active':'Référence';head.append(title,pill);const organization=document.createElement('small');organization.textContent=`${item.organization} · ${item.geographic_scope} · ${item.category}`;const domains=document.createElement('small');domains.textContent=`Domaines : ${(item.domains||[]).join(', ')}`;const access=document.createElement('small');access.textContent=`Accès : ${item.access}${item.requires_auth?' · compte/identifiant requis pour tout ou partie':''}`;const note=document.createElement('small');note.textContent=item.notes||'';const links=document.createElement('div');links.className='source-links';links.append(sourceLink('Portail',item.portal_url));if(item.documentation_url)links.append(sourceLink('Documentation',item.documentation_url));if(item.api_url)links.append(sourceLink('API',item.api_url));card.append(head,organization,domains,access,note,links);container.appendChild(card);});setStatus('#source-catalog-status',`${items.length} sources documentées · ${items.filter(item=>item.searchable).length} interrogeables et planifiables dans HDP.`);
+  }
+
+  function prepareSourceSettingsSelectors(){
+    const globalSelect=q('#global-source-select'),projectSelect=q('#project-source-select');
+    const previousGlobal=globalSelect.value||'hdx',previousProject=projectSelect.value||'hdx';globalSelect.innerHTML='';projectSelect.innerHTML='';
+    state.sources.forEach(source=>{const option=document.createElement('option');option.value=source.id;option.textContent=`${source.name} — ${source.mode==='live_api'?'API':'référence'}`;globalSelect.appendChild(option);});
+    state.sources.filter(source=>source.searchable).forEach(source=>{const option=document.createElement('option');option.value=source.id;option.textContent=source.name;projectSelect.appendChild(option);});
+    if([...globalSelect.options].some(option=>option.value===previousGlobal))globalSelect.value=previousGlobal;
+    if([...projectSelect.options].some(option=>option.value===previousProject))projectSelect.value=previousProject;
+  }
+  function renderSchemaFields(schema,container,values,prefix){
+    container.innerHTML='';Object.entries(schema?.properties||{}).forEach(([name,definition])=>{
+      const wrapper=document.createElement(definition.type==='string'&&Number(definition.maxLength||0)>200?'div':'div');if(definition.type==='array')wrapper.className='wide';
+      if(definition.type==='boolean'){
+        const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';input.id=`${prefix}-${name}`;input.dataset.schemaName=name;input.dataset.schemaType=definition.type;input.checked=Boolean(values?.[name]??definition.default);label.append(input,document.createTextNode(definition.title||name));wrapper.appendChild(label);
+      }else{
+        const label=document.createElement('label');label.htmlFor=`${prefix}-${name}`;label.textContent=definition.title||name;let input;
+        if(Array.isArray(definition.enum)){input=document.createElement('select');definition.enum.forEach(value=>{const option=document.createElement('option');option.value=value;option.textContent=value;input.appendChild(option);});input.value=String(values?.[name]??definition.default??'');}
+        else{input=document.createElement('input');input.type=definition.type==='integer'?'number':'text';const raw=values?.[name]??definition.default??(definition.type==='array'?[]:'');input.value=definition.type==='array'?(raw||[]).join(', '):raw;if(definition.minimum!==undefined)input.min=definition.minimum;if(definition.maximum!==undefined)input.max=definition.maximum;if(definition.maxLength!==undefined)input.maxLength=definition.maxLength;if(definition.pattern)input.pattern=definition.pattern;}
+        input.id=`${prefix}-${name}`;input.dataset.schemaName=name;input.dataset.schemaType=definition.type;wrapper.append(label,input);
+      }
+      if(definition.description){const help=document.createElement('p');help.className='schema-help';help.textContent=definition.description;wrapper.appendChild(help);}container.appendChild(wrapper);
+    });
+  }
+  function readSchemaFields(container){
+    const values={};container.querySelectorAll('[data-schema-name]').forEach(input=>{const name=input.dataset.schemaName,type=input.dataset.schemaType;if(type==='boolean')values[name]=input.checked;else if(type==='integer')values[name]=Number(input.value);else if(type==='array')values[name]=input.value.split(',').map(value=>value.trim()).filter(Boolean).map(value=>/^\d{4}$/.test(value)?Number(value):value);else values[name]=input.value;});return values;
+  }
+  async function loadSourceSettings(){
+    if(!state.sources.length)return;setStatus('#global-source-status','Chargement…');try{state.sourceSettings=await api('/api/source-settings');await Promise.all([loadGlobalSourceForm(),loadProjectSourceForm()]);setStatus('#global-source-status','');}catch(error){setStatus('#global-source-status',error.message,true);}
+  }
+  async function loadGlobalSourceForm(){
+    const sourceId=q('#global-source-select').value;if(!sourceId)return;const source=state.sourceSettings.find(item=>item.id===sourceId)||await api(`/api/source-settings/${sourceId}`);renderSchemaFields(source.global_settings_schema,q('#global-source-fields'),source.configuration.settings,'global-source');const secret=source.configuration.secret_environment_variable;q('#global-source-secret').textContent=secret?`${secret} : ${source.configuration.secret_configured?'configuré':'absent'} — sa valeur n’est jamais affichée.`:'Ce connecteur ne nécessite aucun secret.';
+  }
+  async function loadProjectSourceForm(){
+    if(!state.projectId)return;const sourceId=q('#project-source-select').value;if(!sourceId)return;setStatus('#project-source-status','Chargement…');try{const [settings]=await Promise.all([api(`/api/projects/${state.projectId}/sources/${sourceId}`)]);const source=state.sources.find(item=>item.id===sourceId);q('#project-source-enabled').checked=settings.enabled;renderSchemaFields(source.project_schema,q('#project-source-fields'),settings.parameters,'project-source');q('#project-source-interval').value=settings.schedule_defaults.interval_minutes;q('#project-source-schedule-enabled').checked=settings.schedule_defaults.enabled;q('#project-source-schedule-download').checked=settings.schedule_defaults.auto_download;q('#project-source-request').textContent='Aucune prévisualisation.';setStatus('#project-source-status','');}catch(error){setStatus('#project-source-status',error.message,true);}
+  }
+  q('#global-source-select').addEventListener('change',loadGlobalSourceForm);q('#project-source-select').addEventListener('change',loadProjectSourceForm);
+  q('#global-source-form').addEventListener('submit',async event=>{event.preventDefault();const sourceId=q('#global-source-select').value;try{await api(`/api/source-settings/${sourceId}`,{method:'PUT',body:JSON.stringify({settings:readSchemaFields(q('#global-source-fields'))})});setStatus('#global-source-status','Paramètres globaux enregistrés.');state.sourceSettings=await api('/api/source-settings');await loadGlobalSourceForm();}catch(error){setStatus('#global-source-status',error.message,true);}});
+  function projectSourcePayload(){return {enabled:q('#project-source-enabled').checked,parameters:readSchemaFields(q('#project-source-fields')),schedule_defaults:{interval_minutes:Number(q('#project-source-interval').value),enabled:q('#project-source-schedule-enabled').checked,auto_download:q('#project-source-schedule-download').checked}};}
+  q('#project-source-form').addEventListener('submit',async event=>{event.preventDefault();const sourceId=q('#project-source-select').value;try{await api(`/api/projects/${state.projectId}/sources/${sourceId}`,{method:'PUT',body:JSON.stringify(projectSourcePayload())});setStatus('#project-source-status','Paramètres du projet enregistrés.');await loadProjectSourceForm();}catch(error){setStatus('#project-source-status',error.message,true);}});
+  q('#project-source-preview').addEventListener('click',async()=>{const sourceId=q('#project-source-select').value;try{const payload=projectSourcePayload();await api(`/api/projects/${state.projectId}/sources/${sourceId}`,{method:'PUT',body:JSON.stringify(payload)});const data=await api(`/api/projects/${state.projectId}/sources/${sourceId}/preview`,{method:'POST',body:JSON.stringify({parameters:payload.parameters})});q('#project-source-request').textContent=`${data.request.method} ${data.request.display_url}\n\n${data.request.curl}\n\nDocumentation vérifiée :\n${(data.request.documentation_evidence||[]).join('\n')}`;setStatus('#project-source-status','Requête validée et prévisualisée sans exécution réseau.');}catch(error){setStatus('#project-source-status',error.message,true);}});
   async function loadProjects(selectId=null){
     state.projects=await api('/api/projects');const previous=selectId||state.projectId||localStorage.getItem('hdp-project');els.project.innerHTML='';
     state.projects.forEach(project=>{const option=document.createElement('option');option.value=project.id;option.textContent=project.name;els.project.appendChild(option);});
     state.projectId=state.projects.some(p=>p.id===previous)?previous:state.projects[0]?.id;els.project.value=state.projectId||'';if(state.projectId)localStorage.setItem('hdp-project',state.projectId);renderProjectList();await loadProjectSettings();
   }
-  els.project.addEventListener('change',async()=>{state.projectId=els.project.value;localStorage.setItem('hdp-project',state.projectId);renderProjectList();await Promise.all([loadProjectSettings(),loadResources(),loadScripts(),loadSchedules()]);});
+  els.project.addEventListener('change',async()=>{state.projectId=els.project.value;localStorage.setItem('hdp-project',state.projectId);renderProjectList();await Promise.all([loadProjectSettings(),loadResources(),loadScripts(),loadSchedules(),loadRss(),loadTimeline(),loadMapLayers()]);});
 
   q('#search-form').addEventListener('submit',async event=>{
     event.preventDefault();const submit=q('#search-submit');submit.disabled=true;setStatus('#search-status','Acquisition en cours…');empty(q('#search-results'),'Interrogation et archivage en cours…');
@@ -278,15 +481,17 @@
     try{const data=await api(`/api/search?${params}`);renderResults(data.items);setStatus('#search-status',`Acquisition ${data.acquisition_id}\n${data.item_count} résultat(s) · téléchargements : ${data.downloads.completed} réussis, ${data.downloads.failed} en erreur, ${data.downloads.skipped} ignorés, ${data.downloads.deferred||0} reportés\nSHA-256 ${data.sha256}`);}
     catch(error){empty(q('#search-results'),'Acquisition interrompue.');setStatus('#search-status',error.message,true);}finally{submit.disabled=false;}
   });
-  function renderResults(items){const container=q('#search-results');container.className='list';container.innerHTML='';if(!items.length)return empty(container,'Aucun résultat.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const link=document.createElement('a');link.className='result-title';link.href=item.url||'#';link.target='_blank';link.rel='noopener';link.textContent=item.title||item.id||'Sans titre';const small=document.createElement('small');small.textContent=`${item.source}${item.date?' · '+date(item.date):''} · ${(item.resources||[]).length} ressource(s) référencée(s)`;card.append(link,small);container.appendChild(card);});}
+  function renderResults(items){const container=q('#search-results');container.className='list';container.innerHTML='';if(!items.length)return empty(container,'Aucun résultat.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const link=document.createElement('a');link.className='result-title';link.href=item.url||'#';link.target='_blank';link.rel='noopener';link.textContent=item.title||item.id||'Sans titre';const small=document.createElement('small');small.textContent=`${item.source}${item.date?' · '+date(item.date):''} · ${(item.resources||[]).length} ressource(s) référencée(s)`;card.append(link,small);if(item.description){const description=document.createElement('small');description.textContent=item.description;card.appendChild(description);}container.appendChild(card);});}
 
   q('#project-form').addEventListener('submit',async event=>{event.preventDefault();try{const data=await api('/api/projects',{method:'POST',body:JSON.stringify({name:q('#project-name').value,description:q('#project-description').value})});event.target.reset();await loadProjects(data.id);setStatus('#project-status','Projet créé et sélectionné.');}catch(error){setStatus('#project-status',error.message,true);}});
   function renderProjectList(){const container=q('#project-list');container.innerHTML='';state.projects.forEach(project=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=project.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=project.id===state.projectId?'Actif':`${project.resource_count} ressource(s)`;head.append(title,pill);const details=document.createElement('small');details.textContent=`${project.description||'Sans description'} · ${project.acquisition_count} acquisition(s) · ${bytes(project.storage_bytes)}`;card.append(head,details);if(project.id!==state.projectId){const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Sélectionner',()=>{els.project.value=project.id;els.project.dispatchEvent(new Event('change'));}));if(!project.id.endsWith('000000000001'))actions.append(button('Archiver',async()=>{if(confirm(`Archiver le projet « ${project.name} » ? Les fichiers locaux ne seront pas supprimés.`)){await api(`/api/projects/${project.id}`,{method:'DELETE'});await loadProjects();}},'danger'));card.appendChild(actions);}container.appendChild(card);});}
   async function loadPreferences(){if(!state.projectId)return;try{const data=await api(`/api/projects/${state.projectId}/preferences`);q('#pref-auto').checked=data.auto_download;q('#search-download').checked=data.auto_download;q('#pref-max-size').value=Math.round(data.max_download_bytes/1048576);q('#pref-max-count').value=data.max_resources_per_acquisition;q('#pref-formats').value=(data.allowed_formats||[]).join(', ');}catch(error){setStatus('#preferences-status',error.message,true);}}
   q('#preferences-form').addEventListener('submit',async event=>{event.preventDefault();const payload={auto_download:q('#pref-auto').checked,max_download_bytes:Number(q('#pref-max-size').value)*1048576,max_resources_per_acquisition:Number(q('#pref-max-count').value),allowed_formats:q('#pref-formats').value.split(',').map(x=>x.trim()).filter(Boolean)};try{await api(`/api/projects/${state.projectId}/preferences`,{method:'PUT',body:JSON.stringify(payload)});q('#search-download').checked=payload.auto_download;setStatus('#preferences-status','Préférences enregistrées.');}catch(error){setStatus('#preferences-status',error.message,true);}});
 
-  async function loadProjectSettings(){await Promise.all([loadPreferences(),loadGithub(),loadGeodata()]);}
-  async function loadGithub(){if(!state.projectId)return;try{const data=await api(`/api/projects/${state.projectId}/github`);q('#github-owner').value=data.owner||'';q('#github-name').value=data.repository_name||'';q('#github-description').value=data.description||'';q('#github-visibility').value=data.visibility||'private';q('#github-create').disabled=!data.token_configured||Boolean(data.repository_url);setStatus('#github-status',data.repository_url?`Dépôt créé : ${data.repository_full_name}\n${data.repository_url}`:data.token_configured?'Jeton configuré · dépôt non créé.':'GITHUB_TOKEN absent : la création reste indisponible.',!data.token_configured);}catch(error){setStatus('#github-status',error.message,true);}}
+  async function loadExecutionSettings(){if(!state.projectId)return;try{const data=await api(`/api/projects/${state.projectId}/execution-settings`);q('#exec-python-enabled').checked=data.python_enabled;q('#exec-r-enabled').checked=data.r_enabled;q('#exec-timeout').value=data.timeout_seconds;q('#exec-output').value=Math.ceil(data.max_output_bytes/1024);const runners=`runner Python ${data.runners.python.available?'prêt':'indisponible'} · runner R ${data.runners.r.available?'prêt':'indisponible'}`;setStatus('#execution-settings-status',`${runners} · réseau ${data.network_policy}`);}catch(error){setStatus('#execution-settings-status',error.message,true);}}
+  q('#execution-settings-form').addEventListener('submit',async event=>{event.preventDefault();const payload={python_enabled:q('#exec-python-enabled').checked,r_enabled:q('#exec-r-enabled').checked,timeout_seconds:Number(q('#exec-timeout').value),max_output_bytes:Number(q('#exec-output').value)*1024,network_enabled:false,allowed_hosts:[]};try{await api(`/api/projects/${state.projectId}/execution-settings`,{method:'PUT',body:JSON.stringify(payload)});setStatus('#execution-settings-status','Limites enregistrées. Réseau désactivé.');await loadExecutionSettings();}catch(error){setStatus('#execution-settings-status',error.message,true);}});
+  async function loadProjectSettings(){await Promise.all([loadPreferences(),loadGithub(),loadGeodata(),loadProjectSourceForm(),loadExecutionSettings()]);}
+  async function loadGithub(){if(!state.projectId)return;try{const data=await api(`/api/projects/${state.projectId}/github`);q('#github-owner').value=data.owner||'';q('#github-name').value=data.repository_name||'';q('#github-description').value=data.description||'';q('#github-visibility').value=data.visibility||'private';q('#github-create').disabled=!data.token_configured||Boolean(data.repository_url);const policy=data.token_policy||{};const guidance=data.token_configured?`Jeton ${policy.detected_kind||'configuré'} · minimum recommandé : ${policy.required_permission||'droits minimaux'}`:'GITHUB_TOKEN absent : la création reste indisponible.';setStatus('#github-status',data.repository_url?`Dépôt créé : ${data.repository_full_name}\n${data.repository_url}\n${guidance}`:`${guidance} · dépôt non créé.`,!data.token_configured);}catch(error){setStatus('#github-status',error.message,true);}}
   async function saveGithub(){const payload={owner:q('#github-owner').value,repository_name:q('#github-name').value,description:q('#github-description').value,visibility:q('#github-visibility').value};return api(`/api/projects/${state.projectId}/github`,{method:'PUT',body:JSON.stringify(payload)});}
   q('#github-form').addEventListener('submit',async event=>{event.preventDefault();try{await saveGithub();setStatus('#github-status','Paramètres GitHub enregistrés.');await loadGithub();}catch(error){setStatus('#github-status',error.message,true);}});
   q('#github-create').addEventListener('click',async event=>{if(!confirm(`Créer le dépôt GitHub « ${q('#github-name').value} » avec la visibilité ${q('#github-visibility').value} ? Cette opération agit sur votre compte GitHub.`))return;event.target.disabled=true;setStatus('#github-status','Création du dépôt GitHub…');try{await saveGithub();const data=await api(`/api/projects/${state.projectId}/github/repository`,{method:'POST'});setStatus('#github-status',`${data.message}\n${data.repository_full_name}\n${data.repository_url}`);await loadGithub();}catch(error){setStatus('#github-status',error.message,true);event.target.disabled=false;}});
@@ -302,18 +507,45 @@
   q('#geodata-sync').addEventListener('click',async event=>{event.target.disabled=true;setStatus('#geodata-status','Vérification de l’intersection COD et téléchargement en cours…');try{await api(`/api/projects/${state.projectId}/geodata`,{method:'PUT',body:JSON.stringify(geodataPayload())});const data=await api(`/api/projects/${state.projectId}/geodata/sync`,{method:'POST'});const counts=Object.entries(data.dataset_counts||{}).map(([family,count])=>`${family.toUpperCase()} ${count}`).join(' · ');setStatus('#geodata-status',`Synchronisation ${data.status} · ${counts} · ${data.resource_count} ressource(s) · ${data.downloads.completed} téléchargée(s), ${data.downloads.deferred||0} reportée(s) · acquisition ${data.acquisition_id}${data.warning?'\n'+data.warning:''}`,data.status==='failed'||data.status==='no_official_dataset');await Promise.all([loadGeodata(),loadResources()]);}catch(error){setStatus('#geodata-status',error.message,true);}finally{event.target.disabled=false;}});
 
   q('#resources-refresh').addEventListener('click',loadResources);
-  async function loadResources(){if(!state.projectId)return;setStatus('#resource-status','Chargement…');try{const [items,storage]=await Promise.all([api(`/api/resources?project_id=${state.projectId}`),api(`/api/projects/${state.projectId}/storage`)]);q('#storage-count').textContent=storage.resource_count;q('#storage-size').textContent=bytes(storage.size_bytes);q('#storage-complete').textContent=storage.completed;q('#storage-failed').textContent=storage.failed;renderResources(items);setStatus('#resource-status','');}catch(error){setStatus('#resource-status',error.message,true);}}
-  function renderResources(items){const container=q('#resource-list');container.innerHTML='';if(!items.length)return empty(container,'Aucune ressource locale dans ce projet.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.filename||item.title;const pill=document.createElement('span');pill.className=`pill ${item.status}`;pill.textContent=item.status;head.append(title,pill);const official=item.m49_code?` · ${(item.cod_family||'COD').toUpperCase()} · ONU M49 ${item.m49_code}${item.iso3_code?' / '+item.iso3_code:''} · ${item.cod_level||'officiel'}${item.publisher?' · '+item.publisher:''}`:'';const details=document.createElement('small');details.textContent=`${item.source} · ${item.format||'format inconnu'} · ${bytes(item.size_bytes)} · ${date(item.updated_at)}${official}${item.error?' · '+item.error:''}`;const actions=document.createElement('div');actions.className='mini-actions';if(item.status==='completed'){const download=document.createElement('a');download.href=`/api/resources/${item.id}/file`;download.textContent='Télécharger';actions.append(download);actions.append(button('Vérifier SHA-256',async()=>{try{const result=await api(`/api/resources/${item.id}/verify`,{method:'POST'});alert(result.valid?'Empreinte valide.':`Empreinte invalide.\nAttendue: ${result.expected}\nCalculée: ${result.actual}`);}catch(error){alert(error.message);}}));}actions.append(button('Supprimer localement',async()=>{if(confirm(`Supprimer le fichier local « ${item.filename||item.title} » ? La trace d'acquisition sera conservée.`)){await api(`/api/resources/${item.id}`,{method:'DELETE'});await loadResources();}},'danger'));card.append(head,details,actions);container.appendChild(card);});}
+  document.querySelectorAll('.filters input').forEach(input=>input.addEventListener('change',loadResources));
+  async function loadResources(){if(!state.projectId)return;setStatus('#resource-status','Chargement…');const params=new URLSearchParams({project_id:state.projectId});[['source','#resource-filter-source'],['resource_format','#resource-filter-format'],['subject','#resource-filter-subject'],['organization','#resource-filter-organization'],['geographic_scope','#resource-filter-geography']].forEach(([name,selector])=>{const value=q(selector).value.trim();if(value)params.set(name,value);});try{const [items,storage]=await Promise.all([api(`/api/resources?${params}`),api(`/api/projects/${state.projectId}/storage`)]);q('#storage-count').textContent=storage.resource_count;q('#storage-size').textContent=bytes(storage.size_bytes);q('#storage-complete').textContent=storage.completed;q('#storage-failed').textContent=storage.failed;renderResources(items);setStatus('#resource-status',`${items.length} ressource(s) affichée(s).`);}catch(error){setStatus('#resource-status',error.message,true);}}
+  function renderResources(items){
+    const container=q('#resource-list');container.innerHTML='';if(!items.length)return empty(container,'Aucune ressource locale ne correspond aux filtres.');
+    items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.filename||item.title;const pill=document.createElement('span');pill.className=`pill ${item.status}`;pill.textContent=item.status;head.append(title,pill);const official=item.m49_code?` · ${(item.cod_family||'COD').toUpperCase()} · ONU M49 ${item.m49_code}${item.iso3_code?' / '+item.iso3_code:''} · ${item.cod_level||'officiel'}${item.publisher?' · '+item.publisher:''}`:'';const library=[item.subject,item.organization,item.geographic_scope,item.published_at?date(item.published_at):null].filter(Boolean).join(' · ');const details=document.createElement('small');details.textContent=`${item.source} · ${item.format||'format inconnu'} · ${bytes(item.size_bytes)} · ${date(item.updated_at)}${library?' · '+library:''}${official}${item.error?' · '+item.error:''}`;const actions=document.createElement('div');actions.className='mini-actions';
+      if(item.status==='completed'){const download=document.createElement('a');download.href=`/api/resources/${item.id}/file`;download.textContent='Télécharger';actions.append(download);actions.append(button('Vérifier SHA-256',async()=>{try{const result=await api(`/api/resources/${item.id}/verify`,{method:'POST'});alert(result.valid?'Empreinte valide.':`Empreinte invalide.\nAttendue: ${result.expected}\nCalculée: ${result.actual}`);}catch(error){alert(error.message);}}));const format=String(item.format||'').toLowerCase();const name=String(item.filename||'').toLowerCase();if(format.includes('geojson')||name.endsWith('.geojson'))actions.append(button('Importer dans PostGIS',async event=>{event.target.disabled=true;try{const layer=await api(`/api/resources/${item.id}/map/import`,{method:'POST'});setStatus('#resource-status',`Couche ${layer.name} importée : ${layer.feature_count} entité(s).`);await loadMapLayers();}catch(error){setStatus('#resource-status',error.message,true);}finally{event.target.disabled=false;}}));}
+      actions.append(button('Supprimer localement',async()=>{if(confirm(`Supprimer le fichier local « ${item.filename||item.title} » ? La trace d'acquisition sera conservée.`)){await api(`/api/resources/${item.id}`,{method:'DELETE'});await loadResources();}},'danger'));card.append(head,details,actions);container.appendChild(card);
+    });
+  }
 
-  q('#script-form').addEventListener('submit',async event=>{event.preventDefault();const payload={name:q('#script-name').value,language:q('#script-language').value,description:q('#script-description').value,content:q('#script-content').value};try{if(state.editingScriptId){await api(`/api/scripts/${state.editingScriptId}`,{method:'PATCH',body:JSON.stringify(payload)});}else{await api(`/api/projects/${state.projectId}/scripts`,{method:'POST',body:JSON.stringify(payload)});}event.target.reset();state.editingScriptId=null;event.target.querySelector('button[type="submit"]').textContent='Enregistrer';setStatus('#script-status','Script enregistré (exécution désactivée).');await loadScripts();}catch(error){setStatus('#script-status',error.message,true);}});
+  q('#script-form').addEventListener('submit',async event=>{event.preventDefault();const payload={name:q('#script-name').value,language:q('#script-language').value,description:q('#script-description').value,content:q('#script-content').value};try{const result=state.editingScriptId?await api(`/api/scripts/${state.editingScriptId}`,{method:'PATCH',body:JSON.stringify(payload)}):await api(`/api/projects/${state.projectId}/scripts`,{method:'POST',body:JSON.stringify(payload)});event.target.reset();state.editingScriptId=null;event.target.querySelector('button[type="submit"]').textContent='Enregistrer';setStatus('#script-status',`Script enregistré · version ${result.version_number||1} archivée.`);await loadScripts();}catch(error){setStatus('#script-status',error.message,true);}});
   async function loadScripts(){if(!state.projectId)return;try{renderScripts(await api(`/api/projects/${state.projectId}/scripts`));}catch(error){setStatus('#script-status',error.message,true);}}
-  function renderScripts(items){const container=q('#script-list');container.innerHTML='';if(!items.length)return empty(container,'Aucun script dans ce projet.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=item.language;head.append(title,pill);const details=document.createElement('small');details.textContent=`${item.description||'Sans description'} · modifié ${date(item.updated_at)} · exécution désactivée`;const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Modifier',()=>{state.editingScriptId=item.id;q('#script-name').value=item.name;q('#script-language').value=item.language;q('#script-description').value=item.description;q('#script-content').value=item.content;q('#script-form button[type="submit"]').textContent='Enregistrer les modifications';window.scrollTo({top:0,behavior:'smooth'});}));actions.append(button('Archiver',async()=>{if(confirm(`Archiver le script « ${item.name} » ?`)){await api(`/api/scripts/${item.id}`,{method:'DELETE'});await loadScripts();}},'danger'));card.append(head,details,actions);container.appendChild(card);});}
+  async function pollExecution(executionId){for(let attempt=0;attempt<160;attempt++){const result=await api(`/api/executions/${executionId}`);setStatus('#script-status',`Exécution ${result.status} · ${executionId}`,(result.status==='failed'||result.status==='timed_out'));if(['completed','failed','timed_out'].includes(result.status)){q('#script-output').textContent=`Statut : ${result.status}\nVersion : ${result.version_number} · SHA-256 ${result.content_sha256}\nCode de sortie : ${result.exit_code??'—'}\nRéseau : ${result.network_policy}\n\nSTDOUT\n${result.stdout||'(vide)'}\n\nSTDERR\n${result.stderr||'(vide)'}`;return result;}await new Promise(resolve=>setTimeout(resolve,1000));}throw new Error('Le traitement continue en arrière-plan ; consultez son historique ultérieurement.');}
+  async function showScriptHistory(scriptId){try{const [versions,executions]=await Promise.all([api(`/api/scripts/${scriptId}/versions`),api(`/api/scripts/${scriptId}/executions`)]);const versionText=versions.map(item=>`v${item.version_number} ${item.language} ${item.content_sha256} · ${date(item.created_at)}`).join('\n');const executionText=executions.length?executions.map(item=>`${date(item.requested_at)} · ${item.status} · v${item.version_number} · ${item.id}`).join('\n'):'Aucune exécution.';q('#script-output').textContent=`VERSIONS\n${versionText}\n\nEXÉCUTIONS\n${executionText}`;}catch(error){setStatus('#script-status',error.message,true);}}
+  function renderScripts(items){
+    const container=q('#script-list');container.innerHTML='';if(!items.length)return empty(container,'Aucun script dans ce projet.');
+    items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=item.language;head.append(title,pill);const details=document.createElement('small');details.textContent=`${item.description||'Sans description'} · version ${item.version_number} · modifié ${date(item.updated_at)} · ${item.execution==='available'?'exécution isolée disponible':'stockage uniquement'}`;const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Modifier',()=>{state.editingScriptId=item.id;q('#script-name').value=item.name;q('#script-language').value=item.language;q('#script-description').value=item.description;q('#script-content').value=item.content;q('#script-form button[type="submit"]').textContent='Enregistrer les modifications';window.scrollTo({top:0,behavior:'smooth'});}));if(item.execution==='available')actions.append(button('Exécuter sans réseau',async event=>{event.target.disabled=true;setStatus('#script-status',`Préparation de « ${item.name} »…`);try{const result=await api(`/api/scripts/${item.id}/executions`,{method:'POST',body:JSON.stringify({network_enabled:false,allowed_hosts:[]})});await pollExecution(result.id);}catch(error){setStatus('#script-status',error.message,true);}finally{event.target.disabled=false;}}));actions.append(button('Versions / rapports',()=>showScriptHistory(item.id)));actions.append(button('Archiver',async()=>{if(confirm(`Archiver le script « ${item.name} » ?`)){await api(`/api/scripts/${item.id}`,{method:'DELETE'});await loadScripts();}},'danger'));card.append(head,details,actions);container.appendChild(card);});
+  }
+
+  q('#rss-form').addEventListener('submit',async event=>{event.preventDefault();const payload={registry_id:q('#rss-registry').value,name:q('#rss-name').value,query:q('#rss-query').value,language:q('#rss-language').value,interval_minutes:Number(q('#rss-interval').value),enabled:q('#rss-enabled').checked};try{await api(`/api/projects/${state.projectId}/rss/subscriptions`,{method:'POST',body:JSON.stringify(payload)});event.target.reset();q('#rss-language').value='en';q('#rss-interval').value=360;q('#rss-enabled').checked=true;setStatus('#rss-status','Abonnement créé.');await loadRss();}catch(error){setStatus('#rss-status',error.message,true);}});
+  async function loadRss(){if(!state.projectId||!q('#rss-registry'))return;try{if(!state.rssCatalog.length){state.rssCatalog=await api('/api/rss/catalog');q('#rss-registry').innerHTML='';state.rssCatalog.forEach(feed=>{const option=document.createElement('option');option.value=feed.id;option.textContent=feed.name;q('#rss-registry').appendChild(option);});}const [subscriptions,items]=await Promise.all([api(`/api/projects/${state.projectId}/rss/subscriptions`),api(`/api/projects/${state.projectId}/rss/items?limit=100`)]);renderRssSubscriptions(subscriptions);renderRssItems(items);setStatus('#rss-status',`${subscriptions.length} abonnement(s) · ${items.length} élément(s) récent(s).`);}catch(error){setStatus('#rss-status',error.message,true);}}
+  function renderRssSubscriptions(items){const container=q('#rss-subscription-list');container.innerHTML='';if(!items.length)return empty(container,'Aucun abonnement RSS.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className=`pill ${item.last_status||''}`;pill.textContent=item.enabled?'actif':'suspendu';head.append(title,pill);const details=document.createElement('small');details.textContent=`${item.feed.name} · ${item.language} · toutes les ${item.interval_minutes} min · prochain passage ${date(item.next_fetch_at)} · ${item.last_status||'jamais lu'}${item.last_error?' · '+item.last_error:''}`;const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Lire maintenant',async event=>{event.target.disabled=true;try{const result=await api(`/api/rss/subscriptions/${item.id}/fetch`,{method:'POST'});setStatus('#rss-status',`Flux lu · ${result.new_items||0} nouvel élément.`);await loadRss();}catch(error){setStatus('#rss-status',error.message,true);}finally{event.target.disabled=false;}}));actions.append(button(item.enabled?'Suspendre':'Réactiver',async()=>{await api(`/api/rss/subscriptions/${item.id}`,{method:'PATCH',body:JSON.stringify({enabled:!item.enabled})});await loadRss();}));actions.append(button('Archiver',async()=>{if(confirm(`Archiver l’abonnement « ${item.name} » ?`)){await api(`/api/rss/subscriptions/${item.id}`,{method:'DELETE'});await loadRss();}},'danger'));card.append(head,details,actions);container.appendChild(card);});}
+  function renderRssItems(items){const container=q('#rss-item-list');container.innerHTML='';if(!items.length)return empty(container,'Aucun élément RSS archivé.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const link=document.createElement('a');link.href=item.url||'#';link.target='_blank';link.rel='noopener';link.textContent=item.title;const details=document.createElement('small');details.textContent=`${item.subscription_name} · ${date(item.published_at||item.first_seen_at)}`;const summary=document.createElement('small');summary.textContent=item.summary||'';card.append(link,details,summary);container.appendChild(card);});}
+
+  q('#timeline-refresh').addEventListener('click',loadTimeline);q('#timeline-days').addEventListener('change',loadTimeline);
+  async function loadTimeline(){if(!state.projectId||!q('#timeline-gantt'))return;setStatus('#timeline-status','Chargement…');try{const data=await api(`/api/projects/${state.projectId}/timeline?days=${q('#timeline-days').value}`);renderTimeline(data);setStatus('#timeline-status',`${data.events.length} événement(s) sur la fenêtre.`);}catch(error){setStatus('#timeline-status',error.message,true);}}
+  function renderTimeline(data){const container=q('#timeline-gantt');container.innerHTML='';if(!data.events.length)return empty(container,'Aucun événement sur cette période.');const starts=data.events.map(item=>new Date(item.start).getTime());const ends=data.events.map(item=>new Date(item.end||item.start).getTime());const minimum=new Date(data.window_start).getTime();const maximum=Math.max(new Date(data.window_end).getTime(),...ends);const span=Math.max(1,maximum-minimum);data.events.sort((a,b)=>new Date(a.start)-new Date(b.start)).forEach(item=>{const row=document.createElement('div');row.className='gantt-row';const label=document.createElement('div');label.className='gantt-label';label.textContent=`${item.kind} · ${item.title}`;label.title=`${date(item.start)} → ${date(item.end)} · ${item.status}`;const track=document.createElement('div');track.className='gantt-track';const bar=document.createElement('div');bar.className=`gantt-bar ${item.kind==='script'?'script':item.kind==='scheduled'?'scheduled':''} ${item.status||''}`;const start=Math.max(minimum,new Date(item.start).getTime());const end=Math.max(start,new Date(item.end||item.start).getTime());bar.style.left=`${Math.max(0,(start-minimum)/span*100)}%`;bar.style.width=`${Math.max(.7,(end-start)/span*100)}%`;bar.title=label.title;track.appendChild(bar);row.append(label,track);container.appendChild(row);});}
+
+  async function initLeaflet(){if(state.leafletMap)return true;if(typeof window.L==='undefined'){q('#map-canvas').innerHTML='<div class="map-fallback">Leaflet n’a pas pu être chargé. La gestion PostGIS et les exports restent disponibles.</div>';return false;}q('#map-canvas').innerHTML='';state.leafletMap=L.map('map-canvas',{worldCopyJump:true}).setView([15,0],2);state.mapConfig=await api('/api/map/config');return true;}
+  async function loadMapLayers(){if(!state.projectId||!q('#map-layer-list'))return;try{const layers=await api(`/api/projects/${state.projectId}/map/layers`);renderMapLayers(layers);setStatus('#map-status',`${layers.length} couche(s) PostGIS.`);if(state.leafletMap)setTimeout(()=>state.leafletMap.invalidateSize(),50);}catch(error){setStatus('#map-status',error.message,true);}}
+  function renderMapLayers(items){const container=q('#map-layer-list');container.innerHTML='';if(!items.length)return empty(container,'Aucune couche. Importez une ressource GeoJSON depuis Données locales.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const title=document.createElement('h4');title.textContent=item.name;const details=document.createElement('small');details.textContent=`${item.feature_count} entité(s) · ressource ${item.filename||'détachée'} · ${date(item.updated_at)}`;const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Afficher',()=>showMapLayer(item.id)));const exportLink=document.createElement('a');exportLink.href=`/api/map/layers/${item.id}/export`;exportLink.textContent='Exporter QGIS / R';actions.append(exportLink);card.append(title,details,actions);container.appendChild(card);});}
+  async function showMapLayer(layerId){setStatus('#map-status','Chargement de la couche…');try{if(!await initLeaflet())return;const data=await api(`/api/map/layers/${layerId}/geojson`);if(state.leafletLayer)state.leafletMap.removeLayer(state.leafletLayer);state.leafletLayer=L.geoJSON(data,{style:{color:'#38bdf8',weight:2,fillOpacity:.16},onEachFeature:(feature,layer)=>{const properties=feature.properties||{};const panel=document.createElement('div');Object.entries(properties).slice(0,20).forEach(([name,value])=>{const line=document.createElement('div');const key=document.createElement('strong');key.textContent=`${name} : `;line.append(key,document.createTextNode(String(value??'')));panel.appendChild(line);});if(panel.childNodes.length)layer.bindPopup(panel);}}).addTo(state.leafletMap);const bounds=state.leafletLayer.getBounds();if(bounds.isValid())state.leafletMap.fitBounds(bounds,{padding:[20,20]});setStatus('#map-status',`${data.features.length} entité(s) affichée(s).`);}catch(error){setStatus('#map-status',error.message,true);}}
+  q('#map-enable-tiles').addEventListener('click',async event=>{try{if(!await initLeaflet())return;if(state.tileLayer){state.leafletMap.removeLayer(state.tileLayer);state.tileLayer=null;event.target.textContent='Activer le fond OSM';setStatus('#map-status','Fond de carte désactivé.');return;}state.tileLayer=L.tileLayer(state.mapConfig.tile_url,{maxZoom:19,attribution:`&copy; <a href="https://www.openstreetmap.org/copyright">${state.mapConfig.tile_attribution}</a>`}).addTo(state.leafletMap);event.target.textContent='Désactiver le fond OSM';setStatus('#map-status',`Fond OSM activé à la demande · politique ${state.mapConfig.usage_policy}`);}catch(error){setStatus('#map-status',error.message,true);}});
 
   q('#schedule-form').addEventListener('submit',async event=>{event.preventDefault();const payload={name:q('#schedule-name').value,source:q('#schedule-source').value,query:q('#schedule-query').value,result_limit:Number(q('#schedule-limit').value),auto_download:q('#schedule-download').checked,interval_minutes:Number(q('#schedule-interval').value),enabled:q('#schedule-enabled').checked};try{await api(`/api/projects/${state.projectId}/schedules`,{method:'POST',body:JSON.stringify(payload)});event.target.reset();q('#schedule-limit').value=25;q('#schedule-interval').value=1440;q('#schedule-enabled').checked=true;setStatus('#schedule-status','Planification créée. Une planification active est prise en charge au prochain passage du planificateur.');await loadSchedules();}catch(error){setStatus('#schedule-status',error.message,true);}});
   async function loadSchedules(){if(!state.projectId)return;try{renderSchedules(await api(`/api/projects/${state.projectId}/schedules`));}catch(error){setStatus('#schedule-status',error.message,true);}}
   function renderSchedules(items){const container=q('#schedule-list');container.innerHTML='';if(!items.length)return empty(container,'Aucune planification dans ce projet.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className=`pill ${item.last_status||''}`;pill.textContent=item.enabled?'active':'suspendue';head.append(title,pill);const details=document.createElement('small');details.textContent=`${item.source.toUpperCase()} · « ${item.query} » · toutes les ${item.interval_minutes} min · prochain passage ${date(item.next_run_at)} · dernier statut ${item.last_status||'jamais exécutée'}${item.last_error?' · '+item.last_error:''}`;const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Exécuter maintenant',async event=>{event.target.disabled=true;setStatus('#schedule-status',`Exécution de « ${item.name} »…`);try{const result=await api(`/api/schedules/${item.id}/run`,{method:'POST'});setStatus('#schedule-status',result.status==='completed'?`Exécution terminée · acquisition ${result.acquisition_id}`:`Échec : ${result.error}`,result.status!=='completed');await loadSchedules();}catch(error){setStatus('#schedule-status',error.message,true);}finally{event.target.disabled=false;}}));actions.append(button(item.enabled?'Suspendre':'Réactiver',async()=>{await api(`/api/schedules/${item.id}`,{method:'PATCH',body:JSON.stringify({enabled:!item.enabled})});await loadSchedules();}));actions.append(button('Archiver',async()=>{if(confirm(`Archiver la planification « ${item.name} » ?`)){await api(`/api/schedules/${item.id}`,{method:'DELETE'});await loadSchedules();}},'danger'));card.append(head,details,actions);container.appendChild(card);});}
 
-  (async()=>{await loadHealth();try{await loadCodFamilies();await loadProjects();await Promise.all([loadResources(),loadScripts(),loadSchedules()]);}catch(error){setStatus('#project-status',error.message,true);}})();
+  (async()=>{await loadHealth();try{await Promise.all([loadSources(),loadCodFamilies()]);await loadProjects();await Promise.all([loadResources(),loadScripts(),loadSchedules(),loadSourceSettings(),loadRss(),loadTimeline(),loadMapLayers()]);}catch(error){setStatus('#project-status',error.message,true);setStatus('#source-catalog-status',error.message,true);}})();
 </script>
 </body>
 </html>

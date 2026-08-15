@@ -1,4 +1,4 @@
-# Humanitarian Data Platform 2.4.0
+# Humanitarian Data Platform 3.0.0 — version finale
 
 Application locale pour organiser des acquisitions humanitaires par projets.
 
@@ -12,7 +12,7 @@ Le fichier `.env` peut aussi définir `GITHUB_TOKEN` pour permettre la création
 
 Le service est lié exclusivement à `127.0.0.1`. PostgreSQL/PostGIS n'est pas exposé sur Windows.
 
-La version 2.4.0 présente les familles officielles sous forme de liste. COD-AB
+La version 3.0.0 conserve les familles officielles sous forme de liste. COD-AB
 et COD-PS sont sélectionnables ; COD-CS est visible mais désactivé tant que son
 registre vérifié est vide ; COD-HP est indiqué comme retiré. La liste de pays ou
 zones est recalculée sur l'intersection ONU M49 × groupes HDX des familles
@@ -20,23 +20,52 @@ sélectionnées.
 
 ## Fonctionnalités
 
+- registre versionné des paramètres pour les 7 connecteurs API actifs ;
+- réglages globaux (activation, délai, reprises) et modèles distincts par projet ;
+- prévisualisation locale de la commande et du lien officiel avant toute requête ;
+- bibliothèque filtrable par source, format, sujet, organisme et localisation ;
 - projets isolant préférences, acquisitions, ressources, scripts et planifications ;
 - recherche ReliefWeb et HDX/CKAN avec archivage JSON et empreinte SHA-256 ;
+- recherche directe des catalogues OMS/GHO, Banque mondiale/WDI, UNICEF/SDMX,
+  ONU/ODD et DHS, sans identifiant supplémentaire ;
+- catalogue intégré de 18 sources mondiales distinguant 7 connecteurs API actifs
+  de 11 portails de référence, avec domaines, accès, inscription et liens officiels ;
 - téléchargement optionnel des ressources avec limites de taille, de quantité et de formats ;
 - planificateur persistant, intervalle minimal de 15 minutes et historique des exécutions ;
 - gestion locale : inventaire, téléchargement, vérification SHA-256 et suppression avec conservation de la provenance ;
-- stockage et modification de scripts par projet, sans exécution automatique.
+- versions immuables et exécution Python/R dans des runners distincts sans réseau ;
+- veille RSS officielle ReliefWeb par projet ;
+- chronologie Gantt des opérations ;
+- import GeoJSON PostGIS, Leaflet embarqué et exports QGIS/R ;
+- passerelle REST GitHub locale : lectures classiques, écritures verrouillées ;
 - pays ou zone choisi dans la liste commune ONU M49 × HDX COD ;
 - téléchargements COD-AB et COD-PS officiels, avec provenance de la famille ;
 - affichage explicite de COD-CS indisponible et COD-HP retiré.
 
 Les données sont écrites dans `data/raw/<projet>` et `data/projects/<projet>/resources`. Les métadonnées sont conservées dans PostgreSQL.
 
-ReliefWeb exige un `appname` pré-approuvé. Sans cet identifiant, HDX reste utilisable. Les quotas et conditions des sources restent applicables.
+ReliefWeb exige un `appname` pré-approuvé. Sans cet identifiant, HDX et les cinq
+connecteurs sanitaires publics restent utilisables. DHS n'exige pas de compte
+pour ses indicateurs agrégés, mais l'accès à ses microdonnées est une procédure
+distincte sur inscription. Les quotas, licences et conditions de chaque source
+restent applicables.
 
-## Mise à niveau depuis 1.5
+## Sources épidémiologiques et sanitaires
 
-Le schéma est migré au démarrage. Les acquisitions existantes rejoignent le « Projet par défaut ». Le volume PostgreSQL, `.env` et les fichiers existants sont conservés.
+Les sources interrogeables dans « Recherche » et « Planifications » sont : HDX,
+ReliefWeb, WHO Global Health Observatory, World Bank Health Indicators, UNICEF
+Data Warehouse (SDMX), UN Global SDG Indicators Database et DHS Program
+Indicator Data. Les réponses distantes brutes sont archivées avant normalisation.
+
+L'onglet « Sources sanitaires » référence aussi WHO Mortality Database, WHO
+GLASS, WHO FluNet/FluID, WHO Global Health Estimates, UNAIDS AIDSinfo, IHME
+GHDx, UNICEF MICS, UN World Population Prospects, Global.health, WorldPop et Our
+World in Data. Ces entrées ouvrent leur portail officiel : HDP ne présente pas
+comme automatisable une API publique stable qui n'est pas documentée.
+
+## Mise à niveau et compatibilité
+
+Le schéma est migré au démarrage par migrations idempotentes. Les acquisitions anciennes rejoignent le « Projet par défaut ». Le volume PostgreSQL, toutes les lignes inconnues de `.env` et les fichiers existants sont conservés. La compatibilité garantie à ce jalon porte sur la structure 2.5.0 ; les versions plus anciennes restent prises en charge par le chemin historique, mais devront être qualifiées à partir de fixtures ou d'archives représentatives avant d'être déclarées garanties.
 
 ## Arrêt
 
@@ -53,4 +82,4 @@ métadonnées sont archivés avec chaque ressource.
 
 ## Limite de sécurité
 
-HDP 2.4.0 est une application locale, non un serveur Internet durci. Les scripts sont gérés comme contenu uniquement : aucune route ne les exécute. Les groupements M49 sont statistiques et n'impliquent aucune prise de position politique.
+HDP 3.0.0 est une application locale, non un serveur Internet durci. Seuls les scripts Python/R locaux et de confiance doivent être exécutés. Les runners sont non privilégiés, sans réseau et bornés, mais ne constituent pas une isolation multi-utilisateur. Les groupements M49 sont statistiques et n'impliquent aucune prise de position politique.

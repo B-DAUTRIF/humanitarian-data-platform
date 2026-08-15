@@ -8,7 +8,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY static ./static
-RUN mkdir -p /app/data/raw
+RUN mkdir -p /app/data/raw /app/execution_spool && chmod 1777 /app/execution_spool
 
 EXPOSE 8080
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

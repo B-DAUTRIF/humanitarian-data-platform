@@ -1,15 +1,22 @@
-# API GitHub HDP — v2.4.1
+# Passerelle REST GitHub - HDP 3.0.0
 
-HDP embarque une passerelle locale vers l'API REST GitHub dans le service Docker `github-api`.
+HDP embarque le service Docker `github-api`, une passerelle locale et bornée
+vers les fonctions REST GitHub utilisées par le projet. Elle complète la
+création de dépôt disponible dans l'API principale.
 
-## Principes de sécurité
+## Sécurité
 
-- `GITHUB_TOKEN` reste côté serveur et n'est jamais renvoyé au navigateur.
-- Lecture activée par défaut.
-- Écritures désactivées par défaut (`GITHUB_API_WRITE_ENABLED=false`).
-- Le service est publié uniquement sur `127.0.0.1` par défaut.
-- Les noms owner/repository sont validés avant construction des requêtes.
-- La version REST est envoyée avec `X-GitHub-Api-Version`.
+- le service est publié uniquement sur `127.0.0.1` ;
+- `GITHUB_TOKEN` reste côté serveur et n'est jamais renvoyé ;
+- les lectures sont disponibles par défaut ;
+- les écritures sont désactivées par défaut ;
+- le conteneur est non privilégié, en lecture seule, avec limites de mémoire,
+  CPU et processus ;
+- propriétaire, dépôt, workflow, pagination et tailles de corps sont validés ;
+- l'API REST est appelée avec `X-GitHub-Api-Version: 2026-03-10` par défaut.
+
+HDP demeure une application locale sans authentification. Ne publiez jamais le
+port 8091 sur le réseau local ou Internet.
 
 ## Configuration
 
@@ -21,53 +28,62 @@ GITHUB_API_VERSION=2026-03-10
 GITHUB_DEFAULT_OWNER=B-DAUTRIF
 GITHUB_DEFAULT_REPOSITORY=humanitarian-data-platform
 GITHUB_API_WRITE_ENABLED=false
+GITHUB_API_TIMEOUT_SECONDS=20
 HDP_GITHUB_API_PORT=8091
 ```
 
-Ne jamais versionner un jeton réel.
+Ne versionnez jamais un jeton réel. Préférez un jeton finement granulé limité
+au propriétaire et aux dépôts nécessaires.
 
 ## Endpoints locaux
 
-- `GET /health`
-- `GET /repository`
-- `GET /branches`
-- `GET /commits`
-- `GET /issues`
-- `GET /pulls`
-- `GET /releases`
-- `GET /workflows`
-- `GET /contents/{path}`
-- `GET /rate-limit`
-- `POST /issues` — seulement si les écritures sont explicitement activées
-- `POST /workflows/{workflow_id}/dispatch` — seulement si les écritures sont explicitement activées
+| Méthode | Route | Fonction |
+|---|---|---|
+| GET | `/health` | Version, état du jeton et verrou d'écriture |
+| GET | `/repository` | Métadonnées du dépôt |
+| GET | `/branches` | Branches paginées |
+| GET | `/commits` | Commits paginés, filtre `sha` facultatif |
+| GET | `/issues` | Issues paginées |
+| GET | `/pulls` | Pull requests paginées |
+| GET | `/releases` | Releases paginées |
+| GET | `/workflows` | Workflows GitHub Actions |
+| GET | `/contents/{path}` | Contenu ou métadonnées d'un chemin |
+| GET | `/rate-limit` | Quotas du jeton ou de l'adresse appelante |
+| POST | `/issues` | Création d'une issue, verrouillée par défaut |
+| POST | `/workflows/{id}/dispatch` | Déclenchement manuel, verrouillé par défaut |
 
-Les endpoints de listes acceptent la pagination GitHub classique (`page`, `per_page`). Les en-têtes de pagination et de rate-limit utiles sont retournés dans `meta`, sans recopier les en-têtes sensibles.
+Les listes acceptent `page` et `per_page` entre 1 et 100. Les métadonnées de
+pagination et de quota sont retournées sans recopier d'en-tête sensible.
 
-## Exemples
+## Activation des écritures
+
+Les écritures nécessitent simultanément :
+
+1. `GITHUB_API_WRITE_ENABLED=true` ;
+2. un `GITHUB_TOKEN` configuré ;
+3. les permissions GitHub minimales adaptées à l'opération.
+
+Pour un jeton finement granulé :
+
+- création d'issue : permission **Issues: write** sur le dépôt visé ;
+- déclenchement de workflow : permission **Actions: write** ;
+- création d'un dépôt depuis l'API principale : permission
+  **Administration: write**.
+
+N'accordez pas **Contents: write** tant qu'aucune publication de fichiers par
+l'application n'est prévue.
+
+## Exemples locaux
 
 ```bash
 curl http://127.0.0.1:8091/health
 curl http://127.0.0.1:8091/repository
-curl 'http://127.0.0.1:8091/branches?per_page=20&page=1'
-curl 'http://127.0.0.1:8091/commits?sha=main'
-curl 'http://127.0.0.1:8091/issues?state=open'
+curl "http://127.0.0.1:8091/branches?per_page=20&page=1"
+curl "http://127.0.0.1:8091/commits?sha=main"
+curl "http://127.0.0.1:8091/issues?state=open"
 curl http://127.0.0.1:8091/workflows
 ```
 
-## Écritures
-
-Les écritures nécessitent simultanément :
-
-1. un `GITHUB_TOKEN` possédant les permissions adaptées ;
-2. `GITHUB_API_WRITE_ENABLED=true` ;
-3. les droits GitHub du compte ou de l'application associée au jeton.
-
-Cette double barrière évite qu'un jeton configuré pour les fonctionnalités historiques de HDP rende automatiquement les nouveaux endpoints mutables.
-
-## Documentation GitHub de référence
-
-- REST API : https://docs.github.com/en/rest
-- Versioning : https://docs.github.com/en/rest/about-the-rest-api/api-versions
-- Authentication : https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api
-
-Les permissions exactes dépendent du type de jeton utilisé et de l'opération appelée ; elles doivent être revérifiées avant activation des écritures.
+Références : [API REST GitHub](https://docs.github.com/en/rest),
+[versionnement](https://docs.github.com/en/rest/about-the-rest-api/api-versions)
+et [jetons personnels](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens).

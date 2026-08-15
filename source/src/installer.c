@@ -20,8 +20,8 @@
 #include "payload_generated.h"
 
 #define APP_NAME L"Humanitarian Data Platform"
-#define APP_VERSION L"2.4.0"
-#define MAIN_CLASS L"HDP_NATIVE_INSTALLER_23"
+#define APP_VERSION L"3.0.0"
+#define MAIN_CLASS L"HDP_NATIVE_INSTALLER_30"
 
 #define ID_PATH 1001
 #define ID_RELIEFWEB 1002
@@ -628,6 +628,27 @@ static BOOL secret_line_is_valid(const wchar_t *secret) {
     return TRUE;
 }
 
+static BOOL is_managed_environment_line(const char *line, size_t length) {
+    static const char *keys[] = {
+        "POSTGRES_PASSWORD", "RELIEFWEB_APPNAME", "GITHUB_TOKEN", "HDP_PORT"
+    };
+    for (size_t index = 0; index < sizeof(keys) / sizeof(keys[0]); index++) {
+        size_t key_length = strlen(keys[index]);
+        if (length > key_length && line[key_length] == '=' &&
+            !strncmp(line, keys[index], key_length)) return TRUE;
+    }
+    return FALSE;
+}
+
+static BOOL append_environment_bytes(char *output, size_t capacity, size_t *used,
+                                     const char *data, size_t length) {
+    if (*used >= capacity || length > capacity - *used - 1) return FALSE;
+    memcpy(output + *used, data, length);
+    *used += length;
+    output[*used] = 0;
+    return TRUE;
+}
+
 static BOOL write_environment(const wchar_t *install_dir, const wchar_t *reliefweb_appname,
                               const wchar_t *github_token, USHORT host_port) {
     wchar_t env_path[MAX_PATH * 4];
@@ -638,10 +659,17 @@ static BOOL write_environment(const wchar_t *install_dir, const wchar_t *reliefw
     DWORD existing_size = 0;
     char *existing = read_file_bytes(env_path, &existing_size);
     if (existing) {
+        wchar_t backup_path[MAX_PATH * 4];
+        _snwprintf(backup_path, sizeof(backup_path) / sizeof(wchar_t),
+                   L"%ls\\.env.backup-before-v3.0.0", install_dir);
+        if (!CopyFileW(env_path, backup_path, FALSE)) {
+            HeapFree(GetProcessHeap(), 0, existing);
+            return FALSE;
+        }
+        post_log(L"Sauvegarde de .env créée avant la mise à niveau.\r\n");
         extract_env_value(existing, "POSTGRES_PASSWORD", password, sizeof(password));
         extract_env_value(existing, "RELIEFWEB_APPNAME", existing_appname, sizeof(existing_appname));
         extract_env_value(existing, "GITHUB_TOKEN", existing_github_token, sizeof(existing_github_token));
-        HeapFree(GetProcessHeap(), 0, existing);
     }
     if (!password[0] && !generate_secret(password, sizeof(password))) return FALSE;
 
@@ -658,12 +686,42 @@ static BOOL write_environment(const wchar_t *install_dir, const wchar_t *reliefw
     } else if (existing_github_token[0]) {
         strncpy(github_token_utf8, existing_github_token, sizeof(github_token_utf8) - 1);
     }
-    char content[4096];
-    int length = _snprintf(content, sizeof(content),
-                           "POSTGRES_PASSWORD=%s\r\nRELIEFWEB_APPNAME=%s\r\nGITHUB_TOKEN=%s\r\nHDP_PORT=%u\r\n",
-                           password, appname_utf8, github_token_utf8, host_port);
-    if (length <= 0 || length >= (int)sizeof(content)) return FALSE;
-    return write_binary_file(env_path, (const unsigned char *)content, (size_t)length);
+    size_t capacity = (size_t)existing_size + 4096;
+    char *content = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, capacity);
+    if (!content) {
+        if (existing) HeapFree(GetProcessHeap(), 0, existing);
+        return FALSE;
+    }
+    size_t used = 0;
+    const char *cursor = existing;
+    BOOL ok = TRUE;
+    while (cursor && *cursor && ok) {
+        const char *line_end = strpbrk(cursor, "\r\n");
+        size_t line_length = line_end ? (size_t)(line_end - cursor) : strlen(cursor);
+        if (!is_managed_environment_line(cursor, line_length)) {
+            ok = append_environment_bytes(content, capacity, &used, cursor, line_length) &&
+                 append_environment_bytes(content, capacity, &used, "\r\n", 2);
+        }
+        if (!line_end) break;
+        cursor = line_end + 1;
+        if (line_end[0] == '\r' && *cursor == '\n') cursor++;
+    }
+    char managed[4096];
+    int managed_length = _snprintf(
+        managed, sizeof(managed),
+        "POSTGRES_PASSWORD=%s\r\nRELIEFWEB_APPNAME=%s\r\nGITHUB_TOKEN=%s\r\nHDP_PORT=%u\r\n",
+        password, appname_utf8, github_token_utf8, host_port
+    );
+    if (managed_length <= 0 || managed_length >= (int)sizeof(managed)) ok = FALSE;
+    if (ok) {
+        ok = append_environment_bytes(
+            content, capacity, &used, managed, (size_t)managed_length
+        );
+    }
+    if (existing) HeapFree(GetProcessHeap(), 0, existing);
+    if (ok) ok = write_binary_file(env_path, (const unsigned char *)content, used);
+    HeapFree(GetProcessHeap(), 0, content);
+    return ok;
 }
 
 static DWORD probe_docker_engine(const wchar_t *docker, BOOL *timed_out) {
@@ -865,10 +923,10 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
     }
     post_log(L"Image PostgreSQL/PostGIS disponible.\r\n");
 
-    post_status(L"Construction du service Python/FastAPI", 66);
-    post_log(L"Construction silencieuse de l'API Python. Le compteur d'activité confirme que le processus continue.\r\n");
+    post_status(L"Construction des services Python et GitHub", 66);
+    post_log(L"Construction silencieuse de l'API, du runner Python sans réseau et de la passerelle GitHub locale. Le compteur d'activité confirme que le processus continue.\r\n");
     _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
-               L"compose -f \"%ls\\compose.yaml\" build --quiet api", options->install_dir);
+               L"compose -f \"%ls\\compose.yaml\" build --quiet api runner-python github-api", options->install_dir);
     compose_result = run_process_capture(docker, compose_args, options->install_dir);
     if (compose_result != 0) {
         wchar_t error[256];
@@ -876,13 +934,13 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
         post_log(error);
         goto done;
     }
-    post_log(L"Service Python/FastAPI construit.\r\n");
+        post_log(L"API Python/FastAPI, runner Python et passerelle GitHub construits.\r\n");
 
     if (options->install_r_module) {
         post_status(L"Construction du module analytique R — téléchargement supérieur à 300 Mo", 73);
         post_log(L"Le module R a été sélectionné. Son image est volumineuse ; le premier téléchargement peut être long.\r\n");
         _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
-                   L"compose -f \"%ls\\compose.yaml\" --profile analytics build --quiet r-service", options->install_dir);
+                   L"compose -f \"%ls\\compose.yaml\" --profile analytics build --quiet r-service runner-r", options->install_dir);
         compose_result = run_process_capture(docker, compose_args, options->install_dir);
         if (compose_result != 0) {
             wchar_t error[256];
@@ -898,10 +956,10 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
     post_status(L"Démarrage des services locaux", 84);
     if (options->install_r_module) {
         _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
-                   L"compose -f \"%ls\\compose.yaml\" --profile analytics up -d --no-build db r-service api", options->install_dir);
+                   L"compose -f \"%ls\\compose.yaml\" --profile analytics up -d --no-build db r-service runner-python runner-r github-api api", options->install_dir);
     } else {
         _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
-                   L"compose -f \"%ls\\compose.yaml\" up -d --no-build db api", options->install_dir);
+                   L"compose -f \"%ls\\compose.yaml\" up -d --no-build db runner-python github-api api", options->install_dir);
     }
     compose_result = run_process_capture(docker, compose_args, options->install_dir);
     if (compose_result != 0) {
@@ -1024,9 +1082,20 @@ static void begin_install(void) {
         }
     }
 
-    const wchar_t *confirmation_text = options->install_r_module
-        ? L"L'application et le module analytique R seront installés. Le premier téléchargement de R dépasse 300 Mo et peut durer plusieurs minutes. Continuer ?"
-        : L"Le cœur Python/PostGIS sera installé. Le module R restera différé et pourra être ajouté plus tard en relançant cet installateur. Continuer ?";
+    wchar_t existing_env_path[MAX_PATH * 4];
+    _snwprintf(existing_env_path, sizeof(existing_env_path) / sizeof(wchar_t),
+               L"%ls\\.env", options->install_dir);
+    BOOL is_upgrade = file_exists(existing_env_path);
+    const wchar_t *confirmation_text;
+    if (is_upgrade) {
+        confirmation_text = options->install_r_module
+            ? L"Une installation HDP existante a été détectée. La mise à niveau conservera .env, data et le volume PostgreSQL, puis activera aussi le module R. Une sauvegarde de .env sera créée. Continuer ?"
+            : L"Une installation HDP existante a été détectée. La mise à niveau conservera .env, data et le volume PostgreSQL. Une sauvegarde de .env sera créée. Continuer ?";
+    } else {
+        confirmation_text = options->install_r_module
+            ? L"L'application et le module analytique R seront installés. Le premier téléchargement de R dépasse 300 Mo et peut durer plusieurs minutes. Continuer ?"
+            : L"Le cœur Python/PostGIS sera installé. Le module R restera différé et pourra être ajouté plus tard en relançant cet installateur. Continuer ?";
+    }
     int confirmation = MessageBoxW(g_main,
         confirmation_text,
         APP_NAME, MB_YESNO | MB_ICONQUESTION);
@@ -1035,7 +1104,9 @@ static void begin_install(void) {
         return;
     }
 
-    append_log_control(L"\r\n--- Nouvelle installation ---\r\n");
+    append_log_control(is_upgrade
+        ? L"\r\n--- Mise à niveau d'une installation existante ---\r\n"
+        : L"\r\n--- Nouvelle installation ---\r\n");
     set_controls_installing(TRUE);
     wcsncpy(g_stage_status, L"Démarrage de l'installation", (sizeof(g_stage_status) / sizeof(wchar_t)) - 1);
     g_stage_status[(sizeof(g_stage_status) / sizeof(wchar_t)) - 1] = 0;
@@ -1092,7 +1163,7 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
         case WM_CREATE: {
             g_font = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
             HWND header = create_control(L"STATIC", L"Humanitarian Data Platform", SS_LEFT, 0, window);
-            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 2.4.0 — projets, GitHub et familles COD", SS_LEFT, 0, window);
+            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 3.0.0 — données humanitaires et sanitaires", SS_LEFT, 0, window);
             HWND path_label = create_control(L"STATIC", L"Dossier d'installation", SS_LEFT, 0, window);
             HWND relief_label = create_control(L"STATIC", L"Appname ReliefWeb", SS_LEFT, 0, window);
             HWND github_label = create_control(L"STATIC", L"Jeton GitHub", SS_LEFT, 0, window);
@@ -1117,7 +1188,7 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
             g_r_module = create_control(L"BUTTON", L"Module analytique R (optionnel, téléchargement supérieur à 300 Mo)", BS_AUTOCHECKBOX | WS_TABSTOP, ID_R_MODULE, window);
             SendMessageW(g_r_module, BM_SETCHECK, BST_UNCHECKED, 0);
             g_analyze = create_control(L"BUTTON", L"Analyser à nouveau", BS_PUSHBUTTON | WS_TABSTOP, ID_ANALYZE, window);
-            g_install = create_control(L"BUTTON", L"Installer et ouvrir", BS_DEFPUSHBUTTON | WS_TABSTOP, ID_INSTALL, window);
+            g_install = create_control(L"BUTTON", L"Installer / mettre à niveau", BS_DEFPUSHBUTTON | WS_TABSTOP, ID_INSTALL, window);
             g_open_folder = create_control(L"BUTTON", L"Ouvrir le dossier", BS_PUSHBUTTON | WS_TABSTOP, ID_OPEN_FOLDER, window);
             g_open_log = create_control(L"BUTTON", L"Ouvrir le journal", BS_PUSHBUTTON | WS_TABSTOP, ID_OPEN_LOG, window);
             g_progress = create_control(PROGRESS_CLASSW, L"", PBS_SMOOTH, ID_PROGRESS, window);
