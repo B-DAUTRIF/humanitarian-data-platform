@@ -37,7 +37,7 @@ services:
       retries: 12
 
   spool-init:
-    image: hdp-runner-python:5.0.0
+    image: hdp-runner-python:5.0.1
     build:
       context: ./runner
       dockerfile: Dockerfile.python
@@ -46,10 +46,11 @@ services:
       - >-
         mkdir -p /spool/staging /spool/pending/python /spool/pending/r
         /spool/running/python /spool/running/r /spool/completed/python
-        /spool/completed/r /spool/heartbeat && chown -R 65532:65532 /spool
+        /spool/completed/r /spool/heartbeat && chown -R 0:0 /spool
         && chmod 0711 /spool /spool/staging /spool/pending /spool/pending/python
         /spool/pending/r /spool/running /spool/running/python /spool/running/r
         /spool/completed /spool/completed/python /spool/completed/r /spool/heartbeat
+        && chown -R 65532:65532 /spool
     volumes:
       - execution_spool:/spool
     cap_drop: ["ALL"]
@@ -58,7 +59,7 @@ services:
     restart: "no"
 
   runner-python:
-    image: hdp-runner-python:5.0.0
+    image: hdp-runner-python:5.0.1
     build:
       context: ./runner
       dockerfile: Dockerfile.python
@@ -85,7 +86,7 @@ services:
         condition: service_completed_successfully
 
   runner-r:
-    image: hdp-runner-r:5.0.0
+    image: hdp-runner-r:5.0.1
     build:
       context: ./runner
       dockerfile: Dockerfile.r
