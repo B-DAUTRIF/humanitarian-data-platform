@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 50156)
-Total output lines: 4977
-
 from __future__ import annotations
 
 import asyncio
@@ -2520,7 +2517,25 @@ def source_settings() -> list[dict[str, Any]]:
 @app.get("/api/source-settings/{source_id}")
 def source_setting(source_id: str) -> dict[str, Any]:
     source = source_metadata(source_id)
-    return {**source, "configuration": get_source_global_settin…156 tokens truncated…       ON CONFLICT (source_id) DO UPDATE
+    return {**source, "configuration": get_source_global_settings(source_id)}
+
+
+@app.put("/api/source-settings/{source_id}")
+def update_source_setting(
+    source_id: str, payload: SourceGlobalSettingsUpdate
+) -> dict[str, Any]:
+    source_metadata(source_id)
+    try:
+        settings = validate_values(source_id, payload.settings, scope="global")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    now = datetime.now(UTC)
+    with database_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO source_global_settings (source_id, settings, updated_at)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (source_id) DO UPDATE
             SET settings = EXCLUDED.settings, updated_at = EXCLUDED.updated_at
             """,
             (source_id, Jsonb(settings), now),
