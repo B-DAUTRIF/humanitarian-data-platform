@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Génère la documentation consolidée HTML et PDF de HDP 4.0.0."""
+"""Génère la documentation consolidée HTML et PDF de HDP 4.1.0."""
 
 from __future__ import annotations
 
@@ -28,20 +28,22 @@ from reportlab.platypus import (
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = [
     ("Présentation générale", ROOT / "README.md"),
-    ("Guide utilisateur", ROOT / "docs/USER_GUIDE_V4.0.0.md"),
-    ("Installation", ROOT / "docs/INSTALLATION_V4.0.0.md"),
+    ("Guide utilisateur", ROOT / "docs/USER_GUIDE_V4.1.0.md"),
+    ("Configuration des sources", ROOT / "docs/CONFIGURATION_SOURCES_V4.1.0.md"),
+    ("Technologies, logiciels et liens", ROOT / "docs/TECHNOLOGIES_ET_LIENS_V4.1.0.md"),
+    ("Installation", ROOT / "docs/INSTALLATION_V4.1.0.md"),
     ("Architecture", ROOT / "docs/ARCHITECTURE.md"),
-    ("Référence API", ROOT / "docs/API_REFERENCE_V4.0.0.md"),
-    ("Matrice des sources", ROOT / "docs/SOURCE_CAPABILITY_MATRIX_V4.0.0.md"),
-    ("Sauvegarde et restauration", ROOT / "docs/BACKUP_RESTORE_V4.0.0.md"),
-    ("Revue de sécurité", ROOT / "docs/SECURITY_REVIEW_V4.0.0.md"),
-    ("Limites connues", ROOT / "docs/KNOWN_LIMITATIONS_V4.0.0.md"),
-    ("Rapport de validation", ROOT / "docs/VALIDATION_REPORT_V4.0.0.md"),
+    ("Référence API", ROOT / "docs/API_REFERENCE_V4.1.0.md"),
+    ("Matrice des sources", ROOT / "docs/SOURCE_CAPABILITY_MATRIX_V4.1.0.md"),
+    ("Sauvegarde et restauration", ROOT / "docs/BACKUP_RESTORE_V4.1.0.md"),
+    ("Revue de sécurité", ROOT / "docs/SECURITY_REVIEW_V4.1.0.md"),
+    ("Limites connues", ROOT / "docs/KNOWN_LIMITATIONS_V4.1.0.md"),
+    ("Rapport de validation", ROOT / "docs/VALIDATION_REPORT_V4.1.0.md"),
     ("Historique", ROOT / "CHANGELOG.md"),
 ]
 
-OUT_HTML = ROOT / "docs/Documentation_Humanitarian_Data_Platform_v4.0.0.html"
-OUT_PDF = ROOT / "output/pdf/Notice_detaillee_Humanitarian_Data_Platform_v4.0.0.pdf"
+OUT_HTML = ROOT / "docs/Documentation_Humanitarian_Data_Platform_v4.1.0.html"
+OUT_PDF = ROOT / "output/pdf/Notice_detaillee_Humanitarian_Data_Platform_v4.1.0.pdf"
 
 
 def normalize_hyphens(value: str) -> str:
@@ -132,7 +134,7 @@ def build_html() -> None:
         sections.append(f'<section id="s{index}"><div class="section-label">PARTIE {index:02d}</div><h1>{html.escape(title)}</h1>{markdown_to_html(path.read_text(encoding="utf-8"))}</section>')
     page = f"""<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Humanitarian Data Platform 4.0.0 - Documentation</title>
+<title>Humanitarian Data Platform 4.1.0 - Documentation</title>
 <style>
 :root{{--ink:#172536;--muted:#5f6f7c;--blue:#075985;--cyan:#0e7490;--pale:#e6f6f8;--line:#d5e0e5;}}
 *{{box-sizing:border-box}} body{{margin:0;background:#f4f7f8;color:var(--ink);font:16px/1.62 system-ui,-apple-system,"Segoe UI",sans-serif}}
@@ -146,9 +148,9 @@ article{{min-width:0}} section{{background:white;border:1px solid var(--line);bo
 footer{{text-align:center;color:var(--muted);padding:24px 24px 60px}}
 @media(max-width:850px){{main{{display:block}}nav{{position:static;margin-bottom:24px}}}} @media print{{body{{background:white}}nav{{display:none}}main{{display:block;margin:0;max-width:none}}section{{box-shadow:none;border:0;page-break-before:always}}header{{page-break-after:always}}}}
 </style></head><body>
-<header><div class="kicker">Documentation de référence</div><h1>Humanitarian Data Platform</h1><p>Version 4.0.0 - utilisation, installation portable, architecture, API, sources, sécurité et limites.</p><p>Édition du 15 août 2026</p></header>
+<header><div class="kicker">Documentation de référence</div><h1>Humanitarian Data Platform</h1><p>Version 4.1.0 - sources individualisées, technologies, installation, architecture, API, sécurité et limites.</p><p>Édition du 15 août 2026</p></header>
 <main><nav><strong>Sommaire</strong><ol>{nav}</ol></nav><article>{''.join(sections)}</article></main>
-<footer>Humanitarian Data Platform 4.0.0 - documentation consolidée</footer></body></html>"""
+<footer>Humanitarian Data Platform 4.1.0 - documentation consolidée</footer></body></html>"""
     OUT_HTML.write_text(page, encoding="utf-8")
 
 
@@ -255,13 +257,13 @@ def build_pdf() -> None:
         width, height = A4
         canvas.setFillColor(colors.HexColor("#0C4863")); canvas.rect(0, height - 8 * mm, width, 8 * mm, stroke=0, fill=1)
         canvas.setFont("DejaVu", 7); canvas.setFillColor(colors.HexColor("#607683"))
-        canvas.drawString(20 * mm, 11 * mm, "Humanitarian Data Platform 4.0.0 - documentation")
+        canvas.drawString(20 * mm, 11 * mm, "Humanitarian Data Platform 4.1.0 - documentation")
         canvas.drawRightString(width - 20 * mm, 11 * mm, f"Page {document.page}")
         canvas.restoreState()
 
     OUT_PDF.parent.mkdir(parents=True, exist_ok=True)
-    doc = SimpleDocTemplate(str(OUT_PDF), pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=20 * mm, bottomMargin=18 * mm, title="Humanitarian Data Platform 4.0.0 - Documentation", author="Humanitarian Data Platform")
-    story: list = [Spacer(1, 46 * mm), Paragraph("DOCUMENTATION DE RÉFÉRENCE", styles["CoverKicker"]), Paragraph("Humanitarian<br/>Data Platform", styles["CoverTitle"]), Paragraph("Version 4.0.0", styles["CoverSub"]), Spacer(1, 12 * mm), Paragraph("Utilisation · installation · architecture · API · sources · sécurité · limites", styles["CoverSub"]), Spacer(1, 26 * mm), Paragraph("Édition du 15 août 2026", styles["CoverSub"]), PageBreak(), Paragraph("Sommaire", styles["PartFinal"])]
+    doc = SimpleDocTemplate(str(OUT_PDF), pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=20 * mm, bottomMargin=18 * mm, title="Humanitarian Data Platform 4.1.0 - Documentation", author="Humanitarian Data Platform")
+    story: list = [Spacer(1, 46 * mm), Paragraph("DOCUMENTATION DE RÉFÉRENCE", styles["CoverKicker"]), Paragraph("Humanitarian<br/>Data Platform", styles["CoverTitle"]), Paragraph("Version 4.1.0", styles["CoverSub"]), Spacer(1, 12 * mm), Paragraph("Sources · technologies · installation · architecture · API · sécurité", styles["CoverSub"]), Spacer(1, 26 * mm), Paragraph("Édition du 15 août 2026", styles["CoverSub"]), PageBreak(), Paragraph("Sommaire", styles["PartFinal"])]
     for index, (title, _) in enumerate(DOCS, 1):
         story.append(Paragraph(f"{index:02d}  {html.escape(title)}", styles["TocFinal"]))
     story.append(PageBreak())

@@ -1,8 +1,10 @@
+#define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <grp.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -10,6 +12,7 @@
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
+#include <sys/prctl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -37,7 +40,7 @@ static bool valid_job_id(const char *value) {
 }
 
 static void make_directory(const char *path) {
-    if (mkdir(path, 0777) != 0 && errno != EEXIST) {
+    if (mkdir(path, 0711) != 0 && errno != EEXIST) {
         fprintf(stderr, "mkdir %s: %s\n", path, strerror(errno));
     }
 }
@@ -45,8 +48,13 @@ static void make_directory(const char *path) {
 static void write_text(const char *directory, const char *name, const char *value) {
     char path[PATH_BUFFER];
     if (snprintf(path, sizeof(path), "%s/%s", directory, name) >= (int)sizeof(path)) return;
-    const int descriptor = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    const int descriptor = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, 0640);
     if (descriptor < 0) return;
+    struct stat metadata;
+    if (fstat(descriptor, &metadata) != 0 || !S_ISREG(metadata.st_mode)) {
+        (void)close(descriptor);
+        return;
+    }
     const size_t length = strlen(value);
     size_t written = 0;
     while (written < length) {
@@ -61,8 +69,13 @@ static long read_bounded_integer(const char *directory, const char *name, long m
     char path[PATH_BUFFER];
     char buffer[TEXT_BUFFER] = {0};
     if (snprintf(path, sizeof(path), "%s/%s", directory, name) >= (int)sizeof(path)) return -1;
-    const int descriptor = open(path, O_RDONLY | O_CLOEXEC);
+    const int descriptor = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
     if (descriptor < 0) return -1;
+    struct stat metadata;
+    if (fstat(descriptor, &metadata) != 0 || !S_ISREG(metadata.st_mode) || metadata.st_size > TEXT_BUFFER) {
+        (void)close(descriptor);
+        return -1;
+    }
     const ssize_t count = read(descriptor, buffer, sizeof(buffer) - 1U);
     (void)close(descriptor);
     if (count <= 0) return -1;
@@ -88,19 +101,56 @@ static void set_limit(int resource, rlim_t value) {
     (void)setrlimit(resource, &limit);
 }
 
+static uid_t bounded_uid(const char *job_id) {
+    unsigned long hash = 2166136261UL;
+    for (const unsigned char *cursor = (const unsigned char *)job_id; *cursor; cursor++) {
+        hash ^= *cursor;
+        hash *= 16777619UL;
+    }
+    return (uid_t)(20000UL + (hash % 30000UL));
+}
+
+static void reown_job(const char *directory, uid_t uid, gid_t gid) {
+    DIR *stream = opendir(directory);
+    if (stream != NULL) {
+        struct dirent *entry = NULL;
+        while ((entry = readdir(stream)) != NULL) {
+            if (entry->d_name[0] == '.') continue;
+            char path[PATH_BUFFER];
+            if (snprintf(path, sizeof(path), "%s/%s", directory, entry->d_name) >= (int)sizeof(path)) continue;
+            struct stat metadata;
+            if (lstat(path, &metadata) != 0) continue;
+            if (S_ISREG(metadata.st_mode)) {
+                if (chown(path, uid, gid) != 0) {
+                    fprintf(stderr, "chown %s: %s\n", path, strerror(errno));
+                }
+                (void)chmod(path, 0640);
+            } else {
+                (void)unlink(path);
+            }
+        }
+        (void)closedir(stream);
+    }
+    if (chown(directory, uid, gid) != 0) {
+        fprintf(stderr, "chown %s: %s\n", directory, strerror(errno));
+    }
+    (void)chmod(directory, 0700);
+}
+
 static void run_child(
     const char *directory,
     const char *language,
     const char *command,
     long timeout_seconds,
-    long max_output_bytes
+    long max_output_bytes,
+    uid_t job_uid
 ) {
     char stdout_path[PATH_BUFFER];
     char stderr_path[PATH_BUFFER];
     if (snprintf(stdout_path, sizeof(stdout_path), "%s/stdout.txt", directory) >= (int)sizeof(stdout_path)) _exit(125);
     if (snprintf(stderr_path, sizeof(stderr_path), "%s/stderr.txt", directory) >= (int)sizeof(stderr_path)) _exit(125);
-    const int output = open(stdout_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    const int errors = open(stderr_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    const int output = open(stdout_path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0640);
+    const int errors = open(stderr_path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0640);
     if (output < 0 || errors < 0) _exit(125);
     if (dup2(output, STDOUT_FILENO) < 0 || dup2(errors, STDERR_FILENO) < 0) _exit(125);
     (void)close(output);
@@ -109,10 +159,14 @@ static void run_child(
 
     set_limit(RLIMIT_CORE, 0);
     set_limit(RLIMIT_CPU, (rlim_t)(timeout_seconds + 1));
-    set_limit(RLIMIT_FSIZE, (rlim_t)max_output_bytes);
+    set_limit(RLIMIT_FSIZE, (rlim_t)(max_output_bytes / 2));
     set_limit(RLIMIT_NOFILE, 64);
     set_limit(RLIMIT_NPROC, 32);
     alarm((unsigned int)timeout_seconds);
+    (void)prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
+    if (setgroups(0, NULL) != 0 || setgid(job_uid) != 0 || setuid(job_uid) != 0) {
+        _exit(125);
+    }
 
     char *const safe_environment[] = {
         "HOME=/tmp",
@@ -140,7 +194,8 @@ static void process_job(
     const char *spool,
     const char *language,
     const char *command,
-    const char *job_id
+    const char *job_id,
+    uid_t api_uid
 ) {
     char pending[PATH_BUFFER];
     char running[PATH_BUFFER];
@@ -160,13 +215,19 @@ static void process_job(
         return;
     }
 
+    const uid_t job_uid = bounded_uid(job_id);
+    reown_job(running, job_uid, job_uid);
+
     char timestamp[64];
     utc_now(timestamp, sizeof(timestamp));
     write_text(running, "started_at.txt", timestamp);
     write_text(running, "status.txt", "running");
     const time_t started = time(NULL);
     const pid_t child = fork();
-    if (child == 0) run_child(running, language, command, timeout_seconds, max_output_bytes);
+    if (child == 0) {
+        (void)setpgid(0, 0);
+        run_child(running, language, command, timeout_seconds, max_output_bytes, job_uid);
+    }
     if (child < 0) {
         write_text(running, "status.txt", "failed");
         write_text(running, "stderr.txt", "Impossible de créer le processus isolé.\n");
@@ -174,19 +235,25 @@ static void process_job(
         (void)rename(running, completed);
         return;
     }
+    (void)setpgid(child, child);
 
     int wait_status = 0;
     bool timed_out = false;
     while (waitpid(child, &wait_status, WNOHANG) == 0) {
         if (difftime(time(NULL), started) > (double)timeout_seconds + 1.0) {
             timed_out = true;
-            (void)kill(child, SIGKILL);
+            (void)kill(-child, SIGKILL);
             (void)waitpid(child, &wait_status, 0);
             break;
         }
         struct timespec pause = {.tv_sec = 0, .tv_nsec = 100000000L};
         (void)nanosleep(&pause, NULL);
     }
+
+    /* The leader may have exited while descendants remain. Kill and reap the
+       complete job group before accepting any output. */
+    (void)kill(-child, SIGKILL);
+    while (waitpid(-1, NULL, WNOHANG) > 0) {}
 
     char code[32];
     int exit_code = -1;
@@ -202,6 +269,7 @@ static void process_job(
     write_text(running, "status.txt", status);
     utc_now(timestamp, sizeof(timestamp));
     write_text(running, "finished_at.txt", timestamp);
+    reown_job(running, api_uid, api_uid);
     (void)rename(running, completed);
 }
 
@@ -223,6 +291,16 @@ int main(void) {
     const char *spool = required_env("HDP_SPOOL");
     const char *language = required_env("HDP_RUNNER_LANGUAGE");
     const char *command = required_env("HDP_RUNNER_COMMAND");
+    const char *api_uid_text = required_env("HDP_API_UID");
+    char *uid_end = NULL;
+    errno = 0;
+    const long api_uid_value = strtol(api_uid_text, &uid_end, 10);
+    if (errno != 0 || uid_end == api_uid_text || *uid_end != '\0' || api_uid_value < 1 || api_uid_value > 65535) {
+        fprintf(stderr, "HDP_API_UID invalide\n");
+        return 2;
+    }
+    const uid_t api_uid = (uid_t)api_uid_value;
+    (void)prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
     if (strcmp(language, "python") != 0 && strcmp(language, "r") != 0) {
         fprintf(stderr, "Langage runner invalide\n");
         return 2;
@@ -236,7 +314,7 @@ int main(void) {
             struct dirent *entry = NULL;
             while ((entry = readdir(directory)) != NULL) {
                 if (entry->d_name[0] == '.' || !valid_job_id(entry->d_name)) continue;
-                process_job(spool, language, command, entry->d_name);
+                process_job(spool, language, command, entry->d_name, api_uid);
             }
             (void)closedir(directory);
         }

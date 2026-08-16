@@ -5,6 +5,5 @@ RUN gcc -std=c17 -O2 -Wall -Wextra -Werror runner.c -o hdp-runner
 
 FROM rocker/r-ver:4.4.3
 COPY --from=build /src/hdp-runner /usr/local/bin/hdp-runner
-RUN mkdir -p /spool /tmp && chmod 1777 /spool /tmp
-USER 65532:65532
+RUN mkdir -p /spool /tmp && chmod 0711 /spool && chmod 1777 /tmp
 ENTRYPOINT ["/usr/local/bin/hdp-runner"]

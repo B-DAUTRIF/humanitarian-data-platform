@@ -84,7 +84,7 @@ La licence et les conditions de chaque fiche HDX restent applicables.
 
 ## Catalogues sanitaires et épidémiologiques
 
-HDP 4.0.0 contient uniquement les métadonnées descriptives, liens et adaptateurs
+HDP 5.0.0 contient uniquement les métadonnées descriptives, liens et adaptateurs
 nécessaires à l'interrogation des services ci-dessous. Aucun jeu de données de
 ces organismes n'est incorporé à l'application. Les réponses et fichiers restent
 soumis aux licences, conditions, quotas et politiques d'accès de leur éditeur.

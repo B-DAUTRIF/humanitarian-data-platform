@@ -1,5 +1,23 @@
 # Journal des versions
 
+## 5.0.0 - intelligence HDX et sécurité locale - 16 août 2026
+
+- HDX Data Grid, métadonnées jeu/fichier et plans d’agrégation ;
+- SIGNALS, actions automatiques à échéance et surveillance syndromique ;
+- notebooks Jupyter-compatible exécutés dans les runners Python/R ;
+- P0 SQL, API locale, SSRF, runners, sauvegarde/restauration et rafraîchissement corrigés ;
+- monolithe modulaire simplifié, documentation/UML/Wiki et distributions Windows/Linux.
+
+## 4.1.0 - configuration individualisée et hub technique - 15 août 2026
+
+- dix contrats globaux indépendants, limites HTTP et propriétés fixes par source ;
+- profils techniques et liens officiels contextualisés pour les dix connecteurs ;
+- prévisualisations cURL, Python `httpx` et R `httr2` sans secret ;
+- page utilisateur de 25 ressources, 13 catégories et 87 liens ;
+- distribution du code et des livrables dans un dossier Google Drive vérifié ;
+- compatibilité des paramètres et sauvegardes 4.0.0 ;
+- 101 tests automatisés et documentation consolidée 4.1.0.
+
 ## 4.0.0 — gel fonctionnel — 15 août 2026
 
 - recherche fédérée, critères communs et champs spécifiques ;

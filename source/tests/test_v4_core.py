@@ -73,6 +73,17 @@ class SqlWorkspaceContractTest(unittest.TestCase):
             with self.subTest(query=query), self.assertRaises(ValueError):
                 validate_readonly_sql(query)
 
+    def test_literals_are_preserved_and_quoted_dangerous_functions_are_rejected(self) -> None:
+        query = "SELECT * FROM hdp_resources WHERE source='hdx' AND title LIKE '%cholera%'"
+        self.assertEqual(validate_readonly_sql(query), query)
+        for dangerous in (
+            'SELECT "pg_read_file"(title) FROM hdp_resources LIMIT 1',
+            'SELECT "query_to_xml"(title,true,false,\'\') FROM hdp_resources LIMIT 1',
+            'SELECT "pg_reload_conf"() FROM hdp_resources LIMIT 1',
+        ):
+            with self.subTest(query=dangerous), self.assertRaises(ValueError):
+                validate_readonly_sql(dangerous)
+
 
 class V4StaticContractTest(unittest.TestCase):
     @classmethod
@@ -92,6 +103,19 @@ class V4StaticContractTest(unittest.TestCase):
             "/api/map/layers/{layer_id}",
         ):
             self.assertIn(route, self.main_source)
+
+    def test_v5_modular_intelligence_contract_is_exposed(self) -> None:
+        module = (APP_ROOT / "app" / "v5_features.py").read_text(encoding="utf-8")
+        for route in (
+            "/hdx/datagrid/taxonomy",
+            "/projects/{project_id}/hdx/datagrid/search",
+            "/projects/{project_id}/signals",
+            "/projects/{project_id}/signals/syndromic-snapshot",
+            "/projects/{project_id}/notebooks",
+            "/notebooks/{notebook_id}/cells/{cell_index}/executions",
+        ):
+            self.assertIn(route, module)
+        self.assertIn("app.include_router(v5_router)", self.main_source)
 
     def test_requested_navigation_and_inline_controls_are_visible(self) -> None:
         for marker in (

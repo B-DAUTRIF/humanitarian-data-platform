@@ -84,7 +84,7 @@ class IterationOneStaticContractTest(unittest.TestCase):
             "resource-filter-geography",
         }
         self.assertTrue(expected_ids.issubset(parser.ids))
-        self.assertIn("version 4.0.0", self.html_text)
+        self.assertIn("version 5.0.0", self.html_text)
 
     def test_legacy_25_capabilities_remain_visible(self) -> None:
         for element_id in (
@@ -97,12 +97,12 @@ class IterationOneStaticContractTest(unittest.TestCase):
         ):
             self.assertIn(f'id="{element_id}"', self.html_text)
 
-    def test_windows_build_metadata_targets_version_400(self) -> None:
-        self.assertIn('#define APP_VERSION L"4.0.0"', self.installer_text)
-        self.assertIn("HumanitarianDataPlatform_Setup_Native_GUI_v4.0.0.exe", BUILD_PATH.read_text(encoding="utf-8"))
+    def test_windows_build_metadata_targets_version_500(self) -> None:
+        self.assertIn('#define APP_VERSION L"5.0.0"', self.installer_text)
+        self.assertIn("HumanitarianDataPlatform_Setup_Native_GUI_v5.0.0.exe", BUILD_PATH.read_text(encoding="utf-8"))
         resources = RESOURCE_PATH.read_text(encoding="utf-8")
-        self.assertIn("FILEVERSION 4,0,0,0", resources)
-        self.assertIn('VALUE "ProductVersion", "4.0.0"', resources)
+        self.assertIn("FILEVERSION 5,0,0,0", resources)
+        self.assertIn('VALUE "ProductVersion", "5.0.0"', resources)
 
     def test_windows_upgrade_preserves_unknown_environment_lines(self) -> None:
         self.assertIn("is_managed_environment_line", self.installer_text)
@@ -116,7 +116,7 @@ class IterationOneStaticContractTest(unittest.TestCase):
             "HDP_PORT",
         ):
             self.assertIn(f'"{managed_key}"', self.installer_text)
-        self.assertIn(".env.backup-before-v4.0.0", self.installer_text)
+        self.assertIn(".env.backup-before-v5.0.0", self.installer_text)
         self.assertIn("CopyFileW(env_path, backup_path, FALSE)", self.installer_text)
         self.assertIn("Mise à niveau d'une installation existante", self.installer_text)
 

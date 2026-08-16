@@ -59,7 +59,7 @@ def main() -> None:
             "component": {
                 "type": "application",
                 "name": "Humanitarian Data Platform",
-                "version": "4.0.0",
+                "version": "4.1.0",
             }
         },
         "components": components,

@@ -1,25 +1,10 @@
-# Local configuration and runtime data
-.env
-.env.*
-!.env.example
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.Rhistory
-.RData
-
-# Local build output
-build/
-*.o
-*.obj
-*.res
+.mypy_cache/
+tmp/
+dist/
+source/payload/data/
+source/payload/.env
 *.pdb
-/output/
-
-# Logs and editor files
-*.log
-!source/payload/CHANGELOG_HDP.log
-.vscode/
-.idea/
-Thumbs.db
-.DS_Store
+*.res

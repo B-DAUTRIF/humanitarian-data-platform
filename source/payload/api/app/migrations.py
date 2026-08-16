@@ -444,6 +444,162 @@ MIGRATIONS: tuple[Migration, ...] = (
             """,
         ),
     ),
+    Migration(
+        version="5.0.0-001-intelligence-core",
+        description="Data Grid, métadonnées HDX, signaux syndromiques et notebooks Jupyter",
+        statements=(
+            "ALTER TABLE local_resources ADD COLUMN IF NOT EXISTS expected_update_at TIMESTAMPTZ",
+            "ALTER TABLE local_resources ADD COLUMN IF NOT EXISTS reliability JSONB NOT NULL DEFAULT '{}'::jsonb",
+            "ALTER TABLE local_resources ADD COLUMN IF NOT EXISTS schema_metadata JSONB NOT NULL DEFAULT '{}'::jsonb",
+            "ALTER TABLE local_resources ADD COLUMN IF NOT EXISTS source_metadata JSONB NOT NULL DEFAULT '{}'::jsonb",
+            "ALTER TABLE local_resources ADD COLUMN IF NOT EXISTS version_number INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE local_resources ADD COLUMN IF NOT EXISTS supersedes_resource_id UUID REFERENCES local_resources(id) ON DELETE SET NULL",
+            "ALTER TABLE local_resources ADD COLUMN IF NOT EXISTS http_etag TEXT",
+            "ALTER TABLE local_resources ADD COLUMN IF NOT EXISTS http_last_modified TEXT",
+            """
+            CREATE TABLE IF NOT EXISTS hdx_metadata_records (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                dataset_id TEXT NOT NULL,
+                resource_id TEXT,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                data_grid_dimensions JSONB NOT NULL DEFAULT '[]'::jsonb,
+                geography JSONB NOT NULL DEFAULT '[]'::jsonb,
+                temporal_coverage JSONB NOT NULL DEFAULT '{}'::jsonb,
+                structure JSONB NOT NULL DEFAULT '{}'::jsonb,
+                formats JSONB NOT NULL DEFAULT '[]'::jsonb,
+                update_periodicity TEXT,
+                expected_update_at TIMESTAMPTZ,
+                reliability JSONB NOT NULL DEFAULT '{}'::jsonb,
+                source_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+                observed_at TIMESTAMPTZ NOT NULL,
+                UNIQUE (project_id, dataset_id, resource_id)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS signal_events (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                source TEXT NOT NULL,
+                external_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                summary TEXT NOT NULL DEFAULT '',
+                occurred_at TIMESTAMPTZ NOT NULL,
+                received_at TIMESTAMPTZ NOT NULL,
+                locations JSONB NOT NULL DEFAULT '[]'::jsonb,
+                themes JSONB NOT NULL DEFAULT '[]'::jsonb,
+                severity NUMERIC NOT NULL DEFAULT 0,
+                confidence NUMERIC NOT NULL DEFAULT 0,
+                evidence JSONB NOT NULL DEFAULT '[]'::jsonb,
+                raw JSONB NOT NULL DEFAULT '{}'::jsonb,
+                UNIQUE (project_id, source, external_id)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS signal_rules (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                locations JSONB NOT NULL DEFAULT '[]'::jsonb,
+                themes JSONB NOT NULL DEFAULT '[]'::jsonb,
+                min_severity NUMERIC NOT NULL DEFAULT 0,
+                min_confidence NUMERIC NOT NULL DEFAULT 0,
+                lookback_hours INTEGER NOT NULL DEFAULT 168,
+                data_grid_dimensions JSONB NOT NULL DEFAULT '[]'::jsonb,
+                query_template TEXT NOT NULL DEFAULT '{title} {themes} {locations}',
+                refresh_due_resources BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS signal_actions (
+                id UUID PRIMARY KEY,
+                event_id UUID NOT NULL REFERENCES signal_events(id) ON DELETE CASCADE,
+                rule_id UUID NOT NULL REFERENCES signal_rules(id) ON DELETE CASCADE,
+                action_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                result JSONB NOT NULL DEFAULT '{}'::jsonb,
+                error TEXT,
+                started_at TIMESTAMPTZ NOT NULL,
+                finished_at TIMESTAMPTZ,
+                UNIQUE (event_id, rule_id, action_type)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS syndromic_snapshots (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                scope_key TEXT NOT NULL,
+                window_start TIMESTAMPTZ NOT NULL,
+                window_end TIMESTAMPTZ NOT NULL,
+                event_count INTEGER NOT NULL,
+                score NUMERIC NOT NULL,
+                themes JSONB NOT NULL DEFAULT '{}'::jsonb,
+                locations JSONB NOT NULL DEFAULT '{}'::jsonb,
+                evidence JSONB NOT NULL DEFAULT '[]'::jsonb,
+                created_at TIMESTAMPTZ NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS notebooks (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                kernel TEXT NOT NULL CHECK (kernel IN ('python3', 'ir')),
+                description TEXT NOT NULL DEFAULT '',
+                current_revision INTEGER NOT NULL DEFAULT 1,
+                created_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS notebook_revisions (
+                id UUID PRIMARY KEY,
+                notebook_id UUID NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
+                revision_number INTEGER NOT NULL,
+                document JSONB NOT NULL,
+                document_sha256 CHAR(64) NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL,
+                UNIQUE (notebook_id, revision_number)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS notebook_cell_executions (
+                id UUID PRIMARY KEY,
+                notebook_id UUID NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
+                revision_id UUID NOT NULL REFERENCES notebook_revisions(id),
+                cell_index INTEGER NOT NULL,
+                script_execution_id UUID REFERENCES script_executions(id) ON DELETE SET NULL,
+                code_sha256 CHAR(64) NOT NULL,
+                requested_at TIMESTAMPTZ NOT NULL
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS hdx_metadata_search_idx ON hdx_metadata_records(project_id, observed_at DESC)",
+            "CREATE INDEX IF NOT EXISTS signal_events_scope_idx ON signal_events(project_id, occurred_at DESC)",
+            "CREATE INDEX IF NOT EXISTS signal_rules_project_idx ON signal_rules(project_id, enabled)",
+            "CREATE INDEX IF NOT EXISTS signal_actions_event_idx ON signal_actions(event_id, started_at DESC)",
+            "CREATE INDEX IF NOT EXISTS syndromic_project_idx ON syndromic_snapshots(project_id, window_end DESC)",
+            "CREATE INDEX IF NOT EXISTS notebooks_project_idx ON notebooks(project_id, updated_at DESC)",
+            """
+            CREATE OR REPLACE VIEW hdp_signals AS
+            SELECT id, project_id, source, external_id, title, summary, occurred_at,
+                   locations, themes, severity, confidence, evidence
+            FROM signal_events
+            WHERE project_id = NULLIF(current_setting('hdp.project_id', TRUE), '')::uuid
+            """,
+            """
+            CREATE OR REPLACE VIEW hdp_hdx_metadata AS
+            SELECT id, project_id, dataset_id, resource_id, title, description,
+                   data_grid_dimensions, geography, temporal_coverage, structure,
+                   formats, update_periodicity, expected_update_at, reliability, observed_at
+            FROM hdx_metadata_records
+            WHERE project_id = NULLIF(current_setting('hdp.project_id', TRUE), '')::uuid
+            """,
+        ),
+    ),
 )
 
 

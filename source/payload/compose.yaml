@@ -22,13 +22,43 @@ services:
     profiles: ["analytics"]
     expose:
       - "8001"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 768m
+    cpus: 1.0
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8001/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12
 
+  spool-init:
+    image: hdp-runner-python:5.0.0
+    build:
+      context: ./runner
+      dockerfile: Dockerfile.python
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mkdir -p /spool/staging /spool/pending/python /spool/pending/r
+        /spool/running/python /spool/running/r /spool/completed/python
+        /spool/completed/r /spool/heartbeat && chown -R 65532:65532 /spool
+        && chmod 0711 /spool /spool/staging /spool/pending /spool/pending/python
+        /spool/pending/r /spool/running /spool/running/python /spool/running/r
+        /spool/completed /spool/completed/python /spool/completed/r /spool/heartbeat
+    volumes:
+      - execution_spool:/spool
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "DAC_OVERRIDE"]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
   runner-python:
+    image: hdp-runner-python:5.0.0
     build:
       context: ./runner
       dockerfile: Dockerfile.python
@@ -38,18 +68,24 @@ services:
       HDP_SPOOL: /spool
       HDP_RUNNER_LANGUAGE: python
       HDP_RUNNER_COMMAND: /usr/local/bin/python3
+      HDP_API_UID: "65532"
     volumes:
       - execution_spool:/spool
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=64m
     cap_drop: ["ALL"]
+    cap_add: ["SETUID", "SETGID", "CHOWN", "DAC_OVERRIDE"]
     security_opt: ["no-new-privileges:true"]
     pids_limit: 64
     mem_limit: 512m
     cpus: 1.0
+    depends_on:
+      spool-init:
+        condition: service_completed_successfully
 
   runner-r:
+    image: hdp-runner-r:5.0.0
     build:
       context: ./runner
       dockerfile: Dockerfile.r
@@ -60,67 +96,57 @@ services:
       HDP_SPOOL: /spool
       HDP_RUNNER_LANGUAGE: r
       HDP_RUNNER_COMMAND: /usr/local/bin/Rscript
+      HDP_API_UID: "65532"
     volumes:
       - execution_spool:/spool
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=64m
     cap_drop: ["ALL"]
+    cap_add: ["SETUID", "SETGID", "CHOWN", "DAC_OVERRIDE"]
     security_opt: ["no-new-privileges:true"]
     pids_limit: 64
     mem_limit: 768m
     cpus: 1.0
-
-  github-api:
-    build: ./github-api
-    restart: unless-stopped
-    environment:
-      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-      GITHUB_API_VERSION: ${GITHUB_API_VERSION:-2026-03-10}
-      GITHUB_DEFAULT_OWNER: ${GITHUB_DEFAULT_OWNER:-B-DAUTRIF}
-      GITHUB_DEFAULT_REPOSITORY: ${GITHUB_DEFAULT_REPOSITORY:-humanitarian-data-platform}
-      GITHUB_API_WRITE_ENABLED: ${GITHUB_API_WRITE_ENABLED:-false}
-      GITHUB_API_TIMEOUT_SECONDS: ${GITHUB_API_TIMEOUT_SECONDS:-20}
-    ports:
-      - "127.0.0.1:${HDP_GITHUB_API_PORT:-8091}:8091"
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,nodev,size=32m
-    cap_drop: ["ALL"]
-    security_opt: ["no-new-privileges:true"]
-    pids_limit: 64
-    mem_limit: 256m
-    cpus: 0.5
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8091/health', timeout=3)\""]
-      interval: 10s
-      timeout: 5s
-      retries: 20
+    depends_on:
+      spool-init:
+        condition: service_completed_successfully
 
   api:
     build: ./api
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://humanitarian:${POSTGRES_PASSWORD}@db:5432/humanitarian
+      SQL_READER_URL: postgresql://hdp_reader:${HDP_SQL_PASSWORD}@db:5432/humanitarian
+      HDP_SQL_PASSWORD: ${HDP_SQL_PASSWORD}
       DATA_DIR: /app/data
       R_SERVICE_URL: http://r-service:8001
       RELIEFWEB_APPNAME: ${RELIEFWEB_APPNAME:-}
       HDX_HAPI_APP_IDENTIFIER: ${HDX_HAPI_APP_IDENTIFIER:-}
       HDP_MAX_UPLOAD_BYTES: ${HDP_MAX_UPLOAD_BYTES:-536870912}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-      GITHUB_API_SERVICE_URL: http://github-api:8091
+      HDP_LOCAL_TOKEN: ${HDP_LOCAL_TOKEN}
+      HDP_ALLOWED_HOSTS: ${HDP_ALLOWED_HOSTS:-localhost,127.0.0.1,api}
       EXECUTION_SPOOL_DIR: /app/execution_spool
       HDP_TILE_URL: ${HDP_TILE_URL:-https://tile.openstreetmap.org/{z}/{x}/{y}.png}
     volumes:
       - ./data:/app/data
       - execution_spool:/app/execution_spool
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 2.0
     ports:
       - "127.0.0.1:${HDP_PORT:-8080}:8080"
     depends_on:
       db:
         condition: service_healthy
-      github-api:
-        condition: service_healthy
+      spool-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/api/health', timeout=3)\""]
       interval: 10s

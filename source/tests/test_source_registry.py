@@ -39,7 +39,7 @@ class SourceRegistryContractTest(unittest.TestCase):
         )
         for source_id in CONNECTORS:
             definition = connector_definition(source_id)
-            self.assertEqual(definition["registry_version"], "4.0.0")
+            self.assertEqual(definition["registry_version"], "5.0.0")
             self.assertTrue(definition["documentation_evidence"])
             self.assertEqual(
                 merge_values(source_id, definition["project_defaults"], scope="project"),
@@ -117,7 +117,7 @@ class SourceRegistryContractTest(unittest.TestCase):
             definition = connector_definition(source_id)
             properties = definition["project_schema"]["properties"]
             self.assertTrue({"query", "date_from", "date_to", "location"} <= set(properties))
-            self.assertEqual(definition["capabilities"]["contract_version"], "4.0.0")
+            self.assertEqual(definition["capabilities"]["contract_version"], "5.0.0")
             self.assertEqual(
                 definition["capabilities"]["criteria"]["location"],
                 "normalized_post_filter",

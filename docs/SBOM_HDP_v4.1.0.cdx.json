@@ -1,0 +1,106 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "bom-ref": "pkg:docker/postgis/postgis@16-3.4",
+      "name": "postgis/postgis",
+      "purl": "pkg:docker/postgis/postgis@16-3.4",
+      "type": "container",
+      "version": "16-3.4"
+    },
+    {
+      "bom-ref": "pkg:npm/leaflet@1.9.4",
+      "name": "leaflet",
+      "purl": "pkg:npm/leaflet@1.9.4",
+      "type": "library",
+      "version": "1.9.4"
+    },
+    {
+      "bom-ref": "pkg:pypi/defusedxml@0.7.1",
+      "name": "defusedxml",
+      "purl": "pkg:pypi/defusedxml@0.7.1",
+      "type": "library",
+      "version": "0.7.1"
+    },
+    {
+      "bom-ref": "pkg:pypi/fastapi@0.116.1",
+      "name": "fastapi",
+      "purl": "pkg:pypi/fastapi@0.116.1",
+      "type": "library",
+      "version": "0.116.1"
+    },
+    {
+      "bom-ref": "pkg:pypi/fastapi@0.116.1",
+      "name": "fastapi",
+      "purl": "pkg:pypi/fastapi@0.116.1",
+      "type": "library",
+      "version": "0.116.1"
+    },
+    {
+      "bom-ref": "pkg:pypi/httpx@0.28.1",
+      "name": "httpx",
+      "purl": "pkg:pypi/httpx@0.28.1",
+      "type": "library",
+      "version": "0.28.1"
+    },
+    {
+      "bom-ref": "pkg:pypi/httpx@0.28.1",
+      "name": "httpx",
+      "purl": "pkg:pypi/httpx@0.28.1",
+      "type": "library",
+      "version": "0.28.1"
+    },
+    {
+      "bom-ref": "pkg:pypi/psycopg@3.2.9",
+      "name": "psycopg",
+      "purl": "pkg:pypi/psycopg@3.2.9",
+      "type": "library",
+      "version": "3.2.9"
+    },
+    {
+      "bom-ref": "pkg:pypi/pydantic@2.11.7",
+      "name": "pydantic",
+      "purl": "pkg:pypi/pydantic@2.11.7",
+      "type": "library",
+      "version": "2.11.7"
+    },
+    {
+      "bom-ref": "pkg:pypi/pydantic@2.11.7",
+      "name": "pydantic",
+      "purl": "pkg:pypi/pydantic@2.11.7",
+      "type": "library",
+      "version": "2.11.7"
+    },
+    {
+      "bom-ref": "pkg:pypi/python-multipart@0.0.20",
+      "name": "python-multipart",
+      "purl": "pkg:pypi/python-multipart@0.0.20",
+      "type": "library",
+      "version": "0.0.20"
+    },
+    {
+      "bom-ref": "pkg:pypi/uvicorn@0.35.0",
+      "name": "uvicorn",
+      "purl": "pkg:pypi/uvicorn@0.35.0",
+      "type": "library",
+      "version": "0.35.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/uvicorn@0.35.0",
+      "name": "uvicorn",
+      "purl": "pkg:pypi/uvicorn@0.35.0",
+      "type": "library",
+      "version": "0.35.0"
+    }
+  ],
+  "metadata": {
+    "component": {
+      "name": "Humanitarian Data Platform",
+      "type": "application",
+      "version": "4.1.0"
+    }
+  },
+  "serialNumber": "urn:uuid:ebc6a114-0b99-4926-a27d-c32689bda280",
+  "specVersion": "1.5",
+  "version": 1
+}

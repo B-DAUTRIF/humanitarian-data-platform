@@ -1,6 +1,13 @@
 Humanitarian Data Platform — journal applicatif des versions
 =============================================================
 
+[2026-08-15] Version 4.1.0 - sources individualisées et liens
+------------------------------------------------------------
+- Contrats globaux, limites HTTP et paramètres projet séparés pour 10 sources.
+- Profils techniques, liens officiels et exemples cURL/Python/R expurgés.
+- Page Technologies & code : 25 ressources, 13 catégories, 87 liens.
+- Compatibilité des paramètres et sauvegardes 4.0.0 ; 101 tests réussis.
+
 [2026-08-15] Version 4.0.0 — gel fonctionnel
 ------------------------------------------------
 - Recherche fédérée et paramètres propres à dix connecteurs.

@@ -1,0 +1,15 @@
+[Unit]
+Description=Humanitarian Data Platform V5
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/hdp
+ExecStart=/usr/bin/docker compose --env-file .env -f compose.yaml up -d
+ExecStop=/usr/bin/docker compose --env-file .env -f compose.yaml down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

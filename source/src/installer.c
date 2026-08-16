@@ -20,7 +20,7 @@
 #include "payload_generated.h"
 
 #define APP_NAME L"Humanitarian Data Platform"
-#define APP_VERSION L"4.0.0"
+#define APP_VERSION L"5.0.0"
 #define MAIN_CLASS L"HDP_NATIVE_INSTALLER_30"
 
 #define ID_PATH 1001
@@ -631,7 +631,7 @@ static BOOL secret_line_is_valid(const wchar_t *secret) {
 static BOOL is_managed_environment_line(const char *line, size_t length) {
     static const char *keys[] = {
         "POSTGRES_PASSWORD", "RELIEFWEB_APPNAME", "HDX_HAPI_APP_IDENTIFIER",
-        "GITHUB_TOKEN", "HDP_PORT"
+        "GITHUB_TOKEN", "HDP_LOCAL_TOKEN", "HDP_SQL_PASSWORD", "HDP_PORT"
     };
     for (size_t index = 0; index < sizeof(keys) / sizeof(keys[0]); index++) {
         size_t key_length = strlen(keys[index]);
@@ -658,12 +658,14 @@ static BOOL write_environment(const wchar_t *install_dir, const wchar_t *reliefw
     char existing_appname[256] = {0};
     char existing_hapi_identifier[512] = {0};
     char existing_github_token[2048] = {0};
+    char local_token[128] = {0};
+    char sql_password[128] = {0};
     DWORD existing_size = 0;
     char *existing = read_file_bytes(env_path, &existing_size);
     if (existing) {
         wchar_t backup_path[MAX_PATH * 4];
         _snwprintf(backup_path, sizeof(backup_path) / sizeof(wchar_t),
-                   L"%ls\\.env.backup-before-v4.0.0", install_dir);
+                   L"%ls\\.env.backup-before-v5.0.0", install_dir);
         if (!CopyFileW(env_path, backup_path, FALSE)) {
             HeapFree(GetProcessHeap(), 0, existing);
             return FALSE;
@@ -674,8 +676,12 @@ static BOOL write_environment(const wchar_t *install_dir, const wchar_t *reliefw
         extract_env_value(existing, "HDX_HAPI_APP_IDENTIFIER", existing_hapi_identifier,
                           sizeof(existing_hapi_identifier));
         extract_env_value(existing, "GITHUB_TOKEN", existing_github_token, sizeof(existing_github_token));
+        extract_env_value(existing, "HDP_LOCAL_TOKEN", local_token, sizeof(local_token));
+        extract_env_value(existing, "HDP_SQL_PASSWORD", sql_password, sizeof(sql_password));
     }
     if (!password[0] && !generate_secret(password, sizeof(password))) return FALSE;
+    if (!local_token[0] && !generate_secret(local_token, sizeof(local_token))) return FALSE;
+    if (!sql_password[0] && !generate_secret(sql_password, sizeof(sql_password))) return FALSE;
 
     char appname_utf8[512] = {0};
     char github_token_utf8[2048] = {0};
@@ -714,8 +720,10 @@ static BOOL write_environment(const wchar_t *install_dir, const wchar_t *reliefw
     int managed_length = _snprintf(
         managed, sizeof(managed),
         "POSTGRES_PASSWORD=%s\r\nRELIEFWEB_APPNAME=%s\r\n"
-        "HDX_HAPI_APP_IDENTIFIER=%s\r\nGITHUB_TOKEN=%s\r\nHDP_PORT=%u\r\n",
-        password, appname_utf8, existing_hapi_identifier, github_token_utf8, host_port
+        "HDX_HAPI_APP_IDENTIFIER=%s\r\nGITHUB_TOKEN=%s\r\n"
+        "HDP_LOCAL_TOKEN=%s\r\nHDP_SQL_PASSWORD=%s\r\nHDP_PORT=%u\r\n",
+        password, appname_utf8, existing_hapi_identifier, github_token_utf8,
+        local_token, sql_password, host_port
     );
     if (managed_length <= 0 || managed_length >= (int)sizeof(managed)) ok = FALSE;
     if (ok) {
@@ -931,7 +939,7 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
     post_status(L"Construction des services Python et GitHub", 66);
     post_log(L"Construction silencieuse de l'API, du runner Python sans réseau et de la passerelle GitHub locale. Le compteur d'activité confirme que le processus continue.\r\n");
     _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
-               L"compose -f \"%ls\\compose.yaml\" build --quiet api runner-python github-api", options->install_dir);
+               L"compose -f \"%ls\\compose.yaml\" build --quiet api runner-python", options->install_dir);
     compose_result = run_process_capture(docker, compose_args, options->install_dir);
     if (compose_result != 0) {
         wchar_t error[256];
@@ -961,10 +969,10 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
     post_status(L"Démarrage des services locaux", 84);
     if (options->install_r_module) {
         _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
-                   L"compose -f \"%ls\\compose.yaml\" --profile analytics up -d --no-build db r-service runner-python runner-r github-api api", options->install_dir);
+                   L"compose -f \"%ls\\compose.yaml\" --profile analytics up -d --no-build db r-service runner-python runner-r api", options->install_dir);
     } else {
         _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
-                   L"compose -f \"%ls\\compose.yaml\" up -d --no-build db runner-python github-api api", options->install_dir);
+                   L"compose -f \"%ls\\compose.yaml\" up -d --no-build db runner-python api", options->install_dir);
     }
     compose_result = run_process_capture(docker, compose_args, options->install_dir);
     if (compose_result != 0) {
@@ -995,10 +1003,22 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
     }
 
     post_status(L"Installation terminée — ouverture du navigateur", 100);
-    wchar_t local_url[128];
+    wchar_t env_path[MAX_PATH * 4];
+    _snwprintf(env_path, sizeof(env_path) / sizeof(wchar_t), L"%ls\\.env", options->install_dir);
+    DWORD env_size = 0;
+    char *env_bytes = read_file_bytes(env_path, &env_size);
+    char local_token_utf8[128] = {0};
+    if (env_bytes) {
+        extract_env_value(env_bytes, "HDP_LOCAL_TOKEN", local_token_utf8, sizeof(local_token_utf8));
+        HeapFree(GetProcessHeap(), 0, env_bytes);
+    }
+    wchar_t local_token_wide[128] = {0};
+    MultiByteToWideChar(CP_UTF8, 0, local_token_utf8, -1, local_token_wide,
+                        sizeof(local_token_wide) / sizeof(wchar_t));
+    wchar_t local_url[384];
     _snwprintf(local_url, sizeof(local_url) / sizeof(wchar_t),
-               L"http://localhost:%u", options->host_port);
-    wchar_t success_message[256];
+               L"http://localhost:%u/?token=%ls", options->host_port, local_token_wide);
+    wchar_t success_message[512];
     _snwprintf(success_message, sizeof(success_message) / sizeof(wchar_t),
                L"Installation réussie. Interface : %ls\r\n", local_url);
     post_log(success_message);
@@ -1168,7 +1188,7 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
         case WM_CREATE: {
             g_font = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
             HWND header = create_control(L"STATIC", L"Humanitarian Data Platform", SS_LEFT, 0, window);
-            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 4.0.0 — données humanitaires et sanitaires", SS_LEFT, 0, window);
+            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 5.0.0 — données humanitaires et sanitaires", SS_LEFT, 0, window);
             HWND path_label = create_control(L"STATIC", L"Dossier d'installation", SS_LEFT, 0, window);
             HWND relief_label = create_control(L"STATIC", L"Appname ReliefWeb", SS_LEFT, 0, window);
             HWND github_label = create_control(L"STATIC", L"Jeton GitHub", SS_LEFT, 0, window);

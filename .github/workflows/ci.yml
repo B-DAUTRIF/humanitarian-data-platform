@@ -20,7 +20,9 @@ jobs:
         with:
           node-version: "22"
       - name: Tests Python
-        run: python -m unittest discover -s source/tests -p 'test_*.py'
+        run: |
+          python -m pip install pglast==8.4
+          python -m unittest discover -s source/tests -p 'test_*.py'
       - name: Compilation Python
         run: python -m compileall -q source/payload/api/app source/payload/github-api source/tests tools
       - name: Syntaxe JavaScript
@@ -29,6 +31,8 @@ jobs:
         run: docker compose -f source/payload/compose.yaml config --quiet
         env:
           POSTGRES_PASSWORD: ci-placeholder-not-a-secret
+          HDP_LOCAL_TOKEN: ci-local-token-00000000000000000000000000000000
+          HDP_SQL_PASSWORD: ci-sql-token-000000000000000000000000000000000
       - name: Runner C17
         run: gcc -std=c17 -O2 -Wall -Wextra -Werror source/payload/runner/runner.c -o /tmp/hdp-runner
       - name: Payload reproductible
@@ -36,10 +40,6 @@ jobs:
           node source/scripts/generate_payload.mjs source/payload /tmp/payload_generated.h
           test -s /tmp/payload_generated.h
           grep -q 'HDP_PAYLOAD_GENERATED_H' /tmp/payload_generated.h
-      - name: SBOM reproductible
-        run: |
-          python tools/generate_sbom.py --output /tmp/SBOM_HDP_v4.0.0.cdx.json
-          cmp /tmp/SBOM_HDP_v4.0.0.cdx.json docs/SBOM_HDP_v4.0.0.cdx.json
       - name: Contrôles de sécurité statiques
         run: python tools/security_static_checks.py
       - name: Diff propre

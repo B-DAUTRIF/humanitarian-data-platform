@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TD
-    U["Interface web locale"] --> A["FastAPI 4.0.0"]
+    U["Interface web locale"] --> A["FastAPI 4.1.0"]
     A --> P["PostgreSQL + PostGIS"]
     A --> F["Fichiers et rapports"]
     A --> X["Sources distantes"]
@@ -48,7 +48,12 @@ runners utilisent `network_mode: none`.
 
 Le projet par défaut utilise l'UUID stable `00000000-0000-4000-8000-000000000001`. Le démarrage crée les nouvelles tables de façon idempotente, ajoute `project_id` et `schedule_id` à l'historique v1.5, puis rattache les lignes sans projet.
 
-## Intégrations de projet 4.0.0
+## Intégrations de projet 4.1.0
+
+Le registre 4.1.0 sépare le contrat global de chaque connecteur et expose son
+profil technique, ses liens officiels et ses exemples cURL/Python/R expurgés.
+Le catalogue `/api/technologies` alimente la page utilisateur Technologies &
+code sans charger de script distant.
 
 Le registre `source_registry.py` décrit chaque API au moyen d'un contrat
 versionné inspiré de JSON Schema. L'interface génère les champs depuis ce
