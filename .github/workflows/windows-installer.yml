@@ -2,6 +2,7 @@ name: HDP Windows installer
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches: [main, "codex/**"]
     paths:
