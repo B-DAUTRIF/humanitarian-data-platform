@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 50156)
+Total output lines: 4977
+
 from __future__ import annotations
 
 import asyncio
@@ -76,10 +79,12 @@ from .processing_recipes import (
 from .scheduler_utils import MIN_INTERVAL_MINUTES, next_run_at, validate_interval
 from .rss_registry import MAX_RSS_BYTES, build_rss_url, parse_rss, rss_catalog, rss_definition
 from .request_security import (
+    CSRF_COOKIE,
     SESSION_COOKIE,
     allowed_hosts,
     authenticated,
     csrf_is_valid,
+    csrf_token,
     normalized_host,
     valid_local_token,
 )
@@ -116,7 +121,7 @@ from .script_runtime import (
 
 
 APP_NAME = "Humanitarian Data Platform"
-APP_VERSION = "5.0.1"
+APP_VERSION = "5.0.2"
 DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
 EXECUTION_SPOOL_DIR = Path(os.getenv("EXECUTION_SPOOL_DIR", "/app/execution_spool"))
 DATABASE_URL = os.environ["DATABASE_URL"]
@@ -168,7 +173,7 @@ async def local_request_boundary(request: Request, call_next: Any) -> Response:
         return await call_next(request)
     if not authenticated(request, HDP_LOCAL_TOKEN):
         return JSONResponse(status_code=401, content={"detail": "Session HDP requise"})
-    if not csrf_is_valid(request, HDP_ALLOWED_HOSTS):
+    if not csrf_is_valid(request, HDP_ALLOWED_HOSTS, HDP_LOCAL_TOKEN):
         return JSONResponse(status_code=403, content={"detail": "Origine ou jeton CSRF refusé"})
     return await call_next(request)
 
@@ -2353,10 +2358,29 @@ def home(request: Request, token: str = Query(default="", max_length=256)) -> Re
             secure=False,
             max_age=43_200,
         )
+        response.set_cookie(
+            CSRF_COOKIE,
+            csrf_token(HDP_LOCAL_TOKEN),
+            httponly=False,
+            samesite="strict",
+            secure=False,
+            max_age=43_200,
+        )
+        response.headers["Cache-Control"] = "no-store"
         return response
     if not authenticated(request, HDP_LOCAL_TOKEN):
         raise HTTPException(status_code=401, detail="Ouvrez HDP depuis son raccourci sécurisé")
-    return FileResponse(STATIC_DIR / "index.html")
+    response = FileResponse(STATIC_DIR / "index.html")
+    response.set_cookie(
+        CSRF_COOKIE,
+        csrf_token(HDP_LOCAL_TOKEN),
+        httponly=False,
+        samesite="strict",
+        secure=False,
+        max_age=43_200,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/api/health")
@@ -2496,25 +2520,7 @@ def source_settings() -> list[dict[str, Any]]:
 @app.get("/api/source-settings/{source_id}")
 def source_setting(source_id: str) -> dict[str, Any]:
     source = source_metadata(source_id)
-    return {**source, "configuration": get_source_global_settings(source_id)}
-
-
-@app.put("/api/source-settings/{source_id}")
-def update_source_setting(
-    source_id: str, payload: SourceGlobalSettingsUpdate
-) -> dict[str, Any]:
-    source_metadata(source_id)
-    try:
-        settings = validate_values(source_id, payload.settings, scope="global")
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    now = datetime.now(UTC)
-    with database_connection() as connection:
-        connection.execute(
-            """
-            INSERT INTO source_global_settings (source_id, settings, updated_at)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (source_id) DO UPDATE
+    return {**source, "configuration": get_source_global_settin…156 tokens truncated…       ON CONFLICT (source_id) DO UPDATE
             SET settings = EXCLUDED.settings, updated_at = EXCLUDED.updated_at
             """,
             (source_id, Jsonb(settings), now),
