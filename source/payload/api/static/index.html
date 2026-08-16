@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Humanitarian Data Platform 5.0.1</title>
+  <title>Humanitarian Data Platform 5.0.2</title>
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
   <style>
     :root {
@@ -125,7 +125,7 @@
 <body>
 <header>
   <div class="header-inner">
-    <div class="brand"><h1><a id="brand-home" href="#home" aria-label="Revenir à l’accueil de Humanitarian Data Platform">Humanitarian Data Platform</a></h1><p>Données humanitaires, épidémiologiques et sanitaires mondiales · version 5.0.1</p></div>
+    <div class="brand"><h1><a id="brand-home" href="#home" aria-label="Revenir à l’accueil de Humanitarian Data Platform">Humanitarian Data Platform</a></h1><p>Données humanitaires, épidémiologiques et sanitaires mondiales · version 5.0.2</p></div>
     <div class="context">
       <select id="project-select" aria-label="Projet actif"></select>
       <span id="health" class="badge">Vérification…</span>
@@ -563,7 +563,8 @@
   const els={project:q('#project-select'),health:q('#health')};
   const escapeText=value=>String(value??'');
   function setStatus(selector,message,error=false){const el=q(selector);el.textContent=message||'';el.className=`status${error?' error':''}`;}
-  async function api(path,options={}){const isForm=options.body instanceof FormData;const method=String(options.method||'GET').toUpperCase();const mutation=!['GET','HEAD','OPTIONS'].includes(method);const headers=isForm?{...(options.headers||{})}:{'Content-Type':'application/json',...(options.headers||{})};if(mutation)headers['X-HDP-CSRF']='1';const response=await fetch(path,{...options,headers,credentials:'same-origin'});if(response.status===204)return null;const data=await response.json().catch(()=>({detail:`Erreur HTTP ${response.status}`}));if(response.status===401){throw new Error('Session HDP expirée : rouvrez l’application depuis son raccourci.');}if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail));return data;}
+  function cookieValue(name){const prefix=`${encodeURIComponent(name)}=`;const item=document.cookie.split(';').map(value=>value.trim()).find(value=>value.startsWith(prefix));return item?decodeURIComponent(item.slice(prefix.length)):'';}
+  async function api(path,options={}){const isForm=options.body instanceof FormData;const method=String(options.method||'GET').toUpperCase();const mutation=!['GET','HEAD','OPTIONS'].includes(method);const headers=isForm?{...(options.headers||{})}:{'Content-Type':'application/json',...(options.headers||{})};if(mutation)headers['X-HDP-CSRF']=cookieValue('hdp_csrf')||'1';const response=await fetch(path,{...options,headers,credentials:'same-origin'});if(response.status===204)return null;const data=await response.json().catch(()=>({detail:`Erreur HTTP ${response.status}`}));if(response.status===401){throw new Error('Session HDP expirée : rouvrez l’application depuis son raccourci.');}if(response.status===403&&data.detail==='Origine ou jeton CSRF refusé'){throw new Error('Session de sécurité à renouveler : rechargez HDP avec Ctrl+F5 ou rouvrez le lien sécurisé de l’installateur.');}if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail));return data;}
   function bytes(value){const units=['o','Kio','Mio','Gio'];let n=Number(value||0),i=0;while(n>=1024&&i<units.length-1){n/=1024;i++;}return `${n.toLocaleString('fr-FR',{maximumFractionDigits:i?1:0})} ${units[i]}`;}
   function date(value){return value?new Date(value).toLocaleString('fr-FR'):'—';}
   function button(label,handler,className=''){const b=document.createElement('button');b.type='button';b.textContent=label;b.className=className;b.addEventListener('click',handler);return b;}
