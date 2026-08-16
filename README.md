@@ -34,7 +34,7 @@ Les secrets `POSTGRES_PASSWORD`, `HDP_LOCAL_TOKEN` et `HDP_SQL_PASSWORD` sont g�
 - [Prompt de reconstruction V5](HDP_Prompt_production_global_v5.0.0.txt)
 - [Wiki versionné dans le dépôt](wiki/Home.md)
 - [Dépôt GitHub](https://github.com/B-DAUTRIF/humanitarian-data-platform)
-- [Wiki GitHub](https://github.com/B-DAUTRIF/humanitarian-data-platform/wiki)
+- [Wiki V5 versionné sur GitHub](https://github.com/B-DAUTRIF/humanitarian-data-platform/tree/main/wiki)
 
 Références externes : [HDX Data Grids](https://data.humdata.org/dashboards/overview-of-data-grids), [HDX Signals](https://docs.humdata.org/about/hdx-signals), [prompts HDX Signals](https://docs.humdata.org/about/hdx-signals/prompts), [Jupyter](https://jupyter.org/documentation), [ONU M49](https://unstats.un.org/unsd/methodology/m49/).
 
