@@ -1,5 +1,17 @@
 # Journal des versions
 
+## 5.0.2 - renouvellement de la session CSRF locale - 16 août 2026
+
+- remplacement du marqueur CSRF constant par un jeton dérivé du secret local,
+  vérifié en double soumission entre cookie et en-tête HTTP ;
+- renouvellement du cookie CSRF à chaque ouverture authentifiée et interdiction
+  de mise en cache de la page d'application et de la redirection d'amorçage ;
+- compatibilité transitoire avec les onglets 5.0.1 déjà ouverts, toujours
+  bornée par les contrôles Host, Origin, Fetch Metadata et SameSite strict ;
+- message de récupération explicite lorsque l'interface chargée est périmée ;
+- tests unitaires ajoutés pour les origines, requêtes intersites, cookies et
+  méthodes HTTP sûres.
+
 ## 5.0.1 - correctif d'installation Windows/Docker - 16 août 2026
 
 - correction de l'initialisation du volume `execution_spool` : les permissions
