@@ -34,7 +34,7 @@ def main() -> None:
     require(main_source, "validate_public_url", "contrôle SSRF")
     require(main_source, "validate_upload_content", "validation d’import")
     require(main_source, "download_public_file", "transport HTTP à IP épinglée")
-    require(installer, ".env.backup-before-v5.0.0", "sauvegarde de configuration")
+    require(installer, ".env.backup-before-v5.0.1", "sauvegarde de configuration")
     forbid(installer.casefold(), "down -v", "aucune suppression de volume")
     print("Contrôles de sécurité statiques: OK")
 
