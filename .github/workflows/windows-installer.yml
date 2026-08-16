@@ -42,11 +42,17 @@ jobs:
           Copy-Item "${{ runner.temp }}/hdp-installer/HumanitarianDataPlatform_Setup_Native_GUI_v5.0.0.exe" $stage
           Copy-Item "${{ runner.temp }}/hdp-installer/HumanitarianDataPlatform_Setup_Native_GUI_v5.0.0.exe.sha256" $stage
           Copy-Item -Recurse source/payload (Join-Path $stage "Linux_et_payload")
+          New-Item -ItemType Directory -Force -Path (Join-Path $stage "Sources") | Out-Null
+          Copy-Item -Recurse source (Join-Path $stage "Sources/source")
+          Copy-Item -Recurse tools (Join-Path $stage "Sources/tools")
+          Copy-Item -Recurse .github (Join-Path $stage "Sources/.github")
           Copy-Item -Recurse docs (Join-Path $stage "Documentation")
           Copy-Item -Recurse wiki (Join-Path $stage "Wiki")
           Copy-Item output/pdf/HDP_V5_Documentation_et_UML.pdf $stage
           Copy-Item HDP_Prompt_production_global_v5.0.0.txt $stage
           Copy-Item README.md $stage
+          Copy-Item CHANGELOG.md $stage
+          Copy-Item TODO_Mises_a_jour_HDP.md $stage
           Compress-Archive -Path "$stage/*" -DestinationPath "${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v5.0.0.zip" -CompressionLevel Optimal
           $hash = (Get-FileHash "${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v5.0.0.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  HumanitarianDataPlatform_Archive_complete_v5.0.0.zip" | Set-Content -Encoding ascii "${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v5.0.0.zip.sha256"
