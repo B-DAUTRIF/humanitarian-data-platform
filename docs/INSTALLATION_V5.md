@@ -5,11 +5,19 @@
 Prérequis : Windows 10/11 x64, Docker Desktop et Compose v2. Vérifier l’empreinte :
 
 ```powershell
-Get-FileHash .\HumanitarianDataPlatform_Setup_Native_GUI_v5.0.1.exe -Algorithm SHA256
-Get-Content .\HumanitarianDataPlatform_Setup_Native_GUI_v5.0.1.exe.sha256
+Get-FileHash .\HumanitarianDataPlatform_Setup_Native_GUI_v5.0.2.exe -Algorithm SHA256
+Get-Content .\HumanitarianDataPlatform_Setup_Native_GUI_v5.0.2.exe.sha256
 ```
 
 L’EXE installe le payload, préserve les données existantes lors d’une mise à niveau et génère des secrets indépendants. Il ouvre une URL d’amorçage locale contenant le jeton une seule fois ; le serveur le transforme en cookie `HttpOnly`.
+
+### Mise à niveau corrective depuis 5.0.1
+
+La version 5.0.2 renouvelle automatiquement le jeton CSRF à l'ouverture de
+HDP. Relancer l'EXE dans le même dossier conserve `.env`, `data/` et le volume
+PostgreSQL. Fermer les anciens onglets HDP, puis utiliser le lien sécurisé
+ouvert par l'installateur ; si un onglet affiche encore l'ancienne interface,
+faire `Ctrl+F5`. Ne lancez pas `docker compose down -v`.
 
 ### Mise à niveau corrective depuis 5.0.0
 
