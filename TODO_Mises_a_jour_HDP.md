@@ -1,5 +1,17 @@
 # Todo-list des mises à jour — Humanitarian Data Platform
 
+## Correctif V5.0.2 - session CSRF locale
+
+- [x] remplacer le marqueur CSRF constant par un jeton dérivé et vérifié en
+  double soumission cookie/en-tête ;
+- [x] renouveler le cookie CSRF lors de chaque ouverture authentifiée et
+  désactiver la mise en cache de l'interface ;
+- [x] conserver une transition bornée pour les onglets V5.0.1 déjà ouverts ;
+- [x] tester les origines locales, les requêtes intersites, les cookies
+  absents/discordants et les méthodes HTTP sûres ;
+- [ ] exécuter la recette V5.0.2 sur le poste Windows ayant signalé
+  `Origine ou jeton CSRF refusé` et confirmer une mutation depuis l'interface.
+
 ## Correctif V5.0.1 - installation Windows/Docker
 
 - [x] corriger l'échec `chmod: Operation not permitted` de `spool-init` sans
