@@ -1,55 +1,31 @@
-# Humanitarian Data Platform — version de travail 5.2
+# Humanitarian Data Platform — livraison qualifiée 5.0.2
 
-HDP V5 est une application locale de recherche, d’acquisition, de qualification et de traitement de données humanitaires. La V5 ajoute l’exploitation de la notion HDX Data Grid, les métadonnées au niveau jeu/fichier, une chaîne SIGNALS déclenchée par des événements, une surveillance syndromique et un espace notebook compatible Jupyter.
+La branche `main` représente la **dernière livraison installable qualifiée** de HDP. La version publiée ici est **5.0.2**.
 
-> **État de version au 16 août 2026** — **5.2** est la référence de travail active. La dernière version applicative et le dernier installateur effectivement publiés et qualifiés restent **5.0.2** jusqu’à la reconstruction et à la validation de livrables 5.2. Les artefacts 5.0.2 ne sont pas renommés.
+La ligne de travail **5.2** est conservée séparément sur [`develop/5.2`](https://github.com/B-DAUTRIF/humanitarian-data-platform/tree/develop/5.2). Elle ne doit pas être confondue avec une livraison installable.
 
-## Installer la dernière livraison qualifiée (5.0.2)
+## Télécharger la livraison qualifiée
 
-- Windows x64 : télécharger `HumanitarianDataPlatform_Setup_Native_GUI_v5.0.2.exe`, vérifier son fichier `.sha256`, puis exécuter l’installateur. Docker Desktop avec Compose v2 reste le moteur Linux embarqué.
-- Linux poste : dans `source/payload`, lancer `./install-linux.sh workstation`.
-- Linux serveur dédié : lancer `./install-linux.sh server`, puis ouvrir HDP par tunnel SSH. Le port reste volontairement lié à `127.0.0.1`.
+| Livrable | SHA-256 |
+|---|---|
+| [Installateur Windows x64 5.0.2](dist/v5.0.2/HumanitarianDataPlatform_Setup_Native_GUI_v5.0.2.exe) | `0077049d4ec410a0594fa2743b0d6149c7b2c3ae4b08859bce1c219b9fe2814a` |
+| [Archive complète 5.0.2](dist/v5.0.2/HumanitarianDataPlatform_Archive_complete_v5.0.2.zip) | `89e27edd1f5bdbf75bad70a66495843a8d777e3c73957cec534b56119d4345dc` |
 
-Les secrets `POSTGRES_PASSWORD`, `HDP_LOCAL_TOKEN` et `HDP_SQL_PASSWORD` sont générés séparément. Ne publiez jamais `.env`.
+Les fichiers `.sha256` correspondants se trouvent dans le même dossier. La provenance et les limites de qualification sont consignées dans [`dist/v5.0.2/PROVENANCE.json`](dist/v5.0.2/PROVENANCE.json) et [`docs/versions/5.0.2/QUALIFICATION.md`](docs/versions/5.0.2/QUALIFICATION.md).
 
-## V5 en bref
+## Organisation du dépôt
 
-- recherche HDX Data Grid par besoin, dimension, localisation, période et format ;
-- conservation et usage des descriptions, structures, types, dates, périodicités, géographies et indicateurs de fiabilité ;
-- plans d’agrégation explicites avec contrôles de granularité, période, licence et provenance ;
-- ingestion de signaux HDX/RSS/news/GDACS/webhook, déduplication et règles déterministes ;
-- recherche Data Grid automatique sur signal et mise à jour des seuls fichiers arrivés à leur échéance attendue ;
-- snapshots syndromiques globaux, thématiques ou localisés, sans diagnostic automatique ;
-- notebooks `.ipynb` versionnés dans HDP, exécution Python/R cellule par cellule dans des runners sans réseau ;
-- interface locale authentifiée, CSRF/Host contrôlés, téléchargements avec résolution IP épinglée ;
-- requêtes SQL analysées par AST et exécutées par le rôle PostgreSQL non privilégié `hdp_reader` ;
-- runners par job, sans réseau, limites CPU/fichiers/processus, purge après persistance ;
-- sauvegarde/restauration V5 avec empreintes externes, manifeste interne et contrôle avant extraction.
+- `source/` : source courante nécessaire à la livraison 5.0.2 ;
+- `dist/` : distributions immuables classées par version ;
+- `docs/versions/` : documentation technique classée par version ;
+- `docs/traceability/` : décisions, états, journaux et points de reprise archivés ;
+- `docs/governance/` : règles de publication, structure et audits du dépôt ;
+- `wiki/` : sources du Wiki correspondant à la génération V5.
 
-## Documentation
+L’index documentaire se trouve dans [`docs/README.md`](docs/README.md). Les règles complètes sont décrites dans [`docs/governance/REPOSITORY_STRUCTURE.md`](docs/governance/REPOSITORY_STRUCTURE.md).
 
-- [Guide général V5](docs/HDP_V5_GUIDE.md)
-- [Architecture et UML V5](docs/ARCHITECTURE_V5.md)
-- [Référence API V5](docs/API_V5.md)
-- [Sécurité et validation V5](docs/SECURITY_AND_VALIDATION_V5.md)
-- [Installation V5](docs/INSTALLATION_V5.md)
-- [Prompt de reconstruction de la livraison 5.0.2](HDP_Prompt_production_global_v5.0.2.txt)
-- [Wiki versionné dans le dépôt](wiki/Home.md)
-- [Dépôt GitHub](https://github.com/B-DAUTRIF/humanitarian-data-platform)
-- [Wiki V5 versionné sur GitHub](https://github.com/B-DAUTRIF/humanitarian-data-platform/tree/main/wiki)
+## Installation
 
-Références externes : [HDX Data Grids](https://data.humdata.org/dashboards/overview-of-data-grids), [HDX Signals](https://docs.humdata.org/about/hdx-signals), [prompts HDX Signals](https://docs.humdata.org/about/hdx-signals/prompts), [Jupyter](https://jupyter.org/documentation), [ONU M49](https://unstats.un.org/unsd/methodology/m49/).
+Sous Windows 10/11 x64, vérifier l’empreinte puis lancer l’EXE. Docker Desktop et Compose v2 restent nécessaires. Une mise à niveau depuis 5.0.0 ou 5.0.1 conserve `.env`, `data/` et le volume PostgreSQL ; ne pas exécuter `docker compose down -v`.
 
-## Développement et validation
-
-```bash
-PYTHONPATH=/tmp/hdp-v5-pglast python3 -B -m unittest discover -s source/tests -v
-gcc -std=c17 -O2 -Wall -Wextra -Werror source/payload/runner/runner.c -o /tmp/hdp-runner-v5
-node tools/check_inline_javascript.mjs source/payload/api/static/index.html
-```
-
-La recette Windows CI produit l’EXE PE32+ et l’archive complète. Une signature Authenticode nécessite un certificat de signature fourni séparément.
-
-## Limites de responsabilité
-
-HDP fournit un indice technique de complétude des métadonnées, pas une certification éditoriale. Un score syndromique n’est ni un diagnostic ni une alerte officielle. Toute diffusion opérationnelle exige une revue humaine des preuves, des licences et des incertitudes.
+Le dépôt reste privé tant qu’aucune licence HDP explicite n’a été choisie. L’installateur n’est pas signé Authenticode et la confirmation manuelle sur le poste Windows utilisateur reste une qualification distincte.

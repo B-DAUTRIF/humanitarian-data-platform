@@ -1,0 +1,36 @@
+{
+  "version": "5.0.2",
+  "qualified_installable": true,
+  "source_commit": "cfb42bbb9813f108a5087ad443c2a2d3fa561a06",
+  "windows_workflow_run": 31947534163,
+  "validation_workflow_run": 31947534199,
+  "actions_artifact_id": 9263718612,
+  "actions_artifact_name": "HumanitarianDataPlatform-V5-complet",
+  "actions_artifact_sha256": "2917a21dc96e1da7add11b5b58987fed6dc7a19c39ae59a97da010d99e58637f",
+  "files": {
+    "HumanitarianDataPlatform_Setup_Native_GUI_v5.0.2.exe": {
+      "size_bytes": 1042944,
+      "sha256": "0077049d4ec410a0594fa2743b0d6149c7b2c3ae4b08859bce1c219b9fe2814a"
+    },
+    "HumanitarianDataPlatform_Archive_complete_v5.0.2.zip": {
+      "size_bytes": 2427467,
+      "sha256": "89e27edd1f5bdbf75bad70a66495843a8d777e3c73957cec534b56119d4345dc",
+      "entry_count": 232
+    }
+  },
+  "verification": {
+    "workflow_windows": "success",
+    "workflow_validation": "success",
+    "artifact_zip_test": "success",
+    "complete_archive_zip_test": "success",
+    "hash_files": "success",
+    "binary_format": "PE32+ GUI x86-64"
+  },
+  "external_qualification_open": [
+    "manual Windows 10/11 acceptance",
+    "Authenticode signature",
+    "independent penetration test",
+    "load test",
+    "public-health domain review"
+  ]
+}

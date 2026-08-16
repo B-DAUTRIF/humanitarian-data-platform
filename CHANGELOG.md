@@ -1,13 +1,25 @@
 # Journal des versions
 
-## 5.2 - référence de travail - 16 août 2026
+## Organisation du dépôt et réalignement de `main` - 16 août 2026
+
+- `main` représente désormais la dernière livraison installable qualifiée,
+  soit HDP 5.0.2 ;
+- la ligne de travail 5.2 est conservée sur `develop/5.2` ;
+- l’EXE et l’archive complète 5.0.2 issus des workflows réussis sont archivés
+  sous `dist/v5.0.2` avec leurs empreintes et leur provenance ;
+- la documentation technique est classée sous `docs/versions/<version>` et la
+  traçabilité sous `docs/traceability` ;
+- les copies historiques déjà présentes dans `dist/` sont retirées de la
+  racine et de `source/`, sans suppression de l’historique Git.
+
+## 5.2 - ligne de travail - 16 août 2026
 
 - choix explicite de **5.2** comme version de travail active de HDP ;
 - conservation de **5.0.2** comme dernière livraison applicative et dernier
   installateur qualifiés tant qu'aucun livrable 5.2 n'a été reconstruit et
   validé ;
-- publication de cette décision sur le `main` privé, sans réécriture de
-  l'historique ni renommage des artefacts 5.0.2.
+- conservation de cette ligne sur la branche privée `develop/5.2`, sans
+  réécriture de l'historique ni renommage des artefacts 5.0.2.
 
 ## 5.0.2 - renouvellement de la session CSRF locale - 16 août 2026
 

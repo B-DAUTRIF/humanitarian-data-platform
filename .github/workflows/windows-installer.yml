@@ -47,9 +47,9 @@ jobs:
           Copy-Item -Recurse tools (Join-Path $stage "Sources/tools")
           Copy-Item -Recurse .github (Join-Path $stage "Sources/.github")
           Copy-Item -Recurse docs (Join-Path $stage "Documentation")
+          Copy-Item docs/versions/5.0.0/uml/HDP_V5_Documentation_et_UML.pdf $stage
+          Copy-Item docs/versions/5.0.2/prompts/HDP_Prompt_production_global_v5.0.2.txt $stage
           Copy-Item -Recurse wiki (Join-Path $stage "Wiki")
-          Copy-Item output/pdf/HDP_V5_Documentation_et_UML.pdf $stage
-          Copy-Item HDP_Prompt_production_global_v5.0.2.txt $stage
           Copy-Item README.md $stage
           Copy-Item CHANGELOG.md $stage
           Copy-Item TODO_Mises_a_jour_HDP.md $stage
