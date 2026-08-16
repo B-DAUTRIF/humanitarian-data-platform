@@ -115,6 +115,26 @@ class IterationTwoStaticContractTest(unittest.TestCase):
         self.assertIn("build --quiet r-service runner-r", installer)
         self.assertIn("db r-service runner-python runner-r api", installer)
 
+    def test_spool_initializer_changes_modes_before_final_unprivileged_owner(self) -> None:
+        compose = (SOURCE_ROOT / "payload" / "compose.yaml").read_text(encoding="utf-8")
+        command = compose.split("  spool-init:", 1)[1].split("  runner-python:", 1)[0]
+        root_owner = command.index("chown -R 0:0 /spool")
+        modes = command.index("chmod 0711 /spool")
+        runtime_owner = command.index("chown -R 65532:65532 /spool")
+        self.assertLess(root_owner, modes)
+        self.assertLess(modes, runtime_owner)
+        self.assertNotIn('cap_add: ["CHOWN", "DAC_OVERRIDE", "FOWNER"]', command)
+
+    def test_r_service_build_fails_if_runtime_packages_are_missing(self) -> None:
+        dockerfile = (SOURCE_ROOT / "payload" / "r-service" / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("install.packages(c('plumber','jsonlite'))", dockerfile)
+        self.assertIn("stopifnot(requireNamespace('plumber'", dockerfile)
+        self.assertNotIn("repos='https://cloud.r-project.org'", dockerfile)
+
+    def test_msvc_compiles_utf8_source_explicitly(self) -> None:
+        build = (SOURCE_ROOT / "build-windows.ps1").read_text(encoding="utf-8")
+        self.assertIn("/utf-8", build)
+
     def test_api_and_interface_expose_iteration_two_modules(self) -> None:
         main = (API_ROOT / "app" / "main.py").read_text(encoding="utf-8")
         html = (API_ROOT / "static" / "index.html").read_text(encoding="utf-8")
@@ -129,7 +149,7 @@ class IterationTwoStaticContractTest(unittest.TestCase):
             self.assertIn(route, main)
         for element_id in ("view-rss", "view-timeline", "view-map", "execution-settings-form"):
             self.assertIn(f'id="{element_id}"', html)
-        self.assertIn("version 5.0.0", html)
+        self.assertIn("version 5.0.1", html)
         self.assertIn('/static/vendor/leaflet/leaflet.js', html)
         self.assertNotIn('unpkg.com', html)
         self.assertTrue((API_ROOT / "static" / "vendor" / "leaflet" / "LICENSE").is_file())

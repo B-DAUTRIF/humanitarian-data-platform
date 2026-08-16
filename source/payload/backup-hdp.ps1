@@ -26,7 +26,7 @@ try {
     Copy-Item -LiteralPath "data" -Destination (Join-Path $stage "data") -Recurse
   }
   @(
-    "HDP_BACKUP_VERSION=5.0.0",
+    "HDP_BACKUP_VERSION=5.0.1",
     "CREATED_AT_UTC=$((Get-Date).ToUniversalTime().ToString('o'))",
     "SECRETS_INCLUDED=false",
     "CONFIGURATION_POLICY=Conserver le .env de l'installation cible"

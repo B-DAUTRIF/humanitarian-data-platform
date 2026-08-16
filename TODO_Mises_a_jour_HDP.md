@@ -1,5 +1,16 @@
 # Todo-list des mises à jour — Humanitarian Data Platform
 
+## Correctif V5.0.1 - installation Windows/Docker
+
+- [x] corriger l'échec `chmod: Operation not permitted` de `spool-init` sans
+  élargir les capacités permanentes des runners ;
+- [x] rendre le build R bloquant lorsque `plumber` ou `jsonlite` n'est pas
+  réellement disponible dans l'image finale ;
+- [x] compiler les sources Windows explicitement en UTF-8 ;
+- [x] ajouter les tests statiques et le smoke test Docker associés ;
+- [ ] exécuter la recette V5.0.1 sur le poste Windows ayant produit le journal
+  d'échec et vérifier l'ouverture de l'interface.
+
 ## Round V5 - 16 août 2026
 
 Implémenté et validé localement et par les workflows GitHub :

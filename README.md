@@ -4,7 +4,7 @@ HDP V5 est une application locale de recherche, d’acquisition, de qualificatio
 
 ## Installer
 
-- Windows x64 : télécharger `HumanitarianDataPlatform_Setup_Native_GUI_v5.0.0.exe`, vérifier son fichier `.sha256`, puis exécuter l’installateur. Docker Desktop avec Compose v2 reste le moteur Linux embarqué.
+- Windows x64 : télécharger `HumanitarianDataPlatform_Setup_Native_GUI_v5.0.1.exe`, vérifier son fichier `.sha256`, puis exécuter l’installateur. Docker Desktop avec Compose v2 reste le moteur Linux embarqué.
 - Linux poste : dans `source/payload`, lancer `./install-linux.sh workstation`.
 - Linux serveur dédié : lancer `./install-linux.sh server`, puis ouvrir HDP par tunnel SSH. Le port reste volontairement lié à `127.0.0.1`.
 
@@ -31,7 +31,7 @@ Les secrets `POSTGRES_PASSWORD`, `HDP_LOCAL_TOKEN` et `HDP_SQL_PASSWORD` sont g�
 - [Référence API V5](docs/API_V5.md)
 - [Sécurité et validation V5](docs/SECURITY_AND_VALIDATION_V5.md)
 - [Installation V5](docs/INSTALLATION_V5.md)
-- [Prompt de reconstruction V5](HDP_Prompt_production_global_v5.0.0.txt)
+- [Prompt de reconstruction V5](HDP_Prompt_production_global_v5.0.1.txt)
 - [Wiki versionné dans le dépôt](wiki/Home.md)
 - [Dépôt GitHub](https://github.com/B-DAUTRIF/humanitarian-data-platform)
 - [Wiki V5 versionné sur GitHub](https://github.com/B-DAUTRIF/humanitarian-data-platform/tree/main/wiki)

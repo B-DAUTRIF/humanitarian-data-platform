@@ -11,7 +11,7 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $sourceDirectory "windows-build"
 }
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
-$installerName = "HumanitarianDataPlatform_Setup_Native_GUI_v5.0.0.exe"
+$installerName = "HumanitarianDataPlatform_Setup_Native_GUI_v5.0.1.exe"
 $installerPath = Join-Path $OutputDirectory $installerName
 
 $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
@@ -41,7 +41,7 @@ try {
     # A temporary batch file avoids cmd.exe /S /C quote stripping, which can
     # otherwise pass the compiler commands themselves to vcvars64.bat.
     $buildScript = Join-Path $OutputDirectory "build-msvc.cmd"
-    $compilerCommand = 'cl.exe /nologo /O2 /W4 /WX /std:c17 /D_CRT_SECURE_NO_WARNINGS "src\installer.c" "src\installer.res" ' +
+    $compilerCommand = 'cl.exe /nologo /O2 /W4 /WX /utf-8 /std:c17 /D_CRT_SECURE_NO_WARNINGS "src\installer.c" "src\installer.res" ' +
         "/link /OUT:`"$installerPath`" /SUBSYSTEM:WINDOWS /MACHINE:X64 " +
         '/DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA comctl32.lib shell32.lib ' +
         'advapi32.lib winhttp.lib ws2_32.lib bcrypt.lib gdi32.lib user32.lib || exit /b 1'
@@ -67,7 +67,7 @@ if (-not (Test-Path -LiteralPath $installerPath -PathType Leaf)) {
 }
 
 $version = (Get-Item -LiteralPath $installerPath).VersionInfo
-if ($version.FileVersion -notlike "5.0.0*" -or $version.ProductVersion -notlike "5.0.0*") {
+if ($version.FileVersion -notlike "5.0.1*" -or $version.ProductVersion -notlike "5.0.1*") {
     throw "Métadonnées inattendues : FileVersion=$($version.FileVersion), ProductVersion=$($version.ProductVersion)"
 }
 

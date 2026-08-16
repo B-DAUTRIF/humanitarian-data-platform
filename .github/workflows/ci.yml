@@ -33,6 +33,17 @@ jobs:
           POSTGRES_PASSWORD: ci-placeholder-not-a-secret
           HDP_LOCAL_TOKEN: ci-local-token-00000000000000000000000000000000
           HDP_SQL_PASSWORD: ci-sql-token-000000000000000000000000000000000
+      - name: Images R et initialisation du spool
+        timeout-minutes: 15
+        run: |
+          docker compose -f source/payload/compose.yaml --profile analytics build r-service runner-python
+          docker compose -f source/payload/compose.yaml --profile analytics run --rm --no-deps --entrypoint Rscript r-service -e "stopifnot(requireNamespace('plumber', quietly=TRUE), requireNamespace('jsonlite', quietly=TRUE))"
+          docker compose -f source/payload/compose.yaml up --no-build spool-init
+          docker compose -f source/payload/compose.yaml down -v
+        env:
+          POSTGRES_PASSWORD: ci-placeholder-not-a-secret
+          HDP_LOCAL_TOKEN: ci-local-token-00000000000000000000000000000000
+          HDP_SQL_PASSWORD: ci-sql-token-000000000000000000000000000000000
       - name: Runner C17
         run: gcc -std=c17 -O2 -Wall -Wextra -Werror source/payload/runner/runner.c -o /tmp/hdp-runner
       - name: Payload reproductible

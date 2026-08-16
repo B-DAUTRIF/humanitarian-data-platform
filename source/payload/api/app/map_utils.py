@@ -75,7 +75,7 @@ def export_bundle(destination: Path, layer_name: str, feature_collection: dict[s
         "QgsProject.instance().addMapLayer(layer)\n"
     )
     readme = (
-        "Export Humanitarian Data Platform 5.0.0\n\n"
+        "Export Humanitarian Data Platform 5.0.1\n\n"
         f"Couche : {layer_name}\n"
         f"Fichier : {geojson_name}\n\n"
         "QGIS : décompressez l'archive puis ouvrez directement le GeoJSON, ou utilisez import_qgis.py.\n"

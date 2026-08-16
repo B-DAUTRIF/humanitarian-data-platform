@@ -1,5 +1,18 @@
 # Journal des versions
 
+## 5.0.1 - correctif d'installation Windows/Docker - 16 août 2026
+
+- correction de l'initialisation du volume `execution_spool` : les permissions
+  sont désormais appliquées avant le propriétaire non privilégié, sans ajouter
+  la capacité Linux `FOWNER` ;
+- installation R rendue vérifiable : dépôt binaire Rocker conservé, dépendances
+  système complétées et build arrêté si `plumber` ou `jsonlite` manque ;
+- compilation MSVC forcée en UTF-8 afin de supprimer le texte français
+  mojibaké dans l'interface et les journaux ;
+- ajout d'une recette CI construisant réellement l'image R, vérifiant ses
+  paquets et exécutant `spool-init` sur un volume Docker neuf ;
+- version de maintenance portée à 5.0.1, sans migration destructive.
+
 ## 5.0.0 - intelligence HDX et sécurité locale - 16 août 2026
 
 - HDX Data Grid, métadonnées jeu/fichier et plans d’agrégation ;
