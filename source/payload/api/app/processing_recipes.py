@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 
-ENGINE_VERSION = "4.0.0"
+ENGINE_VERSION = "5.0.0"
 MAX_RECIPE_STEPS = 20
 MAX_COLUMNS = 500
 MAX_GROUPS = 100_000

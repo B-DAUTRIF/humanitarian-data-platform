@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import tempfile
 import uuid
 from datetime import UTC, datetime
@@ -67,7 +68,9 @@ def ensure_spool_layout(spool_root: Path) -> None:
     for relative in ("staging", "pending/python", "pending/r", "running/python", "running/r", "completed/python", "completed/r", "heartbeat"):
         directory = spool_root / relative
         directory.mkdir(parents=True, exist_ok=True)
-        os.chmod(directory, 0o777)
+        # The API owner may create jobs; runners can traverse but cannot list
+        # queues. Each job is re-owned to an isolated UID by the supervisor.
+        os.chmod(directory, 0o711)
 
 
 def prepare_execution_job(
@@ -92,7 +95,7 @@ def prepare_execution_job(
         (temporary / "status.txt").write_text("queued", encoding="ascii")
         for path in temporary.iterdir():
             os.chmod(path, 0o644)
-        os.chmod(temporary, 0o777)
+        os.chmod(temporary, 0o700)
         if target.exists():
             raise FileExistsError(f"Le travail {execution_id} existe déjà")
         os.replace(temporary, target)
@@ -111,13 +114,31 @@ def locate_execution_job(spool_root: Path, execution_id: uuid.UUID, language: st
 
 
 def _bounded_text(path: Path, maximum: int) -> str:
-    if not path.exists():
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except (FileNotFoundError, OSError):
         return ""
-    with path.open("rb") as stream:
-        data = stream.read(maximum + 1)
+    try:
+        stat_result = os.fstat(descriptor)
+        if not stat.S_ISREG(stat_result.st_mode):
+            return ""
+        data = os.read(descriptor, maximum + 1)
+    finally:
+        os.close(descriptor)
     if len(data) > maximum:
         data = data[:maximum]
     return data.decode("utf-8", errors="replace")
+
+
+def purge_execution_job(spool_root: Path, execution_id: uuid.UUID, language: str) -> None:
+    job = locate_execution_job(spool_root, execution_id, language)
+    if not job:
+        return
+    resolved_root = spool_root.resolve()
+    resolved_job = job.resolve()
+    if not resolved_job.is_relative_to(resolved_root) or resolved_job.name != str(execution_id):
+        raise ValueError("Chemin de travail d'exécution non autorisé")
+    shutil.rmtree(resolved_job)
 
 
 def read_execution_result(
@@ -137,8 +158,10 @@ def read_execution_result(
     exit_code = _bounded_text(job / "exit_code.txt", 32).strip()
     result["exit_code"] = int(exit_code) if exit_code.lstrip("-").isdigit() else None
     if status in TERMINAL_STATUSES:
-        result["stdout"] = _bounded_text(job / "stdout.txt", max_output_bytes)
-        result["stderr"] = _bounded_text(job / "stderr.txt", max_output_bytes)
+        per_stream_limit = max(MIN_OUTPUT_BYTES // 2, max_output_bytes // 2)
+        result["stdout"] = _bounded_text(job / "stdout.txt", per_stream_limit)
+        result["stderr"] = _bounded_text(job / "stderr.txt", per_stream_limit)
+        result["output_limit_total"] = max_output_bytes
     return result
 
 

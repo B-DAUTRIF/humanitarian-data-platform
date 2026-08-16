@@ -8,5 +8,7 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY plumber.R .
+RUN chown -R 65532:65532 /app
 EXPOSE 8001
+USER 65532:65532
 CMD ["R", "-q", "-e", "pr <- plumber::plumb('plumber.R'); pr$run(host='0.0.0.0', port=8001)"]

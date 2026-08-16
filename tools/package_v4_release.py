@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Construit de façon déterministe les livrables HDP 4.0.0."""
+"""Construit de façon déterministe les livrables HDP 4.1.0."""
 
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ from pathlib import Path, PurePosixPath
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DIST = ROOT / "dist" / "v4.0.0"
-VERSION = "4.0.0"
-STAMP = (2026, 8, 15, 16, 0, 0)
-TODO = ROOT.parent / "TODO_Mises_a_jour_HDP.md"
+DIST = ROOT / "dist" / "v4.1.0"
+VERSION = "4.1.0"
+STAMP = (2026, 8, 15, 22, 30, 0)
+TODO = ROOT / "TODO_Mises_a_jour_HDP.md"
 EXCLUDED_PARTS = {"__pycache__", ".pytest_cache", ".mypy_cache", "data"}
 EXCLUDED_SUFFIXES = {".exe", ".pdb", ".pyc", ".res"}
 
@@ -123,12 +123,12 @@ def main() -> None:
         "--installer",
         required=True,
         type=Path,
-        help="EXE 4.0.0 compilé et vérifié par le workflow Windows",
+        help="EXE 4.1.0 compilé et vérifié pour Windows x64",
     )
     parser.add_argument(
         "--installer-commit",
-        default="9188db4a772d6c540dab33a091cf4bd6d7ba5780",
-        help="commit GitHub ayant produit l'installateur",
+        default="construction-locale-zig",
+        help="référence de construction ayant produit l'installateur",
     )
     args = parser.parse_args()
     installer = args.installer.resolve()
@@ -145,24 +145,26 @@ def main() -> None:
     source_commit = git_value("rev-parse", "HEAD")
     branch = git_value("branch", "--show-current")
 
-    prompt = ROOT / "HDP_Prompt_production_global_v4.0.0.txt"
-    html_doc = ROOT / "docs/Documentation_Humanitarian_Data_Platform_v4.0.0.html"
-    pdf_doc = ROOT / "output/pdf/Notice_detaillee_Humanitarian_Data_Platform_v4.0.0.pdf"
+    prompt = ROOT / "HDP_Prompt_production_global_v4.1.0.txt"
+    html_doc = ROOT / "docs/Documentation_Humanitarian_Data_Platform_v4.1.0.html"
+    pdf_doc = ROOT / "output/pdf/Notice_detaillee_Humanitarian_Data_Platform_v4.1.0.pdf"
     direct_docs = [
         prompt,
         html_doc,
         pdf_doc,
-        ROOT / "docs/USER_GUIDE_V4.0.0.md",
-        ROOT / "docs/INSTALLATION_V4.0.0.md",
-        ROOT / "docs/API_REFERENCE_V4.0.0.md",
-        ROOT / "docs/SOURCE_CAPABILITY_MATRIX_V4.0.0.md",
-        ROOT / "docs/BACKUP_RESTORE_V4.0.0.md",
-        ROOT / "docs/SECURITY_REVIEW_V4.0.0.md",
-        ROOT / "docs/KNOWN_LIMITATIONS_V4.0.0.md",
-        ROOT / "docs/VALIDATION_REPORT_V4.0.0.md",
-        ROOT / "docs/SBOM_HDP_v4.0.0.cdx.json",
-        ROOT / "docs/ARTIFACTS_V4.0.0.md",
-        ROOT / "HDP_v4.0.0_Point_de_reprise.md",
+        ROOT / "docs/USER_GUIDE_V4.1.0.md",
+        ROOT / "docs/CONFIGURATION_SOURCES_V4.1.0.md",
+        ROOT / "docs/TECHNOLOGIES_ET_LIENS_V4.1.0.md",
+        ROOT / "docs/INSTALLATION_V4.1.0.md",
+        ROOT / "docs/API_REFERENCE_V4.1.0.md",
+        ROOT / "docs/SOURCE_CAPABILITY_MATRIX_V4.1.0.md",
+        ROOT / "docs/BACKUP_RESTORE_V4.1.0.md",
+        ROOT / "docs/SECURITY_REVIEW_V4.1.0.md",
+        ROOT / "docs/KNOWN_LIMITATIONS_V4.1.0.md",
+        ROOT / "docs/VALIDATION_REPORT_V4.1.0.md",
+        ROOT / "docs/SBOM_HDP_v4.1.0.cdx.json",
+        ROOT / "docs/ARTIFACTS_V4.1.0.md",
+        ROOT / "HDP_v4.1.0_Point_de_reprise.md",
         TODO,
     ]
     require_inputs(direct_docs)
@@ -186,8 +188,8 @@ def main() -> None:
     for name in [
         "README.md",
         "CHANGELOG.md",
-        "HDP_Prompt_production_global_v4.0.0.txt",
-        "HDP_v4.0.0_Point_de_reprise.md",
+        "HDP_Prompt_production_global_v4.1.0.txt",
+        "HDP_v4.1.0_Point_de_reprise.md",
     ]:
         source_entries.append((ROOT / name, f"{source_root}/{name}"))
     for directory in [".github", "docs", "source", "tools"]:
@@ -202,10 +204,11 @@ def main() -> None:
 Date de gel : 15 août 2026
 Branche locale : {branch}
 Commit source : {source_commit}
-Base GitHub observée : 6eff2065fadc8070be398ecce7560c6d2db44084
+Base GitHub 4.0.0 observée : 479b10f5c85bd213eb8465243b59b522220ece3d
+Dossier Google Drive : https://drive.google.com/drive/folders/15rAjpoEWVnZfUzdmBaBOnO3sUeVZX7C0
 
 VALIDATIONS LOCALES
-- 90 tests Python réussis
+- 101 tests Python réussis
 - compilation Python réussie
 - 2 scripts JavaScript inline analysés
 - contrôles statiques de sécurité réussis
@@ -213,12 +216,12 @@ VALIDATIONS LOCALES
 - runner C17 compilé avec -Wall -Wextra -Werror
 - payload embarqué reconstruit et contrôlé
 - Compose : YAML valide, 6 services
-- notice PDF : 27 pages rendues, aucune page vide ou tronquée
+- notice PDF rendue et inspectée, aucune page vide ou tronquée
 
 LIVRABLE WINDOWS
 - {installer_name}
 - SHA-256 : {installer_sha}
-- compilé par GitHub Actions au commit {args.installer_commit}
+- référence de construction : {args.installer_commit}
 - PE32+ GUI x64, ASLR, NX et haute entropie contrôlés
 - non signé Authenticode ; recette Windows 10/11 manuelle encore requise
 - {portable_name}
@@ -230,7 +233,7 @@ CONTRÔLES EXTERNES RESTANTS
 - appels directs aux API : réseau de test restreint
 - signature Authenticode : certificat non fourni
 - audit indépendant et choix de licence : décisions externes
-- publication GitHub : version source publiée sur la branche privée main
+- publication GitHub 4.1.0 : non effectuée par ce gel local
 
 INTÉGRITÉ
 - SHA256SUMS.txt couvre les livrables antérieurs à l'archive globale

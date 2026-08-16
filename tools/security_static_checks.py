@@ -27,14 +27,17 @@ def main() -> None:
     require(compose, 'cap_drop: ["ALL"]', "capacités supprimées")
     forbid(compose, "5432:5432", "PostgreSQL non publié")
     require(main_source, "SET TRANSACTION READ ONLY", "transaction SQL read-only")
-    require(sql, "FORBIDDEN_SQL_FUNCTIONS", "fonctions SQL dangereuses")
+    require(sql, "ALLOWED_SQL_FUNCTIONS", "liste positive des fonctions SQL")
+    require(sql, "parse_sql_json", "analyse SQL par AST PostgreSQL")
+    require(main_source, "sql_reader_connection", "rôle SQL dédié")
+    require(main_source, "local_request_boundary", "frontière HTTP locale")
     require(main_source, "validate_public_url", "contrôle SSRF")
     require(main_source, "validate_upload_content", "validation d’import")
-    require(installer, ".env.backup-before-v4.0.0", "sauvegarde de configuration")
+    require(main_source, "download_public_file", "transport HTTP à IP épinglée")
+    require(installer, ".env.backup-before-v5.0.0", "sauvegarde de configuration")
     forbid(installer.casefold(), "down -v", "aucune suppression de volume")
     print("Contrôles de sécurité statiques: OK")
 
 
 if __name__ == "__main__":
     main()
-

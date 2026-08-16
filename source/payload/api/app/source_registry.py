@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import re
+import json
 from copy import deepcopy
 from datetime import date
 from typing import Any
 from urllib.parse import urlencode
 
 
-REGISTRY_VERSION = "4.0.0"
+REGISTRY_VERSION = "5.0.0"
 VERIFIED_AT = "2026-08-15"
 
 
@@ -50,7 +51,7 @@ def field(
     return definition
 
 
-GLOBAL_SCHEMA: dict[str, Any] = {
+GLOBAL_BASE_SCHEMA: dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "additionalProperties": False,
@@ -65,8 +66,38 @@ GLOBAL_SCHEMA: dict[str, Any] = {
         "backoff_seconds": field(
             "integer", "Délai initial de reprise", default=2, minimum=1, maximum=60
         ),
+        "connect_timeout_seconds": field(
+            "integer", "Délai de connexion", default=20, minimum=3, maximum=60,
+            description="Délai maximal consacré à l’établissement de la connexion HTTPS.",
+        ),
+        "max_response_bytes": field(
+            "integer", "Taille maximale de réponse", default=25_000_000,
+            minimum=100_000, maximum=200_000_000,
+            description="La réponse JSON est refusée au-delà de cette limite, avant décodage.",
+        ),
+        "user_agent": field(
+            "string", "Identifiant HTTP", default="HDP/5.0.0",
+            min_length=3, max_length=160,
+            description="Identifie clairement le client HDP auprès du fournisseur de données.",
+        ),
+        "accept_language": field(
+            "string", "Langue HTTP préférée", default="en",
+            enum=["en", "fr", "es", "ar", "zh"],
+        ),
     },
 }
+
+
+def global_schema(extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Construit un contrat global indépendant pour un connecteur."""
+    properties = deepcopy(GLOBAL_BASE_SCHEMA["properties"])
+    properties.update(deepcopy(extra or {}))
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": False,
+        "properties": properties,
+    }
 
 
 COMMON_PROJECT_PROPERTIES: dict[str, Any] = {
@@ -118,6 +149,273 @@ def project_schema(extra: dict[str, Any] | None = None) -> dict[str, Any]:
         "required": ["query", "result_limit", "auto_download"],
         "properties": properties,
     }
+
+
+def official_link(label: str, url: str, kind: str) -> dict[str, str]:
+    return {"label": label, "url": url, "kind": kind}
+
+
+GLOBAL_SCHEMA_EXTRAS: dict[str, dict[str, Any]] = {
+    "hdx": {
+        "ckan_api_version": field(
+            "string", "Version API CKAN", default="3", enum=["3"], read_only=True,
+            description="Version imposée par le connecteur HDX et incluse dans l’URL.",
+        ),
+        "catalog_action": field(
+            "string", "Action CKAN", default="package_search",
+            enum=["package_search"], read_only=True,
+        ),
+    },
+    "reliefweb": {
+        "resource_type": field(
+            "string", "Type de ressource ReliefWeb", default="reports",
+            enum=["reports"], read_only=True,
+        ),
+        "application_identifier_source": field(
+            "string", "Origine de l’identifiant", default="RELIEFWEB_APPNAME",
+            enum=["RELIEFWEB_APPNAME"], read_only=True,
+            description="Nom de variable d’environnement ; sa valeur n’est jamais exposée.",
+        ),
+    },
+    "who-gho": {
+        "protocol_profile": field(
+            "string", "Profil de protocole", default="OData JSON",
+            enum=["OData JSON"], read_only=True,
+        ),
+        "indicator_catalog": field(
+            "string", "Catalogue", default="Indicator",
+            enum=["Indicator"], read_only=True,
+        ),
+    },
+    "world-bank-health": {
+        "indicator_source_id": field(
+            "string", "Identifiant de source", default="2",
+            enum=["2"], read_only=True,
+            description="Source WDI utilisée pour les indicateurs sanitaires et de développement.",
+        ),
+        "api_version": field(
+            "string", "Version Indicators API", default="v2",
+            enum=["v2"], read_only=True,
+        ),
+    },
+    "unicef-sdmx": {
+        "sdmx_context": field(
+            "string", "Contexte SDMX", default="public",
+            enum=["public"], read_only=True,
+        ),
+        "structure_resource": field(
+            "string", "Ressource structurelle", default="dataflow",
+            enum=["dataflow"], read_only=True,
+        ),
+    },
+    "un-sdg": {
+        "api_version": field(
+            "string", "Version UNSD SDG API", default="v1",
+            enum=["v1"], read_only=True,
+        ),
+        "catalog_resource": field(
+            "string", "Ressource du catalogue", default="Indicator/List",
+            enum=["Indicator/List"], read_only=True,
+        ),
+    },
+    "dhs": {
+        "data_scope": field(
+            "string", "Périmètre de données", default="aggregate_indicators",
+            enum=["aggregate_indicators"], read_only=True,
+            description="Le connecteur n’accède jamais aux microdonnées individuelles.",
+        ),
+        "api_resource": field(
+            "string", "Ressource DHS", default="indicators",
+            enum=["indicators"], read_only=True,
+        ),
+    },
+    "hdx-hapi": {
+        "api_version": field(
+            "string", "Version HAPI", default="v2", enum=["v2"], read_only=True,
+        ),
+        "application_identifier_source": field(
+            "string", "Origine de l’identifiant", default="HDX_HAPI_APP_IDENTIFIER",
+            enum=["HDX_HAPI_APP_IDENTIFIER"], read_only=True,
+            description="Nom de variable d’environnement ; sa valeur n’est jamais exposée.",
+        ),
+    },
+    "unhcr": {
+        "api_version": field(
+            "string", "Version Refugee Statistics API", default="v1",
+            enum=["v1"], read_only=True,
+        ),
+        "country_reference": field(
+            "string", "Référentiel pays", default="ISO",
+            enum=["ISO"], read_only=True,
+        ),
+    },
+    "gdacs": {
+        "response_profile": field(
+            "string", "Profil de réponse", default="GeoJSON",
+            enum=["GeoJSON"], read_only=True,
+        ),
+        "alerting_policy": field(
+            "string", "Usage des alertes", default="analysis_only",
+            enum=["analysis_only"], read_only=True,
+            description="HDP ne remplace jamais les canaux officiels d’alerte vitale.",
+        ),
+    },
+}
+
+
+TECHNICAL_PROFILES: dict[str, dict[str, Any]] = {
+    "hdx": {
+        "protocol": "CKAN Action API v3 / HTTPS / JSON",
+        "formats": ["JSON catalogue", "CSV", "GeoJSON", "XLSX", "ZIP", "formats publiés par le producteur"],
+        "authentication": "Lecture publique ; aucune clé pour package_search",
+        "freshness": "Variable selon le producteur ; metadata_modified est conservé",
+        "terms": "Licence et conditions propres à chaque jeu de données",
+        "python_tools": ["httpx", "ckanapi", "pandas", "geopandas"],
+        "r_tools": ["httr2", "jsonlite", "readr", "sf"],
+        "official_links": [
+            official_link("Portail HDX", "https://data.humdata.org/", "portal"),
+            official_link("Guide API CKAN", "https://docs.ckan.org/en/latest/api/", "documentation"),
+            official_link("Action package_search", "https://docs.ckan.org/en/latest/api/#ckan.logic.action.get.package_search", "reference"),
+            official_link("Client Python ckanapi", "https://github.com/ckan/ckanapi", "sdk"),
+            official_link("Humanitarian Exchange Language", "https://data.humdata.org/about/hxl", "standard"),
+        ],
+    },
+    "reliefweb": {
+        "protocol": "ReliefWeb API v2 / HTTPS / JSON",
+        "formats": ["JSON", "PDF et pièces jointes référencées"],
+        "authentication": "appname pré-approuvé fourni par RELIEFWEB_APPNAME",
+        "freshness": "Veille continue ; date.created conservée",
+        "terms": "Réutilisation selon les conditions ReliefWeb et celles du document source",
+        "python_tools": ["httpx", "pandas"],
+        "r_tools": ["httr2", "jsonlite"],
+        "official_links": [
+            official_link("Portail ReliefWeb", "https://reliefweb.int/", "portal"),
+            official_link("Documentation API", "https://apidoc.reliefweb.int/", "documentation"),
+            official_link("Paramètres", "https://apidoc.reliefweb.int/parameters", "reference"),
+            official_link("Points d’accès", "https://apidoc.reliefweb.int/endpoints", "reference"),
+            official_link("Conditions d’utilisation", "https://reliefweb.int/terms-conditions", "terms"),
+        ],
+    },
+    "who-gho": {
+        "protocol": "OData / HTTPS / JSON",
+        "formats": ["JSON OData", "CSV via traitements HDP"],
+        "authentication": "Aucune pour le catalogue public",
+        "freshness": "Variable selon l’indicateur OMS",
+        "terms": "Conditions et licence précisées par l’OMS et l’indicateur",
+        "python_tools": ["httpx", "pandas"],
+        "r_tools": ["httr2", "jsonlite", "dplyr"],
+        "official_links": [
+            official_link("Global Health Observatory", "https://www.who.int/data/gho", "portal"),
+            official_link("Guide API OData", "https://www.who.int/data/gho/info/gho-odata-api", "documentation"),
+            official_link("Catalogue Indicator", "https://ghoapi.azureedge.net/api/Indicator", "api"),
+            official_link("Politique de données OMS", "https://www.who.int/about/policies/publishing/data-policy", "terms"),
+        ],
+    },
+    "world-bank-health": {
+        "protocol": "World Bank Indicators API v2 / HTTPS / JSON",
+        "formats": ["JSON", "XML", "CSV/ZIP par indicateur"],
+        "authentication": "Aucune pour l’API publique",
+        "freshness": "Variable selon la série WDI",
+        "terms": "Conditions Banque mondiale et licence du jeu",
+        "python_tools": ["httpx", "pandas", "wbdata"],
+        "r_tools": ["httr2", "jsonlite", "WDI"],
+        "official_links": [
+            official_link("Thème Santé", "https://data.worldbank.org/topic/health", "portal"),
+            official_link("Documentation Indicators API", "https://datahelpdesk.worldbank.org/knowledgebase/articles/889392-about-the-indicators-api-documentation", "documentation"),
+            official_link("Structure des appels", "https://datahelpdesk.worldbank.org/knowledgebase/articles/898581-api-basic-call-structures", "reference"),
+            official_link("Conditions d’utilisation", "https://www.worldbank.org/en/about/legal/terms-of-use-for-datasets", "terms"),
+        ],
+    },
+    "unicef-sdmx": {
+        "protocol": "SDMX REST / HTTPS / SDMX-JSON",
+        "formats": ["SDMX-JSON", "CSV"],
+        "authentication": "Aucune pour le service public",
+        "freshness": "Variable selon le dataflow UNICEF",
+        "terms": "Conditions UNICEF et annotations du dataflow",
+        "python_tools": ["httpx", "pandas", "pandasdmx"],
+        "r_tools": ["httr2", "jsonlite", "rsdmx"],
+        "official_links": [
+            official_link("UNICEF Data", "https://data.unicef.org/", "portal"),
+            official_link("Documentation SDMX UNICEF", "https://data.unicef.org/sdmx-api-documentation/", "documentation"),
+            official_link("Service SDMX", "https://sdmx.data.unicef.org/ws/public/sdmxapi/rest", "api"),
+            official_link("Standard SDMX", "https://sdmx.org/?page_id=5008", "standard"),
+        ],
+    },
+    "un-sdg": {
+        "protocol": "UNSD SDG API v1 / HTTPS / JSON",
+        "formats": ["JSON", "CSV via traitements HDP"],
+        "authentication": "Aucune pour l’API publique",
+        "freshness": "Selon le calendrier mondial des indicateurs ODD",
+        "terms": "Métadonnées et conditions UNSD",
+        "python_tools": ["httpx", "pandas"],
+        "r_tools": ["httr2", "jsonlite", "dplyr"],
+        "official_links": [
+            official_link("Portail des données ODD", "https://unstats.un.org/sdgs/dataportal", "portal"),
+            official_link("Swagger UNSD SDG API", "https://unstats.un.org/sdgapi/swagger/", "documentation"),
+            official_link("Métadonnées des indicateurs", "https://unstats.un.org/sdgs/metadata/", "reference"),
+        ],
+    },
+    "dhs": {
+        "protocol": "DHS Program API / HTTPS / JSON",
+        "formats": ["JSON agrégé", "CSV via traitements HDP"],
+        "authentication": "API agrégée publique ; microdonnées sur demande séparée",
+        "freshness": "Selon la publication de chaque enquête",
+        "terms": "Conditions DHS ; aucune microdonnée n’est demandée par HDP",
+        "python_tools": ["httpx", "pandas"],
+        "r_tools": ["httr2", "jsonlite", "rdhs"],
+        "official_links": [
+            official_link("Portail DHS Data", "https://dhsprogram.com/data/", "portal"),
+            official_link("Documentation DHS API", "https://api.dhsprogram.com/", "documentation"),
+            official_link("Guide des données", "https://dhsprogram.com/data/Using-Datasets-for-Analysis.cfm", "reference"),
+            official_link("Accès aux microdonnées", "https://dhsprogram.com/data/new-user-registration.cfm", "registration"),
+        ],
+    },
+    "hdx-hapi": {
+        "protocol": "HDX HAPI v2 / HTTPS / JSON",
+        "formats": ["JSON normalisé"],
+        "authentication": "Identifiant d’application HDX_HAPI_APP_IDENTIFIER",
+        "freshness": "Variable par sous-domaine HAPI",
+        "terms": "Conditions HAPI et sources amont",
+        "python_tools": ["httpx", "pandas", "hdx-python-api"],
+        "r_tools": ["httr2", "jsonlite", "dplyr"],
+        "official_links": [
+            official_link("Portail HAPI", "https://hapi.humdata.org/", "portal"),
+            official_link("Documentation HAPI", "https://hdx-hapi.readthedocs.io/en/latest/", "documentation"),
+            official_link("Exemples HAPI", "https://hdx-hapi.readthedocs.io/en/latest/examples/", "reference"),
+            official_link("Journal des versions", "https://hdx-hapi.readthedocs.io/en/latest/changelog/", "changelog"),
+        ],
+    },
+    "unhcr": {
+        "protocol": "UNHCR Refugee Statistics API v1 / HTTPS / JSON",
+        "formats": ["JSON agrégé", "CSV via traitements HDP"],
+        "authentication": "Aucune pour les statistiques agrégées",
+        "freshness": "Séries annuelles",
+        "terms": "Conditions UNHCR ; aucune donnée individuelle",
+        "python_tools": ["httpx", "pandas"],
+        "r_tools": ["httr2", "jsonlite", "dplyr"],
+        "official_links": [
+            official_link("Refugee Data Finder", "https://www.unhcr.org/refugee-statistics/", "portal"),
+            official_link("Documentation API", "https://api.unhcr.org/docs/refugee-statistics.html", "documentation"),
+            official_link("API Population", "https://api.unhcr.org/population/v1/population/", "api"),
+            official_link("Explication de l’API", "https://www.unhcr.org/refugee-statistics/insights/explainers/forcibly-displaced-api.html", "reference"),
+        ],
+    },
+    "gdacs": {
+        "protocol": "GDACS API / HTTPS / GeoJSON",
+        "formats": ["GeoJSON", "JSON"],
+        "authentication": "Aucune pour la recherche publique",
+        "freshness": "Temps quasi réel ; polling raisonnable",
+        "terms": "Information analytique ; ne remplace pas l’alerte officielle",
+        "python_tools": ["httpx", "geopandas", "shapely"],
+        "r_tools": ["httr2", "jsonlite", "sf"],
+        "official_links": [
+            official_link("Portail GDACS", "https://www.gdacs.org/", "portal"),
+            official_link("Swagger GDACS API", "https://www.gdacs.org/gdacsapi/swagger/index.html", "documentation"),
+            official_link("API Search", "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH", "api"),
+            official_link("Flux et services", "https://www.gdacs.org/About/overview.aspx", "reference"),
+        ],
+    },
+}
 
 
 CONNECTORS: dict[str, dict[str, Any]] = {
@@ -386,6 +684,10 @@ CONNECTORS: dict[str, dict[str, Any]] = {
     },
 }
 
+# Alias historique conservé pour les consommateurs qui importaient le contrat
+# global unique de HDP 4.0.0. Il correspond maintenant au contrat HDX.
+GLOBAL_SCHEMA: dict[str, Any] = global_schema(GLOBAL_SCHEMA_EXTRAS["hdx"])
+
 
 def _defaults(schema: dict[str, Any]) -> dict[str, Any]:
     return {
@@ -402,7 +704,7 @@ def connector_definition(source_id: str) -> dict[str, Any]:
         raise ValueError(f"Source non interrogeable : {source_id}") from exc
     capability_overrides = definition.pop("capability_overrides", {})
     capabilities = {
-        "contract_version": "4.0.0",
+        "contract_version": REGISTRY_VERSION,
         "catalog_search": True,
         "parallel_search": True,
         "resource_download": True,
@@ -417,15 +719,18 @@ def connector_definition(source_id: str) -> dict[str, Any]:
     }
     capabilities["criteria"].update(capability_overrides.pop("criteria", {}))
     capabilities.update(capability_overrides)
+    source_global_schema = global_schema(GLOBAL_SCHEMA_EXTRAS.get(source_id))
     definition.update(
         {
             "id": source_id,
             "registry_version": REGISTRY_VERSION,
             "verified_at": VERIFIED_AT,
-            "global_settings_schema": deepcopy(GLOBAL_SCHEMA),
-            "global_defaults": _defaults(GLOBAL_SCHEMA),
+            "global_settings_schema": source_global_schema,
+            "global_defaults": _defaults(source_global_schema),
             "project_defaults": _defaults(definition["project_schema"]),
             "capabilities": capabilities,
+            "technical_profile": deepcopy(TECHNICAL_PROFILES[source_id]),
+            "official_links": deepcopy(TECHNICAL_PROFILES[source_id]["official_links"]),
         }
     )
     return definition
@@ -446,10 +751,18 @@ def enrich_source_catalog(catalog: list[dict[str, Any]]) -> list[dict[str, Any]]
                     "allowed_hosts": [],
                     "secret_environment_variable": None,
                     "documentation_evidence": [item["documentation_url"]],
-                    "global_settings_schema": deepcopy(GLOBAL_SCHEMA),
-                    "global_defaults": _defaults(GLOBAL_SCHEMA),
+                    "global_settings_schema": deepcopy(GLOBAL_BASE_SCHEMA),
+                    "global_defaults": _defaults(GLOBAL_BASE_SCHEMA),
                     "project_schema": None,
                     "project_defaults": None,
+                    "technical_profile": None,
+                    "official_links": [
+                        official_link(
+                            "Documentation officielle",
+                            item["documentation_url"],
+                            "documentation",
+                        )
+                    ],
                 }
             )
         enriched.append(item)
@@ -501,7 +814,11 @@ def validate_values(
     partial: bool = False,
 ) -> dict[str, Any]:
     if scope == "global":
-        schema = deepcopy(GLOBAL_SCHEMA)
+        schema = (
+            connector_definition(source_id)["global_settings_schema"]
+            if source_id in CONNECTORS
+            else deepcopy(GLOBAL_BASE_SCHEMA)
+        )
     else:
         schema = connector_definition(source_id)["project_schema"]
     if not isinstance(values, dict):
@@ -526,6 +843,35 @@ def validate_values(
 
 def merge_values(source_id: str, stored: dict[str, Any] | None, *, scope: str) -> dict[str, Any]:
     return validate_values(source_id, stored or {}, scope=scope, partial=False)
+
+
+def code_examples(source_id: str, display_url: str) -> dict[str, str]:
+    """Produit des exemples Python et R sans injecter de secret réel."""
+    defaults = connector_definition(source_id)["global_defaults"]
+    url_literal = json.dumps(display_url, ensure_ascii=False)
+    user_agent = json.dumps(defaults["user_agent"], ensure_ascii=False)
+    timeout = int(defaults["timeout_seconds"])
+    return {
+        "python": (
+            "import httpx\n\n"
+            f"url = {url_literal}\n"
+            f"headers = {{\"User-Agent\": {user_agent}}}\n"
+            f"response = httpx.get(url, headers=headers, timeout={timeout})\n"
+            "response.raise_for_status()\n"
+            "data = response.json()\n"
+            "print(data)\n"
+        ),
+        "r": (
+            "library(httr2)\n\n"
+            f"url <- {url_literal}\n"
+            "response <- request(url) |>\n"
+            f"  req_user_agent({user_agent}) |>\n"
+            f"  req_timeout({timeout}) |>\n"
+            "  req_perform()\n"
+            "data <- resp_body_json(response, simplifyVector = TRUE)\n"
+            "print(data)\n"
+        ),
+    }
 
 
 def request_preview(source_id: str, parameters: dict[str, Any]) -> dict[str, Any]:
@@ -609,13 +955,21 @@ def request_preview(source_id: str, parameters: dict[str, Any]) -> dict[str, Any
             query["alertlevel"] = ";".join(values["alert_levels"])
     encoded = urlencode(query, doseq=True, safe="<>")
     display_url = f"{url}?{encoded}" if encoded else url
+    defaults = definition["global_defaults"]
+    curl = (
+        "curl --fail --silent --show-error "
+        f"--user-agent {json.dumps(defaults['user_agent'])} {json.dumps(display_url)}"
+    )
     return {
         "method": "GET",
         "url": url,
         "query_parameters": query,
         "display_url": display_url,
-        "curl": f'curl --fail --silent --show-error "{display_url}"',
+        "curl": curl,
+        "code_examples": code_examples(source_id, display_url),
         "secret_environment_variable": definition["secret_environment_variable"],
         "verified_at": definition["verified_at"],
         "documentation_evidence": definition["documentation_evidence"],
+        "official_links": definition["official_links"],
+        "technical_profile": definition["technical_profile"],
     }

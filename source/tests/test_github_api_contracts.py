@@ -19,7 +19,7 @@ class GitHubApiContractTest(unittest.TestCase):
 
     def test_gateway_is_valid_python_and_final_version(self) -> None:
         self.assertIsInstance(self.tree, ast.Module)
-        self.assertIn('APP_VERSION = "4.0.0"', self.source)
+        self.assertIn('APP_VERSION = "5.0.0"', self.source)
         self.assertIn('"X-GitHub-Api-Version": API_VERSION', self.source)
 
     def test_gateway_exposes_bounded_classic_github_functions(self) -> None:
@@ -37,17 +37,14 @@ class GitHubApiContractTest(unittest.TestCase):
         self.assertNotIn('"token": TOKEN', self.source)
         self.assertNotIn('"github_token": TOKEN', self.source)
 
-    def test_compose_keeps_gateway_local_and_unprivileged(self) -> None:
-        self.assertIn("  github-api:", self.compose)
-        self.assertIn('127.0.0.1:${HDP_GITHUB_API_PORT:-8091}:8091', self.compose)
-        self.assertIn(
-            "GITHUB_API_WRITE_ENABLED: ${GITHUB_API_WRITE_ENABLED:-false}",
-            self.compose,
-        )
-        gateway = self.compose.split("  github-api:", 1)[1].split("\n  api:", 1)[0]
-        self.assertIn("read_only: true", gateway)
-        self.assertIn('cap_drop: ["ALL"]', gateway)
-        self.assertIn('security_opt: ["no-new-privileges:true"]', gateway)
+    def test_compose_uses_one_authenticated_local_api(self) -> None:
+        self.assertNotIn("  github-api:", self.compose)
+        self.assertIn('127.0.0.1:${HDP_PORT:-8080}:8080', self.compose)
+        self.assertIn("HDP_LOCAL_TOKEN: ${HDP_LOCAL_TOKEN}", self.compose)
+        api = self.compose.split("  api:", 1)[1]
+        self.assertIn("read_only: true", api)
+        self.assertIn('cap_drop: ["ALL"]', api)
+        self.assertIn('security_opt: ["no-new-privileges:true"]', api)
 
 
 if __name__ == "__main__":

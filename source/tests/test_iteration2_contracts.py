@@ -110,10 +110,10 @@ class IterationTwoStaticContractTest(unittest.TestCase):
 
     def test_native_installer_builds_and_starts_required_runners(self) -> None:
         installer = (SOURCE_ROOT / "src" / "installer.c").read_text(encoding="utf-8")
-        self.assertIn("build --quiet api runner-python github-api", installer)
-        self.assertIn("up -d --no-build db runner-python github-api api", installer)
+        self.assertIn("build --quiet api runner-python", installer)
+        self.assertIn("up -d --no-build db runner-python api", installer)
         self.assertIn("build --quiet r-service runner-r", installer)
-        self.assertIn("db r-service runner-python runner-r github-api api", installer)
+        self.assertIn("db r-service runner-python runner-r api", installer)
 
     def test_api_and_interface_expose_iteration_two_modules(self) -> None:
         main = (API_ROOT / "app" / "main.py").read_text(encoding="utf-8")
@@ -129,7 +129,7 @@ class IterationTwoStaticContractTest(unittest.TestCase):
             self.assertIn(route, main)
         for element_id in ("view-rss", "view-timeline", "view-map", "execution-settings-form"):
             self.assertIn(f'id="{element_id}"', html)
-        self.assertIn("version 4.0.0", html)
+        self.assertIn("version 5.0.0", html)
         self.assertIn('/static/vendor/leaflet/leaflet.js', html)
         self.assertNotIn('unpkg.com', html)
         self.assertTrue((API_ROOT / "static" / "vendor" / "leaflet" / "LICENSE").is_file())

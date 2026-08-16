@@ -30,7 +30,7 @@ class ProcessingRecipeTest(unittest.TestCase):
                 ]
             }
         )
-        self.assertEqual(recipe["version"], "4.0.0")
+        self.assertEqual(recipe["version"], "5.0.0")
         self.assertEqual(recipe["steps"][1]["multiplier"], 100000.0)
         with self.assertRaises(RecipeError):
             validate_recipe({"steps": [{"operation": "shell", "command": "rm"}]})

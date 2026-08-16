@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Humanitarian Data Platform 4.0.0</title>
+  <title>Humanitarian Data Platform 5.0.0</title>
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
   <style>
     :root {
@@ -84,6 +84,14 @@
     .source-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
     .source-grid .item { min-height:190px; }
     .source-links { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; font-size:12px; }
+    .link-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+    .link-card { border:1px solid var(--line); background:#09172a; padding:14px; border-radius:11px; }
+    .link-card h4 { margin:0 0 5px; }
+    .link-card p { margin:5px 0; font-size:12px; }
+    .link-card .source-links { margin-top:9px; }
+    .category-title { margin:22px 0 10px; color:#bae6fd; }
+    .source-context { margin:12px 0; padding:12px; border:1px solid var(--line); border-radius:10px; background:#09172a; }
+    .source-context p { margin:4px 0; font-size:12px; }
     .schema-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; }
     .schema-grid .wide { grid-column:1 / -1; }
     .schema-help { margin:4px 0 0; color:var(--muted); font-size:11px; line-height:1.35; }
@@ -110,14 +118,14 @@
     .sql-table th,.sql-table td { border:1px solid var(--line); padding:8px; text-align:left; vertical-align:top; max-width:420px; overflow-wrap:anywhere; }
     .sql-table th { background:#13243a; position:sticky; top:0; }
     .table-wrap { overflow:auto; max-height:520px; }
-    @media(max-width:900px) { .grid,.grid.equal { grid-template-columns:1fr; } .header-inner { align-items:flex-start; padding:15px 0; flex-direction:column; } .context { min-width:0; width:100%; } header { position:static; } .metrics { grid-template-columns:1fr 1fr; } .filters { grid-template-columns:1fr 1fr; } }
+    @media(max-width:900px) { .grid,.grid.equal { grid-template-columns:1fr; } .header-inner { align-items:flex-start; padding:15px 0; flex-direction:column; } .context { min-width:0; width:100%; } header { position:static; } .metrics { grid-template-columns:1fr 1fr; } .filters { grid-template-columns:1fr 1fr; } .link-grid { grid-template-columns:1fr 1fr; } }
     @media(max-width:680px) { .source-grid { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
 <header>
   <div class="header-inner">
-    <div class="brand"><h1><a id="brand-home" href="#home" aria-label="Revenir à l’accueil de Humanitarian Data Platform">Humanitarian Data Platform</a></h1><p>Données humanitaires, épidémiologiques et sanitaires mondiales · version 4.0.0</p></div>
+    <div class="brand"><h1><a id="brand-home" href="#home" aria-label="Revenir à l’accueil de Humanitarian Data Platform">Humanitarian Data Platform</a></h1><p>Données humanitaires, épidémiologiques et sanitaires mondiales · version 5.0.0</p></div>
     <div class="context">
       <select id="project-select" aria-label="Projet actif"></select>
       <span id="health" class="badge">Vérification…</span>
@@ -127,6 +135,7 @@
 <main>
   <nav aria-label="Rubriques">
     <button data-view="search">Recherche</button>
+    <button data-view="intelligence">Data Grid & SIGNALS</button>
     <button data-view="sources">Sources sanitaires</button>
     <button data-view="source-settings">Paramètres des sources</button>
     <button data-view="projects">Projets & préférences</button>
@@ -135,8 +144,10 @@
     <button data-view="timeline">Chronologie</button>
     <button data-view="map">Carte</button>
     <button data-view="scripts">Scripts</button>
+    <button data-view="notebooks">Notebooks</button>
     <button data-view="schedules">Planifications</button>
     <button data-view="sql">Base SQL</button>
+    <button data-view="technologies">USER · Technologies & code</button>
   </nav>
 
   <section id="view-home" class="view active">
@@ -145,6 +156,45 @@
       <p>Humanitarian Data Platform (HDP) réunit dans une même application la recherche sur plusieurs sources publiques, le téléchargement contrôlé, la bibliothèque de fichiers et les traitements reproductibles. Elle est conçue en priorité pour les données de santé publique, d’épidémiologie et de réponse humanitaire, tout en conservant la provenance et l’intégrité de chaque ressource.</p>
       <p>Les données restent organisées par projet sur votre poste. Vous pouvez comparer des catalogues en parallèle, importer vos propres données, scripts et documents, cartographier les fichiers géographiques, planifier les mises à jour et interroger les vues SQL du projet en lecture seule.</p>
       <div class="actions"><button type="button" data-go-view="search">Commencer une recherche</button><button type="button" class="secondary" data-go-view="data">Ouvrir la bibliothèque</button></div>
+    </div>
+  </section>
+
+  <section id="view-intelligence" class="view">
+    <div class="grid">
+      <div class="card">
+        <h2>Recherche HDX Data Grid</h2>
+        <p class="intro">Recherche pilotée par périmètre, localisation, période, format et dimensions de couverture. HDP conserve les descriptions, schémas, dates, périodicités et indicateurs de fiabilité.</p>
+        <form id="datagrid-form">
+          <label for="datagrid-query">Besoin d’information</label><input id="datagrid-query" maxlength="200" placeholder="Ex. établissements de santé affectés">
+          <label for="datagrid-location">Localisation</label><input id="datagrid-location" maxlength="160" placeholder="Pays ou zone">
+          <div class="schema-grid"><div><label for="datagrid-from">Du</label><input id="datagrid-from" type="date"></div><div><label for="datagrid-to">Au</label><input id="datagrid-to" type="date"></div></div>
+          <label>Dimensions fonctionnelles</label><div id="datagrid-dimensions" class="source-picker"></div>
+          <div class="actions"><button type="submit">Rechercher et indexer les métadonnées</button></div>
+        </form>
+        <div class="notice">HDP distingue explicitement l’appartenance publiée par HDX d’une classification candidate calculée localement.</div>
+        <div id="datagrid-status" class="status"></div>
+      </div>
+      <div class="card"><h2>Couverture et résultats</h2><div id="datagrid-results" class="list"><div class="empty">Aucune recherche Data Grid.</div></div></div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <h2>Règles de signaux</h2>
+        <form id="signal-rule-form"><label for="signal-rule-name">Nom</label><input id="signal-rule-name" required minlength="2" maxlength="120"><label for="signal-rule-themes">Thèmes, séparés par des virgules</label><input id="signal-rule-themes" maxlength="300"><label for="signal-rule-locations">Zones, séparées par des virgules</label><input id="signal-rule-locations" maxlength="300"><div class="schema-grid"><div><label for="signal-severity">Gravité minimale</label><input id="signal-severity" type="number" min="0" max="1" step="0.1" value="0.4"></div><div><label for="signal-confidence">Confiance minimale</label><input id="signal-confidence" type="number" min="0" max="1" step="0.1" value="0.5"></div></div><div class="actions"><button type="submit">Créer la règle</button></div></form>
+        <div id="signal-rule-status" class="status"></div><div id="signal-rules" class="list"></div>
+      </div>
+      <div class="card">
+        <h2>Événement stochastique</h2>
+        <p class="intro">Ingestion structurée depuis HDX Signals, RSS, news, GDACS ou webhook. Une règle correspondante déclenche une recherche Data Grid et ne programme que les fichiers arrivés à leur date attendue.</p>
+        <form id="signal-form"><label for="signal-title">Titre</label><input id="signal-title" required minlength="2" maxlength="300"><label for="signal-summary">Résumé factuel</label><textarea id="signal-summary" maxlength="5000"></textarea><div class="schema-grid"><div><label for="signal-themes">Thèmes</label><input id="signal-themes" maxlength="300"></div><div><label for="signal-locations">Zones</label><input id="signal-locations" maxlength="300"></div><div><label for="signal-event-severity">Gravité</label><input id="signal-event-severity" type="number" min="0" max="1" step="0.1" value="0.5"></div><div><label for="signal-event-confidence">Confiance</label><input id="signal-event-confidence" type="number" min="0" max="1" step="0.1" value="0.7"></div></div><div class="actions"><button type="submit">Ingérer et évaluer</button><button id="syndromic-run" class="secondary" type="button">Vue syndromique 7 jours</button></div></form>
+        <div id="signal-status" class="status"></div><div id="signal-results" class="list"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-notebooks" class="view">
+    <div class="grid">
+      <div class="card"><h2>Notebook Jupyter dans HDP</h2><p class="intro">Créez un document .ipynb compatible Jupyter. Les cellules Python ou R sont versionnées et exécutées par les runners isolés, sans réseau, après confirmation de leur empreinte.</p><form id="notebook-form"><label for="notebook-name">Nom</label><input id="notebook-name" required minlength="2" maxlength="120"><label for="notebook-kernel">Noyau</label><select id="notebook-kernel"><option value="python3">Python 3</option><option value="ir">R</option></select><label for="notebook-code">Première cellule</label><textarea id="notebook-code" maxlength="500000" spellcheck="false" placeholder="# Analyse reproductible"></textarea><div class="actions"><button type="submit">Créer le notebook</button></div></form><div id="notebook-status" class="status"></div></div>
+      <div class="card"><h2>Notebooks du projet</h2><div id="notebook-list" class="list"></div></div>
     </div>
   </section>
 
@@ -188,6 +238,7 @@
         <form id="global-source-form">
           <label for="global-source-select">Source</label>
           <select id="global-source-select"></select>
+          <div id="global-source-context" class="source-context"></div>
           <div id="global-source-fields" class="schema-grid"></div>
           <div class="actions"><button type="submit">Enregistrer globalement</button></div>
         </form>
@@ -200,6 +251,7 @@
         <form id="project-source-form">
           <label for="project-source-select">Source interrogeable</label>
           <select id="project-source-select"></select>
+          <div id="project-source-context" class="source-context"></div>
           <label class="check"><input id="project-source-enabled" type="checkbox" checked> Autoriser cette source dans le projet</label>
           <div id="project-source-fields" class="schema-grid"></div>
           <h3 style="margin-top:18px">Valeurs par défaut des planifications</h3>
@@ -227,6 +279,29 @@
       </div>
       <div id="source-catalog-status" class="status"></div>
       <div id="source-catalog" class="source-grid"></div>
+    </div>
+  </section>
+
+  <section id="view-technologies" class="view">
+    <div class="card">
+      <div class="item-head"><div><h2>USER · Technologies, logiciels tiers et code</h2><p class="intro">Accès centralisé aux documentations officielles des composants réellement utilisés, aux outils conseillés pour Python, R et la géomatique, ainsi qu’au code de HDP.</p></div></div>
+      <div class="metrics">
+        <div class="metric"><strong id="tech-resource-count">0</strong><span>technologies et ressources</span></div>
+        <div class="metric"><strong id="tech-link-count">0</strong><span>liens documentés</span></div>
+        <div class="metric"><strong id="tech-category-count">0</strong><span>catégories</span></div>
+        <div class="metric"><strong>5.0.0</strong><span>contrat du catalogue</span></div>
+      </div>
+      <div class="actions">
+        <a id="technology-drive-link" class="button" href="https://drive.google.com/drive/folders/15rAjpoEWVnZfUzdmBaBOnO3sUeVZX7C0" target="_blank" rel="noopener">Code et livrables sur Google Drive</a>
+        <a id="technology-github-link" class="button secondary" href="https://github.com/B-DAUTRIF/humanitarian-data-platform" target="_blank" rel="noopener">Dépôt GitHub privé</a>
+        <a class="button secondary" href="https://github.com/B-DAUTRIF/humanitarian-data-platform/wiki" target="_blank" rel="noopener">Wiki GitHub</a>
+        <a class="button secondary" href="/static/docs/index.html" target="_blank" rel="noopener">Documentation V5 et UML</a>
+        <a class="button secondary" href="/docs" target="_blank" rel="noopener">API interactive locale</a>
+      </div>
+      <details><summary>Références fonctionnelles extérieures</summary><div class="link-grid"><a href="https://data.humdata.org/dashboards/overview-of-data-grids" target="_blank" rel="noopener">HDX Data Grids</a><a href="https://docs.humdata.org/about/hdx-signals" target="_blank" rel="noopener">HDX Signals</a><a href="https://docs.humdata.org/about/hdx-signals/prompts" target="_blank" rel="noopener">Prompts HDX Signals</a><a href="https://jupyter.org/documentation" target="_blank" rel="noopener">Jupyter</a><a href="https://unstats.un.org/unsd/methodology/m49/" target="_blank" rel="noopener">Nomenclature ONU M49</a><a href="https://data.humdata.org/faq" target="_blank" rel="noopener">Aide HDX</a></div></details>
+      <div class="notice">Le dossier Drive appartient au compte benjamin.dautrif@gmail.com. Le dépôt GitHub est privé : son ouverture dépend des droits du compte connecté. Les logiciels marqués « conseillé » ne sont pas requis pour démarrer HDP.</div>
+      <div id="technology-status" class="status">Chargement du catalogue…</div>
+      <div id="technology-catalog"></div>
     </div>
   </section>
 
@@ -483,18 +558,18 @@
 </main>
 <script src="/static/vendor/leaflet/leaflet.js"></script>
 <script>
-  const state={projects:[],projectId:null,editingScriptId:null,codFamilies:[],codAvailability:null,sources:[],sourceSettings:[],resources:[],rssCatalog:[],processingOperations:null,leafletMap:null,leafletLayers:new Map(),tileLayer:null,mapConfig:null};
+  const state={projects:[],projectId:null,editingScriptId:null,codFamilies:[],codAvailability:null,sources:[],sourceSettings:[],resources:[],rssCatalog:[],processingOperations:null,technologies:null,leafletMap:null,leafletLayers:new Map(),tileLayer:null,mapConfig:null};
   const q=selector=>document.querySelector(selector);
   const els={project:q('#project-select'),health:q('#health')};
   const escapeText=value=>String(value??'');
   function setStatus(selector,message,error=false){const el=q(selector);el.textContent=message||'';el.className=`status${error?' error':''}`;}
-  async function api(path,options={}){const isForm=options.body instanceof FormData;const headers=isForm?{...(options.headers||{})}:{'Content-Type':'application/json',...(options.headers||{})};const response=await fetch(path,{...options,headers});if(response.status===204)return null;const data=await response.json().catch(()=>({detail:`Erreur HTTP ${response.status}`}));if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail));return data;}
+  async function api(path,options={}){const isForm=options.body instanceof FormData;const method=String(options.method||'GET').toUpperCase();const mutation=!['GET','HEAD','OPTIONS'].includes(method);const headers=isForm?{...(options.headers||{})}:{'Content-Type':'application/json',...(options.headers||{})};if(mutation)headers['X-HDP-CSRF']='1';const response=await fetch(path,{...options,headers,credentials:'same-origin'});if(response.status===204)return null;const data=await response.json().catch(()=>({detail:`Erreur HTTP ${response.status}`}));if(response.status===401){throw new Error('Session HDP expirée : rouvrez l’application depuis son raccourci.');}if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail));return data;}
   function bytes(value){const units=['o','Kio','Mio','Gio'];let n=Number(value||0),i=0;while(n>=1024&&i<units.length-1){n/=1024;i++;}return `${n.toLocaleString('fr-FR',{maximumFractionDigits:i?1:0})} ${units[i]}`;}
   function date(value){return value?new Date(value).toLocaleString('fr-FR'):'—';}
   function button(label,handler,className=''){const b=document.createElement('button');b.type='button';b.textContent=label;b.className=className;b.addEventListener('click',handler);return b;}
   function empty(container,message){container.innerHTML='';const div=document.createElement('div');div.className='empty';div.textContent=message;container.appendChild(div);}
 
-  function activateView(name){document.querySelectorAll('nav button').forEach(item=>item.classList.toggle('active',item.dataset.view===name));document.querySelectorAll('.view').forEach(view=>view.classList.toggle('active',view.id===`view-${name}`));if(name==='data')loadResources();if(name==='scripts'){loadScripts();loadProcessingWorkspace();}if(name==='schedules')loadSchedules();if(name==='projects')loadProjectSettings();if(name==='sources')renderSources();if(name==='source-settings')loadSourceSettings();if(name==='rss')loadRss();if(name==='timeline')loadTimeline();if(name==='map')loadMapLayers();if(name==='sql')loadSqlSchema();window.location.hash=name;}
+  function activateView(name){document.querySelectorAll('nav button').forEach(item=>item.classList.toggle('active',item.dataset.view===name));document.querySelectorAll('.view').forEach(view=>view.classList.toggle('active',view.id===`view-${name}`));if(name==='data')loadResources();if(name==='scripts'){loadScripts();loadProcessingWorkspace();}if(name==='notebooks')loadNotebooks();if(name==='intelligence')loadIntelligence();if(name==='schedules')loadSchedules();if(name==='projects')loadProjectSettings();if(name==='sources')renderSources();if(name==='source-settings')loadSourceSettings();if(name==='rss')loadRss();if(name==='timeline')loadTimeline();if(name==='map')loadMapLayers();if(name==='sql')loadSqlSchema();if(name==='technologies')loadTechnologies();window.location.hash=name;}
   document.querySelectorAll('nav button').forEach(tab=>tab.addEventListener('click',()=>activateView(tab.dataset.view)));
   q('#brand-home').addEventListener('click',event=>{event.preventDefault();activateView('home');});
   document.querySelectorAll('[data-go-view]').forEach(button=>button.addEventListener('click',()=>activateView(button.dataset.goView)));
@@ -511,8 +586,14 @@
   function sourceLink(label,url){const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener';link.textContent=label;return link;}
   function renderSources(){
     const items=state.sources,container=q('#source-catalog');container.innerHTML='';q('#sources-total').textContent=items.length;q('#sources-live').textContent=items.filter(item=>item.mode==='live_api').length;q('#sources-reference').textContent=items.filter(item=>item.mode==='reference_portal').length;q('#sources-auth').textContent=items.filter(item=>item.requires_auth).length;
-    if(!items.length)return empty(container,'Catalogue indisponible.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=item.mode==='live_api'?'API active':'Référence';head.append(title,pill);const organization=document.createElement('small');organization.textContent=`${item.organization} · ${item.geographic_scope} · ${item.category}`;const domains=document.createElement('small');domains.textContent=`Domaines : ${(item.domains||[]).join(', ')}`;const access=document.createElement('small');access.textContent=`Accès : ${item.access}${item.requires_auth?' · compte/identifiant requis pour tout ou partie':''}`;const note=document.createElement('small');note.textContent=item.notes||'';const links=document.createElement('div');links.className='source-links';links.append(sourceLink('Portail',item.portal_url));if(item.documentation_url)links.append(sourceLink('Documentation',item.documentation_url));if(item.api_url)links.append(sourceLink('API',item.api_url));card.append(head,organization,domains,access,note,links);container.appendChild(card);});setStatus('#source-catalog-status',`${items.length} sources documentées · ${items.filter(item=>item.searchable).length} interrogeables et planifiables dans HDP.`);
+    if(!items.length)return empty(container,'Catalogue indisponible.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=item.mode==='live_api'?'API active':'Référence';head.append(title,pill);const organization=document.createElement('small');organization.textContent=`${item.organization} · ${item.geographic_scope} · ${item.category}`;const domains=document.createElement('small');domains.textContent=`Domaines : ${(item.domains||[]).join(', ')}`;const access=document.createElement('small');access.textContent=`Accès : ${item.access}${item.requires_auth?' · compte/identifiant requis pour tout ou partie':''}`;const profile=document.createElement('small');profile.textContent=item.technical_profile?`${item.technical_profile.protocol} · formats : ${item.technical_profile.formats.join(', ')} · actualisation : ${item.technical_profile.freshness}`:'';const tools=document.createElement('small');tools.textContent=item.technical_profile?`Python : ${item.technical_profile.python_tools.join(', ')} · R : ${item.technical_profile.r_tools.join(', ')}`:'';const note=document.createElement('small');note.textContent=item.notes||'';const links=document.createElement('div');links.className='source-links';const seen=new Set();const candidates=[{label:'Portail',url:item.portal_url},{label:'Documentation',url:item.documentation_url},{label:'API',url:item.api_url},...(item.official_links||[])];candidates.forEach(entry=>{if(entry.url&&!seen.has(entry.url)){seen.add(entry.url);links.append(sourceLink(entry.label,entry.url));}});card.append(head,organization,domains,access,profile,tools,note,links);container.appendChild(card);});const linkCount=items.reduce((total,item)=>total+(item.official_links||[]).length,0);setStatus('#source-catalog-status',`${items.length} sources documentées · ${items.filter(item=>item.searchable).length} interrogeables et planifiables · ${linkCount} liens officiels spécialisés.`);
   }
+
+  function renderTechnologyItem(item){const card=document.createElement('article');card.className='link-card';const title=document.createElement('h4');title.textContent=item.name;const status=document.createElement('span');status.className='pill';status.textContent=item.status==='used'?'utilisé par HDP':'conseillé';const purpose=document.createElement('p');purpose.textContent=item.purpose;const links=document.createElement('div');links.className='source-links';(item.links||[]).forEach(entry=>links.append(sourceLink(entry.label,entry.url)));card.append(title,status,purpose,links);return card;}
+  async function loadTechnologies(){if(state.technologies){renderTechnologies();return;}setStatus('#technology-status','Chargement du catalogue vérifié…');try{state.technologies=await api('/api/technologies');renderTechnologies();}catch(error){setStatus('#technology-status',error.message,true);}}
+  function renderTechnologies(){const data=state.technologies;if(!data)return;q('#tech-resource-count').textContent=data.resource_count;q('#tech-link-count').textContent=data.link_count;q('#tech-category-count').textContent=data.categories.length;q('#technology-drive-link').href=data.google_drive_folder_url;q('#technology-github-link').href=data.github_repository_url;const container=q('#technology-catalog');container.innerHTML='';data.categories.forEach(category=>{const title=document.createElement('h3');title.className='category-title';title.textContent=category;const grid=document.createElement('div');grid.className='link-grid';data.items.filter(item=>item.category===category).forEach(item=>grid.append(renderTechnologyItem(item)));container.append(title,grid);});setStatus('#technology-status',`Catalogue ${data.version} vérifié le ${data.verified_at} · ${data.link_count} liens regroupés selon leur rôle réel dans le projet.`);}
+
+  function renderSourceContext(source,selector){const container=q(selector);container.innerHTML='';if(!source){container.textContent='Source indisponible.';return;}const title=document.createElement('strong');title.textContent=source.name;const profile=document.createElement('p');profile.textContent=source.technical_profile?`${source.technical_profile.protocol} · ${source.technical_profile.authentication} · ${source.technical_profile.freshness}`:source.notes||'';const tools=document.createElement('p');tools.textContent=source.technical_profile?`Outils utiles — Python : ${source.technical_profile.python_tools.join(', ')} · R : ${source.technical_profile.r_tools.join(', ')}`:'';const links=document.createElement('div');links.className='source-links';(source.official_links||[]).forEach(entry=>links.append(sourceLink(entry.label,entry.url)));container.append(title,profile,tools,links);}
 
   function prepareSourceSettingsSelectors(){
     const globalSelect=q('#global-source-select'),projectSelect=q('#project-source-select');
@@ -526,12 +607,12 @@
     container.innerHTML='';Object.entries(schema?.properties||{}).forEach(([name,definition])=>{
       const wrapper=document.createElement(definition.type==='string'&&Number(definition.maxLength||0)>200?'div':'div');if(definition.type==='array')wrapper.className='wide';
       if(definition.type==='boolean'){
-        const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';input.id=`${prefix}-${name}`;input.dataset.schemaName=name;input.dataset.schemaType=definition.type;input.checked=Boolean(values?.[name]??definition.default);label.append(input,document.createTextNode(definition.title||name));wrapper.appendChild(label);
+        const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';input.id=`${prefix}-${name}`;input.dataset.schemaName=name;input.dataset.schemaType=definition.type;input.checked=Boolean(values?.[name]??definition.default);input.disabled=Boolean(definition.readOnly);label.append(input,document.createTextNode(`${definition.title||name}${definition.readOnly?' (fixe)':''}`));wrapper.appendChild(label);
       }else{
         const label=document.createElement('label');label.htmlFor=`${prefix}-${name}`;label.textContent=definition.title||name;let input;
         if(Array.isArray(definition.enum)){input=document.createElement('select');definition.enum.forEach(value=>{const option=document.createElement('option');option.value=value;option.textContent=value;input.appendChild(option);});input.value=String(values?.[name]??definition.default??'');}
         else{input=document.createElement('input');input.type=definition.type==='integer'?'number':'text';const raw=values?.[name]??definition.default??(definition.type==='array'?[]:'');input.value=definition.type==='array'?(raw||[]).join(', '):raw;if(definition.minimum!==undefined)input.min=definition.minimum;if(definition.maximum!==undefined)input.max=definition.maximum;if(definition.maxLength!==undefined)input.maxLength=definition.maxLength;if(definition.pattern)input.pattern=definition.pattern;}
-        input.id=`${prefix}-${name}`;input.dataset.schemaName=name;input.dataset.schemaType=definition.type;wrapper.append(label,input);
+        input.id=`${prefix}-${name}`;input.dataset.schemaName=name;input.dataset.schemaType=definition.type;input.disabled=Boolean(definition.readOnly);if(definition.readOnly)label.textContent=`${label.textContent} (fixe)`;wrapper.append(label,input);
       }
       if(definition.description){const help=document.createElement('p');help.className='schema-help';help.textContent=definition.description;wrapper.appendChild(help);}container.appendChild(wrapper);
     });
@@ -543,16 +624,16 @@
     if(!state.sources.length)return;setStatus('#global-source-status','Chargement…');try{state.sourceSettings=await api('/api/source-settings');await Promise.all([loadGlobalSourceForm(),loadProjectSourceForm()]);setStatus('#global-source-status','');}catch(error){setStatus('#global-source-status',error.message,true);}
   }
   async function loadGlobalSourceForm(){
-    const sourceId=q('#global-source-select').value;if(!sourceId)return;const source=state.sourceSettings.find(item=>item.id===sourceId)||await api(`/api/source-settings/${sourceId}`);renderSchemaFields(source.global_settings_schema,q('#global-source-fields'),source.configuration.settings,'global-source');const secret=source.configuration.secret_environment_variable;q('#global-source-secret').textContent=secret?`${secret} : ${source.configuration.secret_configured?'configuré':'absent'} — sa valeur n’est jamais affichée.`:'Ce connecteur ne nécessite aucun secret.';
+    const sourceId=q('#global-source-select').value;if(!sourceId)return;const source=state.sourceSettings.find(item=>item.id===sourceId)||await api(`/api/source-settings/${sourceId}`);renderSourceContext(source,'#global-source-context');renderSchemaFields(source.global_settings_schema,q('#global-source-fields'),source.configuration.settings,'global-source');const secret=source.configuration.secret_environment_variable;q('#global-source-secret').textContent=secret?`${secret} : ${source.configuration.secret_configured?'configuré':'absent'} — sa valeur n’est jamais affichée.`:'Ce connecteur ne nécessite aucun secret.';
   }
   async function loadProjectSourceForm(){
-    if(!state.projectId)return;const sourceId=q('#project-source-select').value;if(!sourceId)return;setStatus('#project-source-status','Chargement…');try{const [settings]=await Promise.all([api(`/api/projects/${state.projectId}/sources/${sourceId}`)]);const source=state.sources.find(item=>item.id===sourceId);q('#project-source-enabled').checked=settings.enabled;renderSchemaFields(source.project_schema,q('#project-source-fields'),settings.parameters,'project-source');q('#project-source-interval').value=settings.schedule_defaults.interval_minutes;q('#project-source-schedule-enabled').checked=settings.schedule_defaults.enabled;q('#project-source-schedule-download').checked=settings.schedule_defaults.auto_download;q('#project-source-request').textContent='Aucune prévisualisation.';setStatus('#project-source-status','');}catch(error){setStatus('#project-source-status',error.message,true);}
+    if(!state.projectId)return;const sourceId=q('#project-source-select').value;if(!sourceId)return;setStatus('#project-source-status','Chargement…');try{const [settings]=await Promise.all([api(`/api/projects/${state.projectId}/sources/${sourceId}`)]);const source=state.sources.find(item=>item.id===sourceId);renderSourceContext(source,'#project-source-context');q('#project-source-enabled').checked=settings.enabled;renderSchemaFields(source.project_schema,q('#project-source-fields'),settings.parameters,'project-source');q('#project-source-interval').value=settings.schedule_defaults.interval_minutes;q('#project-source-schedule-enabled').checked=settings.schedule_defaults.enabled;q('#project-source-schedule-download').checked=settings.schedule_defaults.auto_download;q('#project-source-request').textContent='Aucune prévisualisation.';setStatus('#project-source-status','');}catch(error){setStatus('#project-source-status',error.message,true);}
   }
   q('#global-source-select').addEventListener('change',loadGlobalSourceForm);q('#project-source-select').addEventListener('change',loadProjectSourceForm);
   q('#global-source-form').addEventListener('submit',async event=>{event.preventDefault();const sourceId=q('#global-source-select').value;try{await api(`/api/source-settings/${sourceId}`,{method:'PUT',body:JSON.stringify({settings:readSchemaFields(q('#global-source-fields'))})});setStatus('#global-source-status','Paramètres globaux enregistrés.');state.sourceSettings=await api('/api/source-settings');await loadGlobalSourceForm();}catch(error){setStatus('#global-source-status',error.message,true);}});
   function projectSourcePayload(){return {enabled:q('#project-source-enabled').checked,parameters:readSchemaFields(q('#project-source-fields')),schedule_defaults:{interval_minutes:Number(q('#project-source-interval').value),enabled:q('#project-source-schedule-enabled').checked,auto_download:q('#project-source-schedule-download').checked}};}
   q('#project-source-form').addEventListener('submit',async event=>{event.preventDefault();const sourceId=q('#project-source-select').value;try{await api(`/api/projects/${state.projectId}/sources/${sourceId}`,{method:'PUT',body:JSON.stringify(projectSourcePayload())});setStatus('#project-source-status','Paramètres du projet enregistrés.');await loadProjectSourceForm();}catch(error){setStatus('#project-source-status',error.message,true);}});
-  q('#project-source-preview').addEventListener('click',async()=>{const sourceId=q('#project-source-select').value;try{const payload=projectSourcePayload();await api(`/api/projects/${state.projectId}/sources/${sourceId}`,{method:'PUT',body:JSON.stringify(payload)});const data=await api(`/api/projects/${state.projectId}/sources/${sourceId}/preview`,{method:'POST',body:JSON.stringify({parameters:payload.parameters})});q('#project-source-request').textContent=`${data.request.method} ${data.request.display_url}\n\n${data.request.curl}\n\nDocumentation vérifiée :\n${(data.request.documentation_evidence||[]).join('\n')}`;setStatus('#project-source-status','Requête validée et prévisualisée sans exécution réseau.');}catch(error){setStatus('#project-source-status',error.message,true);}});
+  q('#project-source-preview').addEventListener('click',async()=>{const sourceId=q('#project-source-select').value;try{const payload=projectSourcePayload();await api(`/api/projects/${state.projectId}/sources/${sourceId}`,{method:'PUT',body:JSON.stringify(payload)});const data=await api(`/api/projects/${state.projectId}/sources/${sourceId}/preview`,{method:'POST',body:JSON.stringify({parameters:payload.parameters})});q('#project-source-request').textContent=`${data.request.method} ${data.request.display_url}\n\nCURL\n${data.request.curl}\n\nPYTHON (httpx)\n${data.request.code_examples.python}\nR (httr2)\n${data.request.code_examples.r}\nDocumentation vérifiée :\n${(data.request.official_links||[]).map(link=>`${link.label} — ${link.url}`).join('\n')}`;setStatus('#project-source-status','Requête et exemples Python/R validés sans exécution réseau et sans exposition de secret.');}catch(error){setStatus('#project-source-status',error.message,true);}});
   async function loadProjects(selectId=null){
     state.projects=await api('/api/projects');const previous=selectId||state.projectId||localStorage.getItem('hdp-project');els.project.innerHTML='';
     state.projects.forEach(project=>{const option=document.createElement('option');option.value=project.id;option.textContent=project.name;els.project.appendChild(option);});
@@ -655,6 +736,19 @@
   q('#schedule-form').addEventListener('submit',async event=>{event.preventDefault();const payload={name:q('#schedule-name').value,source:q('#schedule-source').value,query:q('#schedule-query').value,result_limit:Number(q('#schedule-limit').value),auto_download:q('#schedule-download').checked,interval_minutes:Number(q('#schedule-interval').value),enabled:q('#schedule-enabled').checked};try{await api(`/api/projects/${state.projectId}/schedules`,{method:'POST',body:JSON.stringify(payload)});event.target.reset();q('#schedule-limit').value=25;q('#schedule-interval').value=1440;q('#schedule-enabled').checked=true;setStatus('#schedule-status','Planification créée. Une planification active est prise en charge au prochain passage du planificateur.');await loadSchedules();}catch(error){setStatus('#schedule-status',error.message,true);}});
   async function loadSchedules(){if(!state.projectId)return;try{renderSchedules(await api(`/api/projects/${state.projectId}/schedules`));}catch(error){setStatus('#schedule-status',error.message,true);}}
   function renderSchedules(items){const container=q('#schedule-list');container.innerHTML='';if(!items.length)return empty(container,'Aucune planification dans ce projet.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className=`pill ${item.last_status||''}`;pill.textContent=item.enabled?'active':'suspendue';head.append(title,pill);const details=document.createElement('small');details.textContent=`${item.source.toUpperCase()} · « ${item.query} » · toutes les ${item.interval_minutes} min · prochain passage ${date(item.next_run_at)} · dernier statut ${item.last_status||'jamais exécutée'}${item.last_error?' · '+item.last_error:''}`;const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Exécuter maintenant',async event=>{event.target.disabled=true;setStatus('#schedule-status',`Exécution de « ${item.name} »…`);try{const result=await api(`/api/schedules/${item.id}/run`,{method:'POST'});setStatus('#schedule-status',result.status==='completed'?`Exécution terminée · acquisition ${result.acquisition_id}`:`Échec : ${result.error}`,result.status!=='completed');await loadSchedules();}catch(error){setStatus('#schedule-status',error.message,true);}finally{event.target.disabled=false;}}));actions.append(button(item.enabled?'Suspendre':'Réactiver',async()=>{await api(`/api/schedules/${item.id}`,{method:'PATCH',body:JSON.stringify({enabled:!item.enabled})});await loadSchedules();}));actions.append(button('Archiver',async()=>{if(confirm(`Archiver la planification « ${item.name} » ?`)){await api(`/api/schedules/${item.id}`,{method:'DELETE'});await loadSchedules();}},'danger'));card.append(head,details,actions);container.appendChild(card);});}
+
+  const commaValues=selector=>q(selector).value.split(',').map(value=>value.trim()).filter(Boolean);
+  async function loadIntelligence(){if(!state.projectId)return;try{const [taxonomy,rules,signals]=await Promise.all([api('/api/hdx/datagrid/taxonomy'),api(`/api/projects/${state.projectId}/signals/rules`),api(`/api/projects/${state.projectId}/signals?limit=30`)]);const dimensions=q('#datagrid-dimensions');if(!dimensions.childElementCount)taxonomy.dimensions.forEach(item=>{const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';input.value=item.id;input.className='datagrid-dimension';label.append(input,document.createTextNode(item.label));dimensions.appendChild(label);});renderSignalRules(rules);renderSignals(signals);}catch(error){setStatus('#signal-status',error.message,true);}}
+  function renderSignalRules(items){const container=q('#signal-rules');container.innerHTML='';if(!items.length)return empty(container,'Aucune règle de signal.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const title=document.createElement('h4');title.textContent=item.name;const detail=document.createElement('small');detail.textContent=`${(item.themes||[]).join(', ')||'tous thèmes'} · ${(item.locations||[]).join(', ')||'toutes zones'} · gravité ≥ ${item.min_severity} · confiance ≥ ${item.min_confidence}`;card.append(title,detail);container.appendChild(card);});}
+  function renderSignals(items){const container=q('#signal-results');container.innerHTML='';if(!items.length)return empty(container,'Aucun signal ingéré.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const title=document.createElement('h4');title.textContent=item.title;const detail=document.createElement('small');detail.textContent=`${item.source} · ${date(item.occurred_at)} · gravité ${item.severity} · confiance ${item.confidence} · ${(item.locations||[]).join(', ')}`;card.append(title,detail);container.appendChild(card);});}
+  q('#datagrid-form').addEventListener('submit',async event=>{event.preventDefault();setStatus('#datagrid-status','Recherche HDX et indexation des métadonnées…');try{const payload={query:q('#datagrid-query').value,location:q('#datagrid-location').value,date_from:q('#datagrid-from').value,date_to:q('#datagrid-to').value,dimensions:[...document.querySelectorAll('.datagrid-dimension:checked')].map(item=>item.value),formats:[],rows:25};const data=await api(`/api/projects/${state.projectId}/hdx/datagrid/search`,{method:'POST',body:JSON.stringify(payload)});const container=q('#datagrid-results');container.innerHTML='';data.datasets.forEach(item=>{const card=document.createElement('div');card.className='item';const link=document.createElement('a');link.href=item.source_url;link.target='_blank';link.rel='noopener';link.textContent=item.title;const detail=document.createElement('small');detail.textContent=`${item.organization||'organisation non renseignée'} · ${item.resources.length} fichier(s) · ${item.periodicity||'périodicité inconnue'} · fiabilité technique ${item.reliability.score}`;const description=document.createElement('small');description.textContent=item.description||'Description absente';card.append(link,detail,description);container.appendChild(card);});setStatus('#datagrid-status',`${data.count} jeu(x) · ${data.metadata_records_updated} description(s) de jeux/fichiers mises à jour · couverture ${JSON.stringify(data.coverage)}`);}catch(error){setStatus('#datagrid-status',error.message,true);}});
+  q('#signal-rule-form').addEventListener('submit',async event=>{event.preventDefault();try{await api(`/api/projects/${state.projectId}/signals/rules`,{method:'POST',body:JSON.stringify({name:q('#signal-rule-name').value,themes:commaValues('#signal-rule-themes'),locations:commaValues('#signal-rule-locations'),min_severity:Number(q('#signal-severity').value),min_confidence:Number(q('#signal-confidence').value),data_grid_dimensions:[],lookback_hours:168,query_template:'{title} {themes} {locations}',refresh_due_resources:true})});event.target.reset();q('#signal-severity').value=.4;q('#signal-confidence').value=.5;setStatus('#signal-rule-status','Règle créée.');await loadIntelligence();}catch(error){setStatus('#signal-rule-status',error.message,true);}});
+  q('#signal-form').addEventListener('submit',async event=>{event.preventDefault();setStatus('#signal-status','Évaluation et recherche Data Grid automatiques…');try{const now=new Date().toISOString();const payload={source:'manual',external_id:`manual-${Date.now()}`,title:q('#signal-title').value,summary:q('#signal-summary').value,occurred_at:now,themes:commaValues('#signal-themes'),locations:commaValues('#signal-locations'),severity:Number(q('#signal-event-severity').value),confidence:Number(q('#signal-event-confidence').value),evidence:[],raw:{entered_in:'HDP V5'}};const data=await api(`/api/projects/${state.projectId}/signals`,{method:'POST',body:JSON.stringify(payload)});setStatus('#signal-status',`Signal enregistré · ${data.actions.length} règle(s) déclenchée(s)\n${data.actions.map(item=>`${item.rule}: ${item.status} · ${JSON.stringify(item.result)}`).join('\n')}`);await loadIntelligence();}catch(error){setStatus('#signal-status',error.message,true);}});
+  q('#syndromic-run').addEventListener('click',async()=>{try{const data=await api(`/api/projects/${state.projectId}/signals/syndromic-snapshot?hours=168&scope=global`,{method:'POST'});setStatus('#signal-status',`Vue syndromique · ${data.event_count} signal(aux) · indice ${data.score}\nThèmes ${JSON.stringify(data.themes)}\n${data.interpretation}`);}catch(error){setStatus('#signal-status',error.message,true);}});
+  async function loadNotebooks(){if(!state.projectId)return;try{const items=await api(`/api/projects/${state.projectId}/notebooks`);const container=q('#notebook-list');container.innerHTML='';if(!items.length)return empty(container,'Aucun notebook.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const title=document.createElement('h4');title.textContent=item.name;const detail=document.createElement('small');detail.textContent=`${item.kernel} · révision ${item.current_revision} · ${date(item.updated_at)}`;const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Ouvrir et exécuter la cellule 0',()=>runNotebookCell(item.id)));card.append(title,detail,actions);container.appendChild(card);});}catch(error){setStatus('#notebook-status',error.message,true);}}
+  async function sha256Text(value){const bytes=new TextEncoder().encode(value);const digest=await crypto.subtle.digest('SHA-256',bytes);return [...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');}
+  async function runNotebookCell(id){try{const notebook=await api(`/api/notebooks/${id}`);const cell=notebook.document.cells[0];if(!cell||cell.cell_type!=='code')throw new Error('La cellule 0 n’est pas exécutable.');const digest=await sha256Text(cell.source);if(!confirm(`Exécuter sans réseau la cellule SHA-256 ${digest} ?`))return;const result=await api(`/api/notebooks/${id}/cells/0/executions`,{method:'POST',body:JSON.stringify({confirmed_sha256:digest,timeout_seconds:60,max_output_bytes:262144})});setStatus('#notebook-status',`Exécution ${result.execution_id} mise en file. Résultat disponible dans Scripts.`);}catch(error){setStatus('#notebook-status',error.message,true);}}
+  q('#notebook-form').addEventListener('submit',async event=>{event.preventDefault();try{const data=await api(`/api/projects/${state.projectId}/notebooks`,{method:'POST',body:JSON.stringify({name:q('#notebook-name').value,kernel:q('#notebook-kernel').value,description:'Notebook créé dans HDP V5',cells:[{cell_type:'code',source:q('#notebook-code').value,metadata:{}}]})});event.target.reset();setStatus('#notebook-status',`Notebook créé · révision ${data.revision} · SHA-256 ${data.sha256}`);await loadNotebooks();}catch(error){setStatus('#notebook-status',error.message,true);}});
 
   (async()=>{await loadHealth();try{await Promise.all([loadSources(),loadCodFamilies()]);await loadProjects();await Promise.all([loadResources(),loadScripts(),loadProcessingWorkspace(),loadSchedules(),loadSourceSettings(),loadRss(),loadTimeline(),loadMapLayers(),renderSearchSourceFields()]);const requested=window.location.hash.replace('#','');activateView(document.getElementById(`view-${requested}`)?requested:'home');}catch(error){setStatus('#project-status',error.message,true);setStatus('#source-catalog-status',error.message,true);}})();
 </script>

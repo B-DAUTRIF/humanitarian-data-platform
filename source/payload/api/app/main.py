@@ -16,8 +16,9 @@ from urllib.parse import unquote, urljoin, urlparse
 
 import httpx
 import psycopg
-from fastapi import FastAPI, File, Form, HTTPException, Query, Response, UploadFile
-from fastapi.responses import FileResponse
+from psycopg import sql
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
@@ -74,6 +75,14 @@ from .processing_recipes import (
 )
 from .scheduler_utils import MIN_INTERVAL_MINUTES, next_run_at, validate_interval
 from .rss_registry import MAX_RSS_BYTES, build_rss_url, parse_rss, rss_catalog, rss_definition
+from .request_security import (
+    SESSION_COOKIE,
+    allowed_hosts,
+    authenticated,
+    csrf_is_valid,
+    normalized_host,
+    valid_local_token,
+)
 from .security import (
     confined_path,
     resource_key,
@@ -82,6 +91,7 @@ from .security import (
     sha256_file,
     validate_public_url,
 )
+from .secure_http import download_public_file
 from .source_registry import (
     CONNECTORS,
     connector_definition,
@@ -90,11 +100,14 @@ from .source_registry import (
     validate_values,
 )
 from .sql_workspace import ALLOWED_SQL_RELATIONS, validate_readonly_sql
+from .technology_registry import technology_catalog
+from .v5_features import router as v5_router
 from .script_runtime import (
     TERMINAL_STATUSES,
     ensure_spool_layout,
     heartbeat_status,
     prepare_execution_job,
+    purge_execution_job,
     read_execution_result,
     script_sha256,
     validate_execution_request,
@@ -103,14 +116,18 @@ from .script_runtime import (
 
 
 APP_NAME = "Humanitarian Data Platform"
-APP_VERSION = "4.0.0"
+APP_VERSION = "5.0.0"
 DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
 EXECUTION_SPOOL_DIR = Path(os.getenv("EXECUTION_SPOOL_DIR", "/app/execution_spool"))
 DATABASE_URL = os.environ["DATABASE_URL"]
+SQL_READER_URL = os.environ.get("SQL_READER_URL", DATABASE_URL)
+HDP_SQL_PASSWORD = os.getenv("HDP_SQL_PASSWORD", "").strip()
 R_SERVICE_URL = os.getenv("R_SERVICE_URL", "http://r-service:8001")
 RELIEFWEB_APPNAME = os.getenv("RELIEFWEB_APPNAME", "").strip()
 HDX_HAPI_APP_IDENTIFIER = os.getenv("HDX_HAPI_APP_IDENTIFIER", "").strip()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
+HDP_LOCAL_TOKEN = os.getenv("HDP_LOCAL_TOKEN", "").strip()
+HDP_ALLOWED_HOSTS = allowed_hosts(os.getenv("HDP_ALLOWED_HOSTS", "").split(","))
 HDP_TILE_URL = os.getenv(
     "HDP_TILE_URL", "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 ).strip()
@@ -136,8 +153,24 @@ app = FastAPI(
     version=APP_VERSION,
     description="Acquisition, téléchargement et gestion locale de ressources humanitaires par projets.",
 )
+app.include_router(v5_router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 scheduler_task: asyncio.Task[None] | None = None
+
+
+@app.middleware("http")
+async def local_request_boundary(request: Request, call_next: Any) -> Response:
+    host = normalized_host(request.headers.get("host", ""))
+    if host not in HDP_ALLOWED_HOSTS:
+        return JSONResponse(status_code=400, content={"detail": "Hôte HTTP refusé"})
+    path = request.url.path
+    if path.startswith("/static/") or path in {"/", "/api/health"}:
+        return await call_next(request)
+    if not authenticated(request, HDP_LOCAL_TOKEN):
+        return JSONResponse(status_code=401, content={"detail": "Session HDP requise"})
+    if not csrf_is_valid(request, HDP_ALLOWED_HOSTS):
+        return JSONResponse(status_code=403, content={"detail": "Origine ou jeton CSRF refusé"})
+    return await call_next(request)
 
 
 class ProjectCreate(BaseModel):
@@ -321,6 +354,10 @@ class SearchResponse(BaseModel):
 
 def database_connection(*, autocommit: bool = True) -> psycopg.Connection[Any]:
     return psycopg.connect(DATABASE_URL, autocommit=autocommit)
+
+
+def sql_reader_connection(*, autocommit: bool = True) -> psycopg.Connection[Any]:
+    return psycopg.connect(SQL_READER_URL, autocommit=autocommit)
 
 
 def initialize_database() -> None:
@@ -649,6 +686,24 @@ def initialize_database() -> None:
                             """,
                             (source["id"], Jsonb(source["project_defaults"]), now),
                         )
+                reader_exists = connection.execute(
+                    "SELECT 1 FROM pg_roles WHERE rolname='hdp_reader'"
+                ).fetchone()
+                password_literal = sql.Literal(HDP_SQL_PASSWORD)
+                if reader_exists:
+                    connection.execute(
+                        sql.SQL("ALTER ROLE hdp_reader WITH LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT").format(password_literal)
+                    )
+                else:
+                    connection.execute(
+                        sql.SQL("CREATE ROLE hdp_reader LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT").format(password_literal)
+                    )
+                connection.execute("GRANT CONNECT ON DATABASE humanitarian TO hdp_reader")
+                connection.execute("GRANT USAGE ON SCHEMA public TO hdp_reader")
+                for view_name in sorted(ALLOWED_SQL_RELATIONS):
+                    connection.execute(
+                        sql.SQL("GRANT SELECT ON {} TO hdp_reader").format(sql.Identifier(view_name))
+                    )
             return
         except Exception as exc:  # Docker may still be completing startup.
             last_error = exc
@@ -659,6 +714,10 @@ def initialize_database() -> None:
 @app.on_event("startup")
 async def startup() -> None:
     global scheduler_task
+    if len(HDP_LOCAL_TOKEN) < 32:
+        raise RuntimeError("HDP_LOCAL_TOKEN doit contenir au moins 32 caractères")
+    if len(HDP_SQL_PASSWORD) < 32:
+        raise RuntimeError("HDP_SQL_PASSWORD doit contenir au moins 32 caractères")
     DATA_DIR.joinpath("raw").mkdir(parents=True, exist_ok=True)
     DATA_DIR.joinpath("projects").mkdir(parents=True, exist_ok=True)
     DATA_DIR.joinpath("uploads").mkdir(parents=True, exist_ok=True)
@@ -1004,16 +1063,43 @@ async def request_connector_json(
                 ),
             )
         query_parameters["app_identifier"] = HDX_HAPI_APP_IDENTIFIER
-    timeout = httpx.Timeout(float(global_settings["timeout_seconds"]), connect=20)
+    timeout = httpx.Timeout(
+        float(global_settings["timeout_seconds"]),
+        connect=float(global_settings["connect_timeout_seconds"]),
+    )
     retries = int(global_settings["retry_count"])
     backoff = int(global_settings["backoff_seconds"])
+    max_response_bytes = int(global_settings["max_response_bytes"])
+    headers = {
+        "User-Agent": str(global_settings["user_agent"]),
+        "Accept-Language": str(global_settings["accept_language"]),
+        "Accept": "application/json, application/geo+json;q=0.9",
+    }
     last_error: httpx.HTTPError | None = None
     for attempt in range(retries + 1):
         try:
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-                response = await client.get(preview["url"], params=query_parameters)
-                response.raise_for_status()
-                return response.json()
+                async with client.stream(
+                    "GET", preview["url"], params=query_parameters, headers=headers
+                ) as response:
+                    response.raise_for_status()
+                    declared_size = int(response.headers.get("content-length", "0") or 0)
+                    if declared_size > max_response_bytes:
+                        raise httpx.HTTPError(
+                            "Réponse distante supérieure à la limite configurée",
+                            request=response.request,
+                        )
+                    chunks: list[bytes] = []
+                    received = 0
+                    async for chunk in response.aiter_bytes():
+                        received += len(chunk)
+                        if received > max_response_bytes:
+                            raise httpx.HTTPError(
+                                "Réponse distante supérieure à la limite configurée",
+                                request=response.request,
+                            )
+                        chunks.append(chunk)
+                    return json.loads(b"".join(chunks))
         except httpx.HTTPError as exc:
             last_error = exc
             status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
@@ -1215,13 +1301,13 @@ def reserve_resource(
     with database_connection() as connection:
         existing = connection.execute(
             """
-            SELECT id, local_path, status FROM local_resources
+            SELECT id, local_path, status, acquisition_id, version_number FROM local_resources
             WHERE project_id = %s AND resource_key = %s AND url = %s AND deleted_at IS NULL
             ORDER BY updated_at DESC LIMIT 1
             """,
             (project_id, key, url),
         ).fetchone()
-        if existing:
+        if existing and existing[3] == acquisition_id:
             connection.execute(
                 """
                 UPDATE local_resources
@@ -1268,6 +1354,8 @@ def reserve_resource(
                 )
             return existing[0], existing[1], existing[2]
         resource_id = uuid.uuid4()
+        supersedes_resource_id = existing[0] if existing else None
+        version_number = int(existing[4]) + 1 if existing else 1
         now = datetime.now(UTC)
         connection.execute(
             """
@@ -1307,6 +1395,11 @@ def reserve_resource(
                 now,
             ),
         )
+        if supersedes_resource_id:
+            connection.execute(
+                "UPDATE local_resources SET supersedes_resource_id=%s, version_number=%s WHERE id=%s",
+                (supersedes_resource_id, version_number, resource_id),
+            )
     return resource_id, None, "queued"
 
 
@@ -1326,8 +1419,8 @@ def update_resource(resource_id: uuid.UUID, status: str, **values: Any) -> None:
         )
 
 
-def filename_from_response(url: str, response: httpx.Response, fallback: str) -> str:
-    disposition = response.headers.get("content-disposition", "")
+def filename_from_headers(url: str, headers: dict[str, str], fallback: str) -> str:
+    disposition = headers.get("content-disposition", "")
     match = re.search(r"filename\*?=(?:UTF-8''|\")?([^\";]+)", disposition, flags=re.IGNORECASE)
     candidate = unquote(match.group(1).strip()) if match else Path(urlparse(url).path).name
     return safe_filename(candidate, fallback)
@@ -1342,51 +1435,35 @@ async def download_one(
 ) -> str:
     current_url = validate_public_url(str(resource["url"]))
     update_resource(resource_id, "downloading", error=None)
-    timeout = httpx.Timeout(120, connect=20)
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-        for _ in range(6):
-            async with client.stream("GET", current_url, headers={"User-Agent": f"HDP/{APP_VERSION}"}) as response:
-                if response.status_code in {301, 302, 303, 307, 308}:
-                    location = response.headers.get("location")
-                    if not location:
-                        raise ValueError("Redirection sans destination")
-                    current_url = validate_public_url(urljoin(current_url, location))
-                    continue
-                response.raise_for_status()
-                declared = response.headers.get("content-length")
-                if declared and int(declared) > max_bytes:
-                    raise ValueError(f"Ressource supérieure à la limite de {max_bytes} octets")
-                filename = filename_from_response(current_url, response, f"{resource_id}.bin")
-                relative = Path("projects") / str(project_id) / "resources" / str(acquisition_id) / f"{resource_id}_{filename}"
-                destination = confined_path(DATA_DIR, str(relative))
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                partial = destination.with_suffix(destination.suffix + ".part")
-                digest = hashlib.sha256()
-                total = 0
-                try:
-                    with partial.open("wb") as stream:
-                        async for chunk in response.aiter_bytes(65_536):
-                            total += len(chunk)
-                            if total > max_bytes:
-                                raise ValueError(f"Ressource supérieure à la limite de {max_bytes} octets")
-                            digest.update(chunk)
-                            stream.write(chunk)
-                    partial.replace(destination)
-                except Exception:
-                    partial.unlink(missing_ok=True)
-                    raise
-                update_resource(
-                    resource_id,
-                    "completed",
-                    filename=filename,
-                    local_path=str(relative),
-                    sha256=digest.hexdigest(),
-                    size_bytes=total,
-                    content_type=response.headers.get("content-type", "").split(";")[0],
-                    error=None,
-                )
-                return "completed"
-        raise ValueError("Trop de redirections HTTP")
+    directory = confined_path(
+        DATA_DIR, str(Path("projects") / str(project_id) / "resources" / str(acquisition_id))
+    )
+    result = await asyncio.to_thread(
+        download_public_file,
+        current_url,
+        directory,
+        max_bytes=max_bytes,
+        user_agent=f"HDP/{APP_VERSION}",
+    )
+    filename = filename_from_headers(result.final_url, result.headers, f"{resource_id}.bin")
+    relative = Path("projects") / str(project_id) / "resources" / str(acquisition_id) / f"{resource_id}_{filename}"
+    destination = confined_path(DATA_DIR, str(relative))
+    try:
+        os.replace(result.temporary_path, destination)
+    except Exception:
+        result.temporary_path.unlink(missing_ok=True)
+        raise
+    update_resource(
+        resource_id,
+        "completed",
+        filename=filename,
+        local_path=str(relative),
+        sha256=result.sha256,
+        size_bytes=result.size_bytes,
+        content_type=result.headers.get("content-type", "").split(";")[0],
+        error=None,
+    )
+    return "completed"
 
 
 async def download_resources(
@@ -2263,7 +2340,22 @@ async def scheduler_loop() -> None:
 
 
 @app.get("/", include_in_schema=False)
-def home() -> FileResponse:
+def home(request: Request, token: str = Query(default="", max_length=256)) -> Response:
+    if token:
+        if not valid_local_token(token, HDP_LOCAL_TOKEN):
+            raise HTTPException(status_code=401, detail="Jeton local HDP invalide")
+        response = RedirectResponse(url="/", status_code=303)
+        response.set_cookie(
+            SESSION_COOKIE,
+            HDP_LOCAL_TOKEN,
+            httponly=True,
+            samesite="strict",
+            secure=False,
+            max_age=43_200,
+        )
+        return response
+    if not authenticated(request, HDP_LOCAL_TOKEN):
+        raise HTTPException(status_code=401, detail="Ouvrez HDP depuis son raccourci sécurisé")
     return FileResponse(STATIC_DIR / "index.html")
 
 
@@ -2357,7 +2449,7 @@ def execute_sql_query(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     started = time.perf_counter()
     try:
-        with database_connection(autocommit=False) as connection:
+        with sql_reader_connection(autocommit=False) as connection:
             connection.execute("SET TRANSACTION READ ONLY")
             connection.execute("SET LOCAL statement_timeout = '5000ms'")
             connection.execute("SELECT set_config('hdp.project_id', %s, TRUE)", (str(project_id),))
@@ -2386,6 +2478,11 @@ def execute_sql_query(
 @app.get("/api/sources")
 def sources() -> list[dict[str, Any]]:
     return source_catalog()
+
+
+@app.get("/api/technologies")
+def technologies() -> dict[str, Any]:
+    return technology_catalog()
 
 
 @app.get("/api/source-settings")
@@ -2912,9 +3009,12 @@ async def search(
     limit: int = Query(default=25, ge=1, le=100),
     auto_download: bool | None = None,
 ) -> SearchResponse:
-    preferences = get_preferences(project_id)
-    should_download = preferences["auto_download"] if auto_download is None else auto_download
-    return await execute_acquisition(project_id, source, query, limit, should_download)
+    del project_id, source, query, limit, auto_download
+    raise HTTPException(
+        status_code=405,
+        detail="Cette route GET sans effet de bord est retirée en V5. Utiliser POST /api/acquisitions.",
+        headers={"Allow": "POST"},
+    )
 
 
 @app.post("/api/acquisitions", response_model=SearchResponse, status_code=201)
@@ -4353,7 +4453,9 @@ def collect_execution_result(execution_id: uuid.UUID) -> dict[str, Any]:
                 error, execution_id,
             ),
         )
-    return _execution_row(execution_id)
+    persisted = _execution_row(execution_id)
+    purge_execution_job(EXECUTION_SPOOL_DIR, execution_id, current["language"])
+    return persisted
 
 
 def collect_pending_executions() -> None:

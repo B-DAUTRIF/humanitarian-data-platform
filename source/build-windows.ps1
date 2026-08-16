@@ -11,7 +11,7 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $sourceDirectory "windows-build"
 }
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
-$installerName = "HumanitarianDataPlatform_Setup_Native_GUI_v4.0.0.exe"
+$installerName = "HumanitarianDataPlatform_Setup_Native_GUI_v5.0.0.exe"
 $installerPath = Join-Path $OutputDirectory $installerName
 
 $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
@@ -67,7 +67,7 @@ if (-not (Test-Path -LiteralPath $installerPath -PathType Leaf)) {
 }
 
 $version = (Get-Item -LiteralPath $installerPath).VersionInfo
-if ($version.FileVersion -notlike "4.0.0*" -or $version.ProductVersion -notlike "4.0.0*") {
+if ($version.FileVersion -notlike "5.0.0*" -or $version.ProductVersion -notlike "5.0.0*") {
     throw "Métadonnées inattendues : FileVersion=$($version.FileVersion), ProductVersion=$($version.ProductVersion)"
 }
 
