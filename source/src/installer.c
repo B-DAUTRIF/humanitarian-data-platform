@@ -20,7 +20,7 @@
 #include "payload_generated.h"
 
 #define APP_NAME L"Humanitarian Data Platform"
-#define APP_VERSION L"5.0.0"
+#define APP_VERSION L"5.0.1"
 #define MAIN_CLASS L"HDP_NATIVE_INSTALLER_30"
 
 #define ID_PATH 1001
@@ -665,7 +665,7 @@ static BOOL write_environment(const wchar_t *install_dir, const wchar_t *reliefw
     if (existing) {
         wchar_t backup_path[MAX_PATH * 4];
         _snwprintf(backup_path, sizeof(backup_path) / sizeof(wchar_t),
-                   L"%ls\\.env.backup-before-v5.0.0", install_dir);
+                   L"%ls\\.env.backup-before-v5.0.1", install_dir);
         if (!CopyFileW(env_path, backup_path, FALSE)) {
             HeapFree(GetProcessHeap(), 0, existing);
             return FALSE;
@@ -937,7 +937,7 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
     post_log(L"Image PostgreSQL/PostGIS disponible.\r\n");
 
     post_status(L"Construction des services Python et GitHub", 66);
-    post_log(L"Construction silencieuse de l'API, du runner Python sans réseau et de la passerelle GitHub locale. Le compteur d'activité confirme que le processus continue.\r\n");
+    post_log(L"Construction silencieuse de l'API et du runner Python sans réseau. Le compteur d'activité confirme que le processus continue.\r\n");
     _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
                L"compose -f \"%ls\\compose.yaml\" build --quiet api runner-python", options->install_dir);
     compose_result = run_process_capture(docker, compose_args, options->install_dir);
@@ -947,7 +947,7 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
         post_log(error);
         goto done;
     }
-        post_log(L"API Python/FastAPI, runner Python et passerelle GitHub construits.\r\n");
+        post_log(L"API Python/FastAPI et runner Python construits.\r\n");
 
     if (options->install_r_module) {
         post_status(L"Construction du module analytique R — téléchargement supérieur à 300 Mo", 73);
@@ -1188,7 +1188,7 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
         case WM_CREATE: {
             g_font = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
             HWND header = create_control(L"STATIC", L"Humanitarian Data Platform", SS_LEFT, 0, window);
-            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 5.0.0 — données humanitaires et sanitaires", SS_LEFT, 0, window);
+            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 5.0.1 — données humanitaires et sanitaires", SS_LEFT, 0, window);
             HWND path_label = create_control(L"STATIC", L"Dossier d'installation", SS_LEFT, 0, window);
             HWND relief_label = create_control(L"STATIC", L"Appname ReliefWeb", SS_LEFT, 0, window);
             HWND github_label = create_control(L"STATIC", L"Jeton GitHub", SS_LEFT, 0, window);
