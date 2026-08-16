@@ -2,7 +2,7 @@
 
 ## Round V5 - 16 août 2026
 
-Implémenté et validé localement :
+Implémenté et validé localement et par les workflows GitHub :
 
 - [x] HDP-059/060 : validation SQL AST, littéraux préservés, rôle `hdp_reader` ;
 - [x] HDP-061 : session locale, Host/Origin/CSRF, retrait des effets de bord GET ;
@@ -16,10 +16,10 @@ Implémenté et validé localement :
 - [x] monolithe modulaire simplifié, documentation, UML PDF et Wiki versionné ;
 - [x] installateur Linux poste/serveur et workflow de production Windows V5 ;
 - [x] 103 tests Python, compilation C stricte, OpenAPI (69 routes), JavaScript et contrôles statiques.
+- [x] workflow Windows 2025 réussi, EXE/ZIP V5 récupérés et empreintes contrôlées.
 
-À terminer sur l’infrastructure GitHub/Windows :
+Qualifications d'exploitation encore ouvertes :
 
-- [ ] exécuter le workflow Windows 2025 et récupérer l’EXE/ZIP V5 ;
 - [ ] recette réelle Windows 10/11 avec Docker Desktop ;
 - [ ] recette Compose complète (Docker indisponible dans l’environnement local) ;
 - [ ] signature Authenticode si un certificat est fourni ;
