@@ -10,6 +10,7 @@ from starlette.requests import Request
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 PUBLIC_PATHS = frozenset({"/api/health"})
 SESSION_COOKIE = "hdp_session"
+CSRF_COOKIE = "hdp_csrf"
 CSRF_HEADER = "x-hdp-csrf"
 
 
@@ -43,6 +44,14 @@ def authenticated(request: Request, expected_token: str) -> bool:
     )
 
 
+def csrf_token(local_token: str) -> str:
+    if not local_token:
+        return ""
+    return hmac.digest(
+        local_token.encode("utf-8"), b"hdp-csrf-v1", "sha256"
+    ).hex()
+
+
 def origin_is_local(request: Request, allowed: frozenset[str]) -> bool:
     origin = request.headers.get("origin") or request.headers.get("referer")
     if not origin:
@@ -53,12 +62,21 @@ def origin_is_local(request: Request, allowed: frozenset[str]) -> bool:
     return parsed.scheme in {"http", "https"} and normalized_host(parsed.netloc) in allowed
 
 
-def csrf_is_valid(request: Request, allowed: frozenset[str]) -> bool:
+def csrf_is_valid(
+    request: Request, allowed: frozenset[str], expected_local_token: str
+) -> bool:
     if request.method.upper() in SAFE_METHODS:
         return True
-    if request.headers.get(CSRF_HEADER) != "1":
-        return False
     fetch_site = request.headers.get("sec-fetch-site", "").casefold()
     if fetch_site and fetch_site not in {"same-origin", "same-site", "none"}:
         return False
-    return origin_is_local(request, allowed)
+    if not origin_is_local(request, allowed):
+        return False
+    submitted = request.headers.get(CSRF_HEADER, "")
+    expected = csrf_token(expected_local_token)
+    cookie = request.cookies.get(CSRF_COOKIE, "")
+    if valid_local_token(submitted, expected) and valid_local_token(cookie, expected):
+        return True
+    # Compatibilité avec l'interface 5.0.1 déjà ouverte. Ce chemin reste borné
+    # par SameSite=Strict, le contrôle Fetch Metadata et l'origine locale.
+    return submitted == "1"
