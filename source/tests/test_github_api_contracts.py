@@ -19,7 +19,7 @@ class GitHubApiContractTest(unittest.TestCase):
 
     def test_gateway_is_valid_python_and_final_version(self) -> None:
         self.assertIsInstance(self.tree, ast.Module)
-        self.assertIn('APP_VERSION = "5.0.1"', self.source)
+        self.assertIn('APP_VERSION = "5.0.2"', self.source)
         self.assertIn('"X-GitHub-Api-Version": API_VERSION', self.source)
 
     def test_gateway_exposes_bounded_classic_github_functions(self) -> None:
