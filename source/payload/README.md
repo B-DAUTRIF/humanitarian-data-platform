@@ -1,6 +1,6 @@
-# Humanitarian Data Platform 5.0.1
+# Humanitarian Data Platform 5.0.2
 
-## Version 5.0.1
+## Version 5.0.2
 
 Chaque source possède désormais ses propres réglages globaux et projet, sa
 fiche technique, ses liens officiels et une prévisualisation cURL/Python/R sans
@@ -96,7 +96,7 @@ métadonnées sont archivés avec chaque ressource.
 
 ## Limite de sécurité
 
-HDP 5.0.1 est une application locale, non un serveur Internet durci. Seuls les
+HDP 5.0.2 est une application locale, non un serveur Internet durci. Seuls les
 scripts Python/R locaux et de confiance doivent être exécutés. Les runners sont
 non privilégiés, sans réseau et bornés, mais ne constituent pas une isolation
 multi-utilisateur.

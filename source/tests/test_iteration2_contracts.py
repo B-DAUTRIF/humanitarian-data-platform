@@ -149,10 +149,18 @@ class IterationTwoStaticContractTest(unittest.TestCase):
             self.assertIn(route, main)
         for element_id in ("view-rss", "view-timeline", "view-map", "execution-settings-form"):
             self.assertIn(f'id="{element_id}"', html)
-        self.assertIn("version 5.0.1", html)
+        self.assertIn("version 5.0.2", html)
+        self.assertIn("cookieValue('hdp_csrf')", html)
         self.assertIn('/static/vendor/leaflet/leaflet.js', html)
         self.assertNotIn('unpkg.com', html)
         self.assertTrue((API_ROOT / "static" / "vendor" / "leaflet" / "LICENSE").is_file())
+
+    def test_session_cookie_stays_httponly_and_csrf_cookie_is_renewed(self) -> None:
+        main = (API_ROOT / "app" / "main.py").read_text(encoding="utf-8")
+        self.assertIn("SESSION_COOKIE,\n            HDP_LOCAL_TOKEN,\n            httponly=True", main)
+        self.assertGreaterEqual(main.count("CSRF_COOKIE,"), 3)
+        self.assertGreaterEqual(main.count("httponly=False"), 2)
+        self.assertGreaterEqual(main.count('response.headers["Cache-Control"] = "no-store"'), 2)
 
 
 if __name__ == "__main__":

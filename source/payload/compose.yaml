@@ -37,7 +37,7 @@ services:
       retries: 12
 
   spool-init:
-    image: hdp-runner-python:5.0.1
+    image: hdp-runner-python:5.0.2
     build:
       context: ./runner
       dockerfile: Dockerfile.python
@@ -59,7 +59,7 @@ services:
     restart: "no"
 
   runner-python:
-    image: hdp-runner-python:5.0.1
+    image: hdp-runner-python:5.0.2
     build:
       context: ./runner
       dockerfile: Dockerfile.python
@@ -86,7 +86,7 @@ services:
         condition: service_completed_successfully
 
   runner-r:
-    image: hdp-runner-r:5.0.1
+    image: hdp-runner-r:5.0.2
     build:
       context: ./runner
       dockerfile: Dockerfile.r
