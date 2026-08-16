@@ -1,5 +1,14 @@
 # Journal des versions
 
+## 5.2 - référence de travail - 16 août 2026
+
+- choix explicite de **5.2** comme version de travail active de HDP ;
+- conservation de **5.0.2** comme dernière livraison applicative et dernier
+  installateur qualifiés tant qu'aucun livrable 5.2 n'a été reconstruit et
+  validé ;
+- publication de cette décision sur le `main` privé, sans réécriture de
+  l'historique ni renommage des artefacts 5.0.2.
+
 ## 5.0.2 - renouvellement de la session CSRF locale - 16 août 2026
 
 - remplacement du marqueur CSRF constant par un jeton dérivé du secret local,

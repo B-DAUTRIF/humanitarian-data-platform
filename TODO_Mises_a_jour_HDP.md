@@ -1,5 +1,17 @@
 # Todo-list des mises à jour — Humanitarian Data Platform
 
+## Référence de travail 5.2 - décision du 16 août 2026
+
+- [x] désigner **HDP 5.2** comme version de travail active ;
+- [x] conserver la version 5.0.2 comme dernière livraison qualifiée et ne pas
+  renommer ses EXE, ZIP, empreintes ou documents ;
+- [x] publier la décision dans les fichiers canoniques du dépôt privé sans
+  force-push ;
+- [ ] attribuer à chaque futur changement 5.2 un périmètre, des critères
+  d'acceptation et des preuves de validation ;
+- [ ] reconstruire, tester et qualifier séparément les livrables 5.2 avant de
+  les annoncer comme version installable.
+
 ## Correctif V5.0.2 - session CSRF locale
 
 - [x] remplacer le marqueur CSRF constant par un jeton dérivé et vérifié en
