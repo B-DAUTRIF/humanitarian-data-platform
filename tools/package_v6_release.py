@@ -65,7 +65,11 @@ def iter_source_files() -> list[Path]:
         relative = path.relative_to(ROOT)
         if any(part in EXCLUDED_PARTS for part in relative.parts):
             continue
-        if path.name in EXCLUDED_NAMES or path.suffix.casefold() in EXCLUDED_SUFFIXES:
+        if (
+            path.name in EXCLUDED_NAMES
+            or path.name.casefold().endswith(".exe.sha256")
+            or path.suffix.casefold() in EXCLUDED_SUFFIXES
+        ):
             continue
         files.append(path)
     return sorted(files, key=lambda item: item.relative_to(ROOT).as_posix())

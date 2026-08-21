@@ -61,6 +61,7 @@ class V6ReleaseContractTest(unittest.TestCase):
         self.assertIn("source/payload/.env.example", files)
         self.assertNotIn("source/src/payload_generated.h", files)
         self.assertNotIn("source/HumanitarianDataPlatform_Setup_Native_GUI_v3.0.0.exe", files)
+        self.assertNotIn("source/HumanitarianDataPlatform_Setup_Native_GUI_v3.0.0.exe.sha256", files)
         self.assertFalse(any("__pycache__" in path for path in files))
 
 
