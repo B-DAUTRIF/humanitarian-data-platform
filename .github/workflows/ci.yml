@@ -21,12 +21,12 @@ jobs:
           node-version: "22"
       - name: Tests Python
         run: |
-          python -m pip install pglast==8.4
+          python -m pip install -r source/payload/api/requirements.txt
           python -m unittest discover -s source/tests -p 'test_*.py'
       - name: Compilation Python
         run: python -m compileall -q source/payload/api/app source/payload/github-api source/tests tools
       - name: Syntaxe JavaScript
-        run: node tools/check_inline_javascript.mjs source/payload/api/static/index.html
+        run: node tools/check_inline_javascript.mjs source/payload/api/static/index.html source/payload/api/static/login.html
       - name: Contrat Compose
         run: docker compose -f source/payload/compose.yaml config --quiet
         env:
