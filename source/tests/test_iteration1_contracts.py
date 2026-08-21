@@ -97,12 +97,12 @@ class IterationOneStaticContractTest(unittest.TestCase):
         ):
             self.assertIn(f'id="{element_id}"', self.html_text)
 
-    def test_windows_build_metadata_targets_version_502(self) -> None:
-        self.assertIn('#define APP_VERSION L"5.0.2"', self.installer_text)
-        self.assertIn("HumanitarianDataPlatform_Setup_Native_GUI_v5.0.2.exe", BUILD_PATH.read_text(encoding="utf-8"))
+    def test_windows_build_metadata_targets_version_600_dev(self) -> None:
+        self.assertIn('#define APP_VERSION L"6.0.0-dev"', self.installer_text)
+        self.assertIn("HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0-dev.exe", BUILD_PATH.read_text(encoding="utf-8"))
         resources = RESOURCE_PATH.read_text(encoding="utf-8")
-        self.assertIn("FILEVERSION 5,0,2,0", resources)
-        self.assertIn('VALUE "ProductVersion", "5.0.2"', resources)
+        self.assertIn("FILEVERSION 6,0,0,0", resources)
+        self.assertIn('VALUE "ProductVersion", "6.0.0-dev"', resources)
 
     def test_windows_upgrade_preserves_unknown_environment_lines(self) -> None:
         self.assertIn("is_managed_environment_line", self.installer_text)
@@ -116,7 +116,7 @@ class IterationOneStaticContractTest(unittest.TestCase):
             "HDP_PORT",
         ):
             self.assertIn(f'"{managed_key}"', self.installer_text)
-        self.assertIn(".env.backup-before-v5.0.2", self.installer_text)
+        self.assertIn(".env.backup-before-v6.0.0", self.installer_text)
         self.assertIn("CopyFileW(env_path, backup_path, FALSE)", self.installer_text)
         self.assertIn("Mise à niveau d'une installation existante", self.installer_text)
 

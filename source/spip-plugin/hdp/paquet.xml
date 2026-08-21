@@ -1,0 +1,17 @@
+<paquet
+    prefix="hdp"
+    categorie="communication"
+    version="1.0.0-dev"
+    etat="dev"
+    compatibilite="[4.2.0;4.4.*]"
+    schema="1.0.0"
+    logo="prive/themes/spip/images/hdp-64.svg"
+    documentation="README.md"
+>
+    <nom>HDP — Publications humanitaires</nom>
+    <auteur>Humanitarian Data Platform</auteur>
+    <licence>GNU/GPL v3</licence>
+    <pipeline nom="declarer_tables_objets_sql" inclure="base/hdp.php" />
+    <pipeline nom="autoriser" inclure="hdp_autorisations.php" />
+    <pipeline nom="taches_generales_cron" inclure="hdp_pipelines.php" />
+</paquet>

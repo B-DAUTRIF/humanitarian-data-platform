@@ -52,31 +52,46 @@ def csrf_token(local_token: str) -> str:
     ).hex()
 
 
-def origin_is_local(request: Request, allowed: frozenset[str]) -> bool:
+def origin_is_local(
+    request: Request, allowed: frozenset[str], expected_origin: str = ""
+) -> bool:
     origin = request.headers.get("origin") or request.headers.get("referer")
     if not origin:
         # Non-browser clients remain usable only with the bearer/session and
         # the non-safelisted CSRF header checked separately.
         return True
     parsed = urlparse(origin)
-    return parsed.scheme in {"http", "https"} and normalized_host(parsed.netloc) in allowed
+    if parsed.scheme not in {"http", "https"} or normalized_host(parsed.netloc) not in allowed:
+        return False
+    if expected_origin:
+        expected = urlparse(expected_origin)
+        return (
+            parsed.scheme.casefold() == expected.scheme.casefold()
+            and parsed.netloc.casefold() == expected.netloc.casefold()
+        )
+    return True
 
 
 def csrf_is_valid(
-    request: Request, allowed: frozenset[str], expected_local_token: str
+    request: Request,
+    allowed: frozenset[str],
+    expected_secret: str,
+    *,
+    expected_origin: str = "",
+    allow_legacy: bool = True,
 ) -> bool:
     if request.method.upper() in SAFE_METHODS:
         return True
     fetch_site = request.headers.get("sec-fetch-site", "").casefold()
     if fetch_site and fetch_site not in {"same-origin", "same-site", "none"}:
         return False
-    if not origin_is_local(request, allowed):
+    if not origin_is_local(request, allowed, expected_origin):
         return False
     submitted = request.headers.get(CSRF_HEADER, "")
-    expected = csrf_token(expected_local_token)
+    expected = csrf_token(expected_secret)
     cookie = request.cookies.get(CSRF_COOKIE, "")
     if valid_local_token(submitted, expected) and valid_local_token(cookie, expected):
         return True
     # Compatibilité avec l'interface 5.0.1 déjà ouverte. Ce chemin reste borné
     # par SameSite=Strict, le contrôle Fetch Metadata et l'origine locale.
-    return submitted == "1"
+    return allow_legacy and submitted == "1"

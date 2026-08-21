@@ -17,7 +17,7 @@ from fastapi import FastAPI, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 
-APP_VERSION = "5.0.2"
+APP_VERSION = "6.0.0-dev"
 API_URL = "https://api.github.com"
 API_VERSION = os.getenv("GITHUB_API_VERSION", "2026-03-10").strip()
 TOKEN = os.getenv("GITHUB_TOKEN", "").strip()

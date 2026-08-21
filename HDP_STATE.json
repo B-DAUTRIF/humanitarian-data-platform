@@ -1,192 +1,85 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "application": "Humanitarian Data Platform",
   "application_short_name": "HDP",
-  "declared_version": "5.2",
-  "working_version": "5.2",
-  "latest_published_release": "5.0.2",
-  "working_version_status": "active_reference_not_yet_packaged_or_qualified",
-  "state_generated_at": "2026-08-16T21:23:02+02:00",
-  "state_last_updated_at": "2026-08-16T21:31:34+02:00",
-  "state_basis": "Verified repository state, documentation and explicit owner decision to use 5.2 as the working version; technical observations remain based on the 5.0.2 source and tests",
-  "git": {
+  "working_version": "6.0.0-dev",
+  "latest_qualified_release": "5.0.2",
+  "previous_working_line": "5.2",
+  "state_generated_at": "2026-08-21T05:05:00+02:00",
+  "status": "implementation_in_progress",
+  "basis": {
+    "archive": "HumanitarianDataPlatform_Archive_complete_v5.0.2.zip",
     "repository": "B-DAUTRIF/humanitarian-data-platform",
-    "visibility": "private",
-    "branch": "main",
-    "basis_commit": "cfb42bbb9813f108a5087ad443c2a2d3fa561a06",
-    "basis_commit_subject": "fix: renouveler les sessions CSRF locales en V5.0.2",
-    "publication_policy": "descendant commit only; no force push"
+    "remote_reference_branch": "develop/5.2",
+    "remote_reference_commit": "d0257a402a958439f6f28e6b3de2290112bfbbfc",
+    "remote_published": false
   },
-  "architecture": {
-    "style": "modular monolith",
-    "components": [
-      "FastAPI",
-      "PostgreSQL/PostGIS",
-      "Docker Compose",
-      "isolated Python runner",
-      "isolated R runner",
-      "optional R/plumber service",
-      "native web interface",
-      "native Windows installer source",
-      "Linux installation scripts"
+  "baseline_tests": {
+    "executed": 227,
+    "passed": 227,
+    "failures": 0,
+    "errors": 0,
+    "suite_green": true,
+    "sql_migrations_parsed": 19,
+    "sql_statements_parsed": 161,
+    "javascript_inline_scripts_valid": 3,
+    "python_ast_files_parsed": 65,
+    "runner_c_compiled": true,
+    "windows_installer_source_compiled": false,
+    "fastapi_routes_loaded": 163,
+    "openapi_paths": 127,
+    "v6_openapi_paths": 49,
+    "spip_php_syntax_checked": false,
+    "docker_recipe_executed": false,
+    "windows_recipe_executed": false,
+    "live_connector_calls_executed": false
+  },
+  "implemented_lot": {
+    "identifier": "v6-archive-rebuild-lots-1-to-10",
+    "rule_engine": "nested AND/OR, temporal correlations, validation and simulation",
+    "catalog": "raw immutable metadata, lineage, confidence, OpenAPI inventory and progressive activation",
+    "cache": "content-addressed public artifacts, atomic publication, HTTP revalidation and project stale policy",
+    "rss": "15 official feeds plus candidate preview, approval and project subscription lifecycle",
+    "backup": "global PostgreSQL dump and project/signal manifest bundles",
+    "authentication": "WebAuthn passkey, hashed opaque sessions, exact origin and no installation token in URLs",
+    "spip": "hdp-spip/1.0 bridge, manually approved public drafts and SPIP 4.2-4.4 plugin skeleton",
+    "mail": "manual public EML import, redaction, confined attachments and rule dispatch after project linking",
+    "installer": "timeouts, cancellation, activity logs and native Windows desktop shortcut",
+    "api": "49 V6 OpenAPI paths",
+    "ui": "rules, sources, RSS candidates, SPIP, mail, backups, dual timeline and confined folder exploration",
+    "compatibility_fixes": "lookback, signal idempotence, aggregation readiness and V5 route/table preservation"
+  },
+  "last_implementation_gate": {
+    "executed_at": "2026-08-21T05:05:00+02:00",
+    "result": "passed",
+    "blocking_failures": [],
+    "qualification_complete": false,
+    "python_tests": "227 passed",
+    "python_ast": "65 files parsed",
+    "postgresql": "19 migrations and 161 statements parsed",
+    "javascript": "3 inline scripts valid across index and passkey login",
+    "openapi": "163 routes, 127 paths, 49 V6 paths",
+    "c_build": "runner compiled with strict C17 flags",
+    "not_executed": [
+      "SPIP PHP syntax and native runtime: PHP/SPIP unavailable",
+      "Docker Compose recipe: Docker unavailable",
+      "Windows installer recipe: non-Windows host",
+      "live connector and RSS calls: separate validation required",
+      "backup restore recipes: separate temporary-database validation required"
+    ]
+  },
+  "program": {
+    "notice": "docs/NOTICE_TECHNIQUE_FONCTIONNELLE_V6.md",
+    "todo": "TODO_Mises_a_jour_HDP.md",
+    "implementation_gate": "docs/V6_IMPLEMENTATION_GATE.md",
+    "implementation_gate_command": "python tools/run_v6_quality_gate.py",
+    "implementation_gate_policy": "mandatory after every new V6 implementation; blocking failures stop the next lot",
+    "remaining_functional_arbitrations": [
+      "default maximum stale-age calculation mode",
+      "mail reception protocol and provider",
+      "mailbox folders, retention and network polling frequency",
+      "desktop shortcut behavior outside Windows workstation mode"
     ],
-    "observed_metrics": {
-      "fastapi_routes": 93,
-      "main_py_lines": 4977,
-      "v5_features_py_lines": 578,
-      "index_html_lines": 757,
-      "total_selected_source_lines": 11677
-    },
-    "assessment": "Modularization has started, but orchestration, business logic and UI remain concentrated in three large files. A general rewrite is not recommended."
-  },
-  "tests": {
-    "discovered_test_methods": 111,
-    "executed_tests": 101,
-    "passed_tests": 101,
-    "failed_tests": 0,
-    "import_errors": 1,
-    "suite_green": false,
-    "executed_at": "2026-08-16T21:17:00+02:00",
-    "command": "PYTHONDONTWRITEBYTECODE=1 python -B -m unittest discover -s source/tests -p 'test_*.py' -v",
-    "blocker": {
-      "module": "source/tests/test_v4_core.py",
-      "reason": "ModuleNotFoundError: No module named 'pglast'",
-      "expected_dependency": "pglast==8.4",
-      "status": "dependency declared in source/payload/api/requirements.txt but absent from the current execution environment"
-    },
-    "not_executed_in_this_state_capture": [
-      "PostgreSQL/FastAPI integration tests",
-      "Docker Compose smoke test",
-      "real external API contract calls",
-      "Windows 10/11 installation recipe",
-      "Linux clean-host installation recipe",
-      "load test",
-      "independent penetration test",
-      "backup restoration in a clean environment"
-    ]
-  },
-  "sources": {
-    "documented_sources": 23,
-    "declared_active_connectors": 10,
-    "verification_status": "Counts are documented and statically tested; live contracts were not called during this state capture"
-  },
-  "security": {
-    "observed_implemented_controls": [
-      "local session token and renewed double-submit CSRF cookie",
-      "Host and Origin checks",
-      "read-only SQL AST validation",
-      "dedicated non-superuser hdp_reader role",
-      "public-IP-pinned HTTP transport",
-      "networkless Python and R runners",
-      "per-job UID and process group",
-      "CPU, process, descriptor and output limits",
-      "execution spool purge after report persistence",
-      "read-only containers and dropped capabilities where configured"
-    ],
-    "qualification_status": "Implementation observed and partially covered by static/unit tests; complete PostgreSQL, Docker and Windows qualification remains open"
-  },
-  "functional_state": {
-    "research_and_acquisition": {
-      "status": "advanced_but_not_end_to_end_qualified",
-      "notes": "Federated search, source-specific configuration, downloads and provenance are present. Live calls and a complete user workflow were not executed during this capture."
-    },
-    "hdx_data_grid": {
-      "status": "partial",
-      "confirmed_gaps": [
-        "Date filters are applied to metadata_modified rather than observation coverage",
-        "Classification uses local keyword heuristics when explicit HDX metadata is absent",
-        "No calibrated relevance ranking or inter-source semantic deduplication is demonstrated"
-      ]
-    },
-    "metadata_and_aggregation": {
-      "status": "broken_end_to_end",
-      "confirmed_gaps": [
-        "GET metadata does not expose the internal metadata record id",
-        "POST aggregation-plan requires metadata_ids",
-        "The ready status is based mainly on the presence of formats and geography",
-        "Units, actual join keys, periods and licences are returned as blocking checks but not programmatically validated"
-      ]
-    },
-    "signals": {
-      "status": "experimental",
-      "confirmed_gaps": [
-        "lookback_hours is stored but not applied during rule evaluation",
-        "A deduplicated event is re-evaluated before the signal-action uniqueness conflict is ignored, so side effects can repeat",
-        "No automatic RSS, GDACS, HDX Signals or news ingestion pipeline was found in the SIGNALS route path",
-        "The syndromic score is an uncalibrated sum of severity multiplied by confidence"
-      ]
-    },
-    "notebooks": {
-      "status": "jupyter_compatible_not_integrated",
-      "confirmed_gaps": [
-        "The backend can address several cells but the interface creates and executes only cell zero",
-        "Execution outputs are not written back into notebook documents",
-        "Runners mount only the execution spool and cannot read project resources",
-        "Scientific Python and R libraries are not included in runner images"
-      ]
-    },
-    "public_health_analysis": {
-      "status": "partial",
-      "notes": "CSV/TSV deterministic recipes and provenance exist. Epidemiological indicators, confidence intervals, survey methods, calibrated surveillance and complete reproducible reports remain future work."
-    }
-  },
-  "documentation_consistency": {
-    "status": "requires_reconciliation",
-    "confirmed_differences": [
-      "TODO declares 69 routes while 93 FastAPI routes are observed",
-      "TODO declares 103 tests while 111 test methods are present",
-      "README and TODO describe some Data Grid, aggregation, SIGNALS and notebook capabilities as complete although end-to-end gaps remain",
-      "No HDP_STATE.json existed before this state capture"
-    ]
-  },
-  "release_artifacts": {
-    "windows_v5_exe_present": false,
-    "v5_complete_zip_present": false,
-    "workflow_defines_windows_artifacts": true,
-    "qualification_open": [
-      "real Windows 10/11 installation and upgrade",
-      "complete Docker Compose recipe",
-      "Authenticode signature",
-      "GitHub Wiki synchronization",
-      "independent security audit",
-      "load test",
-      "public-health domain review"
-    ]
-  },
-  "reference_artifacts": {
-    "evaluation_report": {
-      "path": "output/pdf/Rapport_evaluation_HDP_V5.0.2_sante_publique.pdf",
-      "sha256": "e3f2b85d39d22cfc197a530f6d627ee962fbb39f4ad5f868713ca9a550f3228c"
-    },
-    "consolidation_prompt": {
-      "path": "output/pdf/Prompt_cooperation_consolidation_HDP_V5.pdf",
-      "sha256": "22844db7618e5906c3f56ea6a81f880d210fc40c13b430b7a3260daf662102fe"
-    },
-    "documentation_and_uml": {
-      "path": "output/pdf/HDP_V5_Documentation_et_UML.pdf",
-      "sha256": "8df67d73fad31baa97b28d2f6e1db3720df50ad75c69034b14d732610e9951b4"
-    }
-  },
-  "recommended_next_mission": {
-    "status": "awaiting_user_validation",
-    "title": "Consolidate SIGNALS to Data Grid to metadata to aggregation",
-    "scope": [
-      "Expose metadata record identifiers",
-      "Make SIGNALS actions idempotent",
-      "Apply lookback_hours",
-      "Correct aggregation readiness semantics",
-      "Add integration tests",
-      "Reconcile README, API documentation and TODO",
-      "Maintain HDP_STATE.json"
-    ]
-  },
-  "future_chat_preference": {
-    "enabled": true,
-    "language": "fr",
-    "exact_suggestion": "reprends HDP depuis le dernier état mémorisé",
-    "when_to_offer": "At the beginning of future chats when HDP or continuation of this project is relevant",
-    "purpose": "Offer an explicit one-click style continuation from the latest verified HDP project state",
-    "working_version_to_restore": "5.2"
-  },
-  "next_visit_instruction": "Explicitly propose: « reprends HDP depuis le dernier état mémorisé ». If the user accepts, restore HDP 5.2 as the working version, load this file together with the consolidation prompt and evaluation report, and recheck Git commit, working tree, tests and artifacts before treating the technical state as current. Ask whether the recommended next mission is approved before modifying code."
+    "delivery_policy": "no EXE, ZIP, commit, push or main update without separate validation"
+  }
 }

@@ -14,7 +14,13 @@ API_ROOT = SOURCE_ROOT / "payload" / "api"
 sys.path.insert(0, str(API_ROOT))
 
 from app.map_utils import export_bundle, load_geojson  # noqa: E402
-from app.rss_registry import build_rss_url, parse_rss, rss_catalog  # noqa: E402
+from app.rss_registry import (  # noqa: E402
+    build_rss_url,
+    parse_rss,
+    rss_catalog,
+    rss_schema_signature,
+    validate_feed_definition,
+)
 from app.script_runtime import (  # noqa: E402
     prepare_execution_job,
     read_execution_result,
@@ -47,16 +53,25 @@ class ScriptRuntimeContractTest(unittest.TestCase):
 
 
 class RssRegistryContractTest(unittest.TestCase):
-    def test_registry_contains_only_verified_reliefweb_https_feeds(self) -> None:
+    def test_registry_contains_versioned_official_health_feeds(self) -> None:
         catalog = rss_catalog()
-        self.assertEqual(len(catalog), 4)
+        self.assertGreaterEqual(len(catalog), 15)
+        organizations = {feed["organization"] for feed in catalog}
+        self.assertIn("OCHA / ReliefWeb", organizations)
+        self.assertIn("OMS / Bureau Afrique", organizations)
+        self.assertIn("ECDC", organizations)
+        self.assertIn("CDC", organizations)
         for feed in catalog:
-            self.assertTrue(feed["base_url"].startswith("https://reliefweb.int/"))
-            self.assertEqual(feed["verified_at"], "2026-08-15")
-            self.assertIn("reliefweb.int", feed["allowed_hosts"])
+            self.assertTrue(feed["base_url"].startswith("https://"))
+            self.assertIn(feed["verified_at"], {"2026-08-15", "2026-08-21"})
+            self.assertTrue(feed["allowed_hosts"])
+            for key in ("region", "themes", "languages", "license", "declared_frequency", "evidence_url"):
+                self.assertIn(key, feed)
         url = build_rss_url("reliefweb-reports", "cholera Mozambique", "fr")
         self.assertIn("lang=fr", url)
         self.assertIn("search=cholera+Mozambique", url)
+        with self.assertRaises(ValueError):
+            build_rss_url("cdc-travel-notices", "cholera", "en")
 
     def test_rss_and_atom_are_parsed_without_html_execution(self) -> None:
         rss = b"""<?xml version='1.0'?><rss><channel><item><guid>a-1</guid><title>Alerte</title><link>https://reliefweb.int/report/x</link><description><![CDATA[<b>Texte</b> utile]]></description><pubDate>Fri, 15 Aug 2026 08:00:00 GMT</pubDate></item></channel></rss>"""
@@ -64,8 +79,23 @@ class RssRegistryContractTest(unittest.TestCase):
         self.assertEqual(items[0]["external_id"], "a-1")
         self.assertEqual(items[0]["summary"], "Texte utile")
         self.assertEqual(items[0]["published_at"].year, 2026)
+        self.assertEqual(len(rss_schema_signature(rss)), 64)
         with self.assertRaises(ValueError):
             parse_rss(b"<!DOCTYPE rss [<!ENTITY x 'bad'>]><rss/>")
+        with self.assertRaises(ValueError):
+            parse_rss(b"<html><body>not a feed</body></html>")
+
+    def test_custom_feed_definition_requires_documented_https(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_feed_definition(
+                {
+                    "id": "bad", "name": "Bad", "organization": "Example",
+                    "base_url": "http://127.0.0.1/feed", "portal_url": "https://example.org",
+                    "region": "World", "themes": ["health"], "languages": ["en"],
+                    "license": "Unknown", "declared_frequency": "daily",
+                    "evidence_url": "https://example.org/docs", "verified_at": "2026-08-21",
+                }
+            )
 
 
 class MapUtilitiesContractTest(unittest.TestCase):

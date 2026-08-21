@@ -1,12 +1,18 @@
-# Humanitarian Data Platform — version de travail 5.2
+# Humanitarian Data Platform — version de développement 6.0.0
 
-HDP V5 est une application locale de recherche, d’acquisition, de qualification et de traitement de données humanitaires. La V5 ajoute l’exploitation de la notion HDX Data Grid, les métadonnées au niveau jeu/fichier, une chaîne SIGNALS déclenchée par des événements, une surveillance syndromique et un espace notebook compatible Jupyter.
+HDP est une application de recherche, d’acquisition, de qualification et de
+traitement de données humanitaires et sanitaires publiques. La ligne 6.0.0
+développe un moteur de règles ET/OU versionné, un catalogue exhaustif de
+connecteurs, des équivalents fonctionnels et une politique de cache traçable.
 
-> **État de version au 16 août 2026** — **5.2** est la référence de travail active. La dernière version applicative et le dernier installateur effectivement publiés et qualifiés restent **5.0.2** jusqu’à la reconstruction et à la validation de livrables 5.2. Les artefacts 5.0.2 ne sont pas renommés.
+> **État au 21 août 2026** — 6.0.0 est une version de développement non encore
+> qualifiée. La dernière livraison installable qualifiée reste
+> 5.0.2. Voir la [notice V6](docs/NOTICE_TECHNIQUE_FONCTIONNELLE_V6.md) et la
+> [todo-list](TODO_Mises_a_jour_HDP.md).
 
-## Installer la dernière livraison qualifiée (5.0.2)
+## Installer
 
-- Windows x64 : télécharger `HumanitarianDataPlatform_Setup_Native_GUI_v5.0.2.exe`, vérifier son fichier `.sha256`, puis exécuter l’installateur. Docker Desktop avec Compose v2 reste le moteur Linux embarqué.
+- Windows x64 : l'artefact de développement attendu est `HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0-dev.exe`. Vérifier son `.sha256` ; son exécution sur Windows 10/11 avec Docker Desktop reste une recette de qualification distincte.
 - Linux poste : dans `source/payload`, lancer `./install-linux.sh workstation`.
 - Linux serveur dédié : lancer `./install-linux.sh server`, puis ouvrir HDP par tunnel SSH. Le port reste volontairement lié à `127.0.0.1`.
 
@@ -33,7 +39,9 @@ Les secrets `POSTGRES_PASSWORD`, `HDP_LOCAL_TOKEN` et `HDP_SQL_PASSWORD` sont g�
 - [Référence API V5](docs/API_V5.md)
 - [Sécurité et validation V5](docs/SECURITY_AND_VALIDATION_V5.md)
 - [Installation V5](docs/INSTALLATION_V5.md)
-- [Prompt de reconstruction de la livraison 5.0.2](HDP_Prompt_production_global_v5.0.2.txt)
+- [Prompt de recréation V6](HDP_Prompt_recreation_global_v6.0.0.txt)
+- [Prompt de reconstruction V5 historique](HDP_Prompt_production_global_v5.0.2.txt)
+- [Rapport de conformité et évaluation V6](docs/RAPPORT_CONFORMITE_ET_EVALUATION_V6.md)
 - [Wiki versionné dans le dépôt](wiki/Home.md)
 - [Dépôt GitHub](https://github.com/B-DAUTRIF/humanitarian-data-platform)
 - [Wiki V5 versionné sur GitHub](https://github.com/B-DAUTRIF/humanitarian-data-platform/tree/main/wiki)
@@ -43,10 +51,17 @@ Références externes : [HDX Data Grids](https://data.humdata.org/dashboards/ove
 ## Développement et validation
 
 ```bash
-PYTHONPATH=/tmp/hdp-v5-pglast python3 -B -m unittest discover -s source/tests -v
-gcc -std=c17 -O2 -Wall -Wextra -Werror source/payload/runner/runner.c -o /tmp/hdp-runner-v5
-node tools/check_inline_javascript.mjs source/payload/api/static/index.html
+python3 -m pip install pglast==8.4
+python3 tools/run_v6_quality_gate.py
 ```
+
+Ce jalon est obligatoire après chaque nouvelle implémentation V6. Il ne remplace
+pas les recettes Docker, Windows ou les appels réels propres au lot ; il les
+signale séparément lorsqu'ils n'ont pas été exécutés.
+
+Le dernier jalon local 6.0.0-dev est consigné dans `HDP_STATE.json`. Docker,
+la recette d'installation Windows, le runtime SPIP/PHP et les appels réels aux
+connecteurs ne sont pas qualifiés par le seul passage du jalon local.
 
 La recette Windows CI produit l’EXE PE32+ et l’archive complète. Une signature Authenticode nécessite un certificat de signature fourni séparément.
 

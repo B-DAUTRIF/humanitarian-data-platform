@@ -1,0 +1,34 @@
+#CACHE{0}
+<!doctype html>
+<html lang="#LANG">
+<head>
+    <meta charset="#CHARSET">
+    <meta name="robots" content="noindex,nofollow">
+    <BOUCLE_titre(HDP_PUBLICATIONS){id_hdp_publication}{statut=publie}><title>[(#TITRE|textebrut)]</title></BOUCLE_titre>
+    <title>Publication HDP</title><//B_titre>
+</head>
+<body>
+[(#SESSION{id_auteur}|oui)
+<BOUCLE_publication(HDP_PUBLICATIONS){id_hdp_publication}{statut=publie}>
+<main>
+    <p><a href="#URL_PAGE{hdp}">Retour aux publications</a></p>
+    <article>
+        <h1>#TITRE</h1>
+        [<p>(#DESCRIPTIF)</p>]
+        <div>#TEXTE</div>
+        <footer>Publié le [(#DATE_PUBLICATION|affdate)] — révision #REVISION</footer>
+    </article>
+</main>
+</BOUCLE_publication>
+<p>Publication introuvable ou retirée.</p>
+<//B_publication>
+]
+[(#SESSION{id_auteur}|non)
+<main>
+    <h1>Accès protégé</h1>
+    <p><:hdp:connexion_requise:></p>
+    #FORMULAIRE_LOGIN
+</main>
+]
+</body>
+</html>

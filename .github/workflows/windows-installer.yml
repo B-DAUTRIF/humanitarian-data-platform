@@ -34,37 +34,21 @@ jobs:
         shell: pwsh
         run: ./source/build-windows.ps1 -OutputDirectory "${{ runner.temp }}/hdp-installer"
 
-      - name: Construire l'archive complète V5
+      - name: Construire l'archive complète V6 de développement
         shell: pwsh
         run: |
-          $stage = Join-Path $env:RUNNER_TEMP "HDP_V5"
-          New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Copy-Item "${{ runner.temp }}/hdp-installer/HumanitarianDataPlatform_Setup_Native_GUI_v5.0.2.exe" $stage
-          Copy-Item "${{ runner.temp }}/hdp-installer/HumanitarianDataPlatform_Setup_Native_GUI_v5.0.2.exe.sha256" $stage
-          Copy-Item -Recurse source/payload (Join-Path $stage "Linux_et_payload")
-          New-Item -ItemType Directory -Force -Path (Join-Path $stage "Sources") | Out-Null
-          Copy-Item -Recurse source (Join-Path $stage "Sources/source")
-          Copy-Item -Recurse tools (Join-Path $stage "Sources/tools")
-          Copy-Item -Recurse .github (Join-Path $stage "Sources/.github")
-          Copy-Item -Recurse docs (Join-Path $stage "Documentation")
-          Copy-Item -Recurse wiki (Join-Path $stage "Wiki")
-          Copy-Item output/pdf/HDP_V5_Documentation_et_UML.pdf $stage
-          Copy-Item HDP_Prompt_production_global_v5.0.2.txt $stage
-          Copy-Item README.md $stage
-          Copy-Item CHANGELOG.md $stage
-          Copy-Item TODO_Mises_a_jour_HDP.md $stage
-          Compress-Archive -Path "$stage/*" -DestinationPath "${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v5.0.2.zip" -CompressionLevel Optimal
-          $hash = (Get-FileHash "${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v5.0.2.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  HumanitarianDataPlatform_Archive_complete_v5.0.2.zip" | Set-Content -Encoding ascii "${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v5.0.2.zip.sha256"
+          python tools/package_v6_release.py `
+            --installer "${{ runner.temp }}/hdp-installer/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0-dev.exe" `
+            --output-dir "${{ runner.temp }}/hdp-v6-artifacts"
 
       - name: Publier l'installateur et son empreinte
         uses: actions/upload-artifact@v4
         with:
-          name: HumanitarianDataPlatform-V5-complet
+          name: HumanitarianDataPlatform-V6-dev-complet
           path: |
-            ${{ runner.temp }}/hdp-installer/HumanitarianDataPlatform_Setup_Native_GUI_v5.0.2.exe
-            ${{ runner.temp }}/hdp-installer/HumanitarianDataPlatform_Setup_Native_GUI_v5.0.2.exe.sha256
-            ${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v5.0.2.zip
-            ${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v5.0.2.zip.sha256
+            ${{ runner.temp }}/hdp-v6-artifacts/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0-dev.exe
+            ${{ runner.temp }}/hdp-v6-artifacts/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0-dev.exe.sha256
+            ${{ runner.temp }}/hdp-v6-artifacts/HumanitarianDataPlatform_Archive_complete_v6.0.0-dev.zip
+            ${{ runner.temp }}/hdp-v6-artifacts/HumanitarianDataPlatform_Archive_complete_v6.0.0-dev.zip.sha256
           if-no-files-found: error
           retention-days: 30

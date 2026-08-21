@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connexion — Humanitarian Data Platform</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07111f;--panel:#102139;--line:#29415e;--text:#eff7ff;--muted:#a9bdd3;--accent:#38bdf8;--danger:#fb7185}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 15% 0,#153b65,transparent 36%),linear-gradient(135deg,#050b14,#0b1b31);font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--text)}
+    main{width:min(470px,100%);padding:28px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(155deg,#12233af5,#0d192bf5);box-shadow:0 25px 75px #0008}h1{font-size:23px;margin:0 0 8px}p{color:var(--muted);line-height:1.55}label{display:block;margin:20px 0 7px;color:var(--muted);font-size:13px}input,button{width:100%;font:inherit;border-radius:10px;padding:12px}input{border:1px solid var(--line);background:#071426;color:var(--text)}button{margin-top:15px;border:0;background:var(--accent);color:#03202e;font-weight:750;cursor:pointer}button:disabled{opacity:.55;cursor:wait}.secondary{background:#1c314b;color:var(--text);border:1px solid var(--line)}#status{min-height:23px;margin-top:15px;color:var(--muted);white-space:pre-wrap}.error{color:var(--danger)!important}.notice{border-left:3px solid var(--accent);padding:10px 12px;background:#09172a;border-radius:0 9px 9px 0;font-size:12px}.hidden{display:none}code{color:#bae6fd}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Accès opérateur HDP</h1>
+    <p>Les fonctions privées sont protégées par une passkey ou une clé de sécurité. La vérification utilisateur est obligatoire.</p>
+    <div id="unsupported" class="notice hidden">Ce navigateur ne fournit pas WebAuthn. Utilisez un navigateur récent sur l’origine configurée en HTTPS, ou sur <code>localhost</code>.</div>
+    <section id="register" class="hidden">
+      <div class="notice">Premier accès : saisissez une seule fois le secret d’installation présent dans le fichier <code>.env</code>. Il ne sera ni placé dans l’URL ni stocké par le navigateur.</div>
+      <label for="bootstrap">Secret d’installation</label>
+      <input id="bootstrap" type="password" autocomplete="off" spellcheck="false">
+      <button id="register-button" type="button">Enregistrer ma passkey</button>
+    </section>
+    <section id="authenticate" class="hidden">
+      <button id="authenticate-button" type="button">Se connecter avec une passkey</button>
+    </section>
+    <button id="reload" class="secondary hidden" type="button">Recharger la configuration</button>
+    <div id="status" role="status" aria-live="polite"></div>
+  </main>
+  <script>
+    const byId=id=>document.getElementById(id);
+    const status=(message,error=false)=>{byId('status').textContent=message;byId('status').classList.toggle('error',error)};
+    const b64urlToBytes=value=>{const base64=value.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(value.length/4)*4,'=');return Uint8Array.from(atob(base64),char=>char.charCodeAt(0))};
+    const bytesToB64url=value=>{let binary='';for(const byte of new Uint8Array(value))binary+=String.fromCharCode(byte);return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')};
+    function creationOptions(value){if(PublicKeyCredential.parseCreationOptionsFromJSON)return PublicKeyCredential.parseCreationOptionsFromJSON(value);const copy=structuredClone(value);copy.challenge=b64urlToBytes(copy.challenge);copy.user.id=b64urlToBytes(copy.user.id);copy.excludeCredentials=(copy.excludeCredentials||[]).map(item=>({...item,id:b64urlToBytes(item.id)}));return copy}
+    function requestOptions(value){if(PublicKeyCredential.parseRequestOptionsFromJSON)return PublicKeyCredential.parseRequestOptionsFromJSON(value);const copy=structuredClone(value);copy.challenge=b64urlToBytes(copy.challenge);copy.allowCredentials=(copy.allowCredentials||[]).map(item=>({...item,id:b64urlToBytes(item.id)}));return copy}
+    function credentialJSON(credential){if(typeof credential.toJSON==='function')return credential.toJSON();const response=credential.response;const result={id:credential.id,rawId:bytesToB64url(credential.rawId),type:credential.type,authenticatorAttachment:credential.authenticatorAttachment,clientExtensionResults:credential.getClientExtensionResults(),response:{clientDataJSON:bytesToB64url(response.clientDataJSON)}};if(response.attestationObject){result.response.attestationObject=bytesToB64url(response.attestationObject);result.response.transports=response.getTransports?response.getTransports():[]}else{result.response.authenticatorData=bytesToB64url(response.authenticatorData);result.response.signature=bytesToB64url(response.signature);result.response.userHandle=response.userHandle?bytesToB64url(response.userHandle):null}return result}
+    async function json(path,body){const response=await fetch(path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),credentials:'same-origin'});const data=await response.json().catch(()=>({detail:`Erreur HTTP ${response.status}`}));if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail));return data}
+    async function load(){status('Vérification de la configuration…');try{const data=await json('/api/auth/status');if(data.mode!=='passkey'){status('Le serveur n’est pas configuré en mode passkey.',true);byId('reload').classList.remove('hidden');return}byId('register').classList.toggle('hidden',data.passkey_configured);byId('authenticate').classList.toggle('hidden',!data.passkey_configured);status(data.passkey_configured?'Passkey configurée. Vous pouvez vous authentifier.':'Enregistrez la première passkey opérateur.')}catch(error){status(error.message,true);byId('reload').classList.remove('hidden')}}
+    async function register(){const button=byId('register-button');button.disabled=true;try{const bootstrap_token=byId('bootstrap').value;const start=await json('/api/auth/register/options',{bootstrap_token});const credential=await navigator.credentials.create({publicKey:creationOptions(start.public_key)});if(!credential)throw new Error('Création de passkey annulée');await json('/api/auth/register/verify',{bootstrap_token,challenge_id:start.challenge_id,credential:credentialJSON(credential),label:'Passkey opérateur'});location.assign('/')}catch(error){status(error.message||'Enregistrement annulé',true)}finally{button.disabled=false}}
+    async function authenticate(){const button=byId('authenticate-button');button.disabled=true;try{const start=await json('/api/auth/authenticate/options',{});const credential=await navigator.credentials.get({publicKey:requestOptions(start.public_key)});if(!credential)throw new Error('Authentification annulée');await json('/api/auth/authenticate/verify',{challenge_id:start.challenge_id,credential:credentialJSON(credential)});location.assign('/')}catch(error){status(error.message||'Authentification annulée',true)}finally{button.disabled=false}}
+    if(!window.PublicKeyCredential||!navigator.credentials){byId('unsupported').classList.remove('hidden');status('WebAuthn indisponible dans ce navigateur.',true)}else{load()}
+    byId('register-button').addEventListener('click',register);byId('authenticate-button').addEventListener('click',authenticate);byId('reload').addEventListener('click',()=>location.reload());
+  </script>
+</body>
+</html>

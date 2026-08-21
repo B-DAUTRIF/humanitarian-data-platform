@@ -1,6 +1,14 @@
-# Humanitarian Data Platform 5.0.2
+# Humanitarian Data Platform 6.0.0-dev
 
-## Version 5.0.2
+## Version de développement 6.0.0
+
+Cette ligne ajoute le moteur de règles ET/OU et ses corrélations temporelles,
+le catalogue V6 et l'import de contrats OpenAPI, les caches publics
+adressés par contenu, les sauvegardes par périmètre, l'authentification passkey,
+la passerelle SPIP, les flux RSS extensibles et l'import manuel d'EML publics.
+Les inventaires officiels complets, les exécuteurs asynchrones d'actions, la
+réception réseau des mails et les recettes Windows/Docker/SPIP restent des
+travaux de qualification ou d'implémentation explicitement suivis.
 
 Chaque source possède désormais ses propres réglages globaux et projet, sa
 fiche technique, ses liens officiels et une prévisualisation cURL/Python/R sans
@@ -96,7 +104,7 @@ métadonnées sont archivés avec chaque ressource.
 
 ## Limite de sécurité
 
-HDP 5.0.2 est une application locale, non un serveur Internet durci. Seuls les
+HDP 6.0.0-dev n'est pas encore un serveur Internet qualifié. Seuls les
 scripts Python/R locaux et de confiance doivent être exécutés. Les runners sont
 non privilégiés, sans réseau et bornés, mais ne constituent pas une isolation
 multi-utilisateur.

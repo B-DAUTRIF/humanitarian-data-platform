@@ -11,7 +11,7 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $sourceDirectory "windows-build"
 }
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
-$installerName = "HumanitarianDataPlatform_Setup_Native_GUI_v5.0.2.exe"
+$installerName = "HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0-dev.exe"
 $installerPath = Join-Path $OutputDirectory $installerName
 
 $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
@@ -44,7 +44,7 @@ try {
     $compilerCommand = 'cl.exe /nologo /O2 /W4 /WX /utf-8 /std:c17 /D_CRT_SECURE_NO_WARNINGS "src\installer.c" "src\installer.res" ' +
         "/link /OUT:`"$installerPath`" /SUBSYSTEM:WINDOWS /MACHINE:X64 " +
         '/DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA comctl32.lib shell32.lib ' +
-        'advapi32.lib winhttp.lib ws2_32.lib bcrypt.lib gdi32.lib user32.lib || exit /b 1'
+        'advapi32.lib winhttp.lib ws2_32.lib bcrypt.lib gdi32.lib user32.lib ole32.lib uuid.lib || exit /b 1'
     $commands = @(
         '@echo off'
         ('call "{0}" || exit /b 1' -f $vcvars)
@@ -67,7 +67,7 @@ if (-not (Test-Path -LiteralPath $installerPath -PathType Leaf)) {
 }
 
 $version = (Get-Item -LiteralPath $installerPath).VersionInfo
-if ($version.FileVersion -notlike "5.0.2*" -or $version.ProductVersion -notlike "5.0.2*") {
+if ($version.FileVersion -notlike "6.0.0*" -or $version.ProductVersion -notlike "6.0.0-dev*") {
     throw "Métadonnées inattendues : FileVersion=$($version.FileVersion), ProductVersion=$($version.ProductVersion)"
 }
 

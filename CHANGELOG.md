@@ -1,13 +1,62 @@
 # Journal des versions
 
+## 6.0.0-dev - règles et catalogue central - 21 août 2026
+
+- passage officiel de la ligne de travail 5.2 à HDP 6.0.0 en développement ;
+- intégration de la notice technique et fonctionnelle dans la todo-list ;
+- intégration des lots SPIP, veille sanitaire mondiale/RSS, installation et
+  bibliothèque, sauvegardes par périmètre, réception de mails et méthode de
+  diagnostic incrémental ;
+- ajout d'un jalon de qualité automatisé et obligatoire à répéter après chaque
+  nouvelle implémentation V6, avec blocage explicite en cas d'échec ;
+- fiabilisation du futur installateur V6 : commandes longues bornées, lecture de
+  sortie non bloquante, activité périodique et annulation contrôlée sans
+  suppression des données ou volumes existants ;
+- premier lot local du moteur ET/OU versionné : validation bornée, simulation
+  avec preuve, comptage, séquence, absence et tendance fixe ou glissante ;
+- migrations du catalogue central, des contrats de connecteurs, du cache, des
+  politiques projet, des demandes d'action idempotentes et de la chronologie ;
+- validation et comparaison des contrats de connecteurs, clé de cache canonique
+  sans secret et politique `stale_if_error` configurable par projet ;
+- 17 chemins API V6 et première interface experte pour les règles, les paramètres
+  des sources et la politique de données périmées ;
+- corrections de compatibilité V5 sur `lookback_hours`, l'idempotence des actions,
+  l'identifiant des métadonnées et les critères de disponibilité à l'agrégation ;
+- import exhaustif des contrats OpenAPI/Swagger documentés, historique
+  d'activation progressive et affichage de tous les paramètres/champs inventoriés ;
+- catalogue central fidèle avec instantanés bruts, champs non mappés, lignée,
+  confiance, références projet et planifications versionnées ;
+- matérialisation d'équivalents à la demande et cache public partagé,
+  adressé par contenu, atomique et revalidable par ETag/Last-Modified/fréquence ;
+- registre de 15 flux officiels ReliefWeb, OMS, ECDC et CDC, plus cycle complet
+  de proposition, aperçu réseau borné, validation manuelle et abonnement ;
+- sauvegardes globales PostgreSQL, projet et signaux avec manifeste et
+  empreintes, sans autorisation de restauration automatique ;
+- authentification opérateur WebAuthn/passkey, session opaque hachée, cookies
+  stricts, suppression du secret des URL et écran d'enrôlement initial ;
+- contrat `hdp-spip/1.0`, jetons limités et révocables, brouillons publics à
+  validation manuelle et plugin de consultation protégée pour SPIP 4.2 à 4.4 ;
+- import EML public sans connexion à une boîte : masquage des adresses,
+  pièces jointes bornées et confinées, rattachement manuel puis règles V6 ;
+- interface ajoutée pour SPIP, sauvegardes, courriels, flux personnalisés,
+  chronologies global/projet, paramètres exhaustifs et exploration confinée ;
+- installateur fiabilisé avec délais, annulation et raccourci Bureau ; les
+  lanceurs n'inscrivent plus le secret d'installation dans l'URL ;
+- diagnostic local courant : 19 migrations et 49 chemins API V6 avant le
+  dernier passage documentaire ;
+- l'inventaire officiel effectivement peuplé pour les dix API, l'exécution des
+  planifications du catalogue, le connecteur réseau de mails, les exécuteurs
+  d'actions et le constructeur visuel de règles restent à terminer ;
+- recettes Docker, Windows, PHP/SPIP, appels connecteurs réels et restaurations
+  non exécutées dans cet environnement ;
+- conservation de 5.0.2 comme dernière livraison installable qualifiée.
+
 ## 5.2 - référence de travail - 16 août 2026
 
-- choix explicite de **5.2** comme version de travail active de HDP ;
+- choix explicite de **5.2** comme version de travail active avant le passage à
+  la ligne 6.0.0 ;
 - conservation de **5.0.2** comme dernière livraison applicative et dernier
-  installateur qualifiés tant qu'aucun livrable 5.2 n'a été reconstruit et
-  validé ;
-- publication de cette décision sur le `main` privé, sans réécriture de
-  l'historique ni renommage des artefacts 5.0.2.
+  installateur qualifiés.
 
 ## 5.0.2 - renouvellement de la session CSRF locale - 16 août 2026
 

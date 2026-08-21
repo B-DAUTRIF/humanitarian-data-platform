@@ -6,3 +6,4 @@ pydantic==2.11.7
 defusedxml==0.7.1
 python-multipart==0.0.20
 pglast==8.4
+webauthn==2.2.0

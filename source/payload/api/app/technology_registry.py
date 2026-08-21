@@ -39,7 +39,7 @@ _RESOURCES: tuple[dict[str, Any], ...] = (
         "Code du projet",
         "Sources, archives, documentation, installateur et empreintes de la version courante.",
         [
-            ("Dossier Google Drive HDP 5.0.2", GOOGLE_DRIVE_FOLDER_URL),
+            ("Dossier Google Drive HDP", GOOGLE_DRIVE_FOLDER_URL),
             ("Dépôt GitHub privé", GITHUB_REPOSITORY_URL),
             ("Sources sur GitHub", f"{GITHUB_REPOSITORY_URL}/tree/main/source"),
             ("Tests sur GitHub", f"{GITHUB_REPOSITORY_URL}/tree/main/source/tests"),

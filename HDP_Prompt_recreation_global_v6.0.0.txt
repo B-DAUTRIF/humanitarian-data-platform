@@ -1,0 +1,218 @@
+PROMPT GLOBAL DE RECRÉATION — HUMANITARIAN DATA PLATFORM 6.0.0-dev
+Révision : 21 août 2026
+
+RÔLE
+Tu reprends Humanitarian Data Platform (HDP) depuis l'archive complète 5.0.2 et
+le dépôt privé B-DAUTRIF/humanitarian-data-platform. Tu dois reconstruire une
+ligne 6.0.0-dev reproductible, sans effacer l'historique ni présenter comme
+qualifiée une recette qui n'a pas été exécutée.
+
+SOURCES DE VÉRITÉ, PAR ORDRE
+1. Le besoin fonctionnel formulé par le propriétaire et les arbitrages ci-dessous.
+2. docs/NOTICE_TECHNIQUE_FONCTIONNELLE_V6.md.
+3. TODO_Mises_a_jour_HDP.md et HDP_STATE.json pour l'état réellement prouvé.
+4. Le code, les migrations et les tests du dépôt.
+5. L'archive 5.0.2 pour la compatibilité et les artefacts historiques uniquement.
+
+Ne déduis jamais qu'une case est terminée parce qu'une table, une route ou un
+squelette existe. « Terminé » exige code, migration éventuelle, test automatisé
+et recette correspondant à la plateforme concernée. Un import de contrat n'est
+pas un inventaire officiel peuplé ; un EXE compilé n'est pas une installation
+Windows qualifiée ; un plugin PHP syntaxiquement valide n'est pas une recette
+SPIP complète.
+
+OBJECTIF PRODUIT
+HDP collecte, décrit, catalogue, recherche, acquiert, transforme et surveille
+des données humanitaires, sanitaires et épidémiologiques publiques. La V6 ajoute
+des règles ET/OU temporelles, un catalogue exhaustif des contrats de sources,
+des équivalents fonctionnels mis en cache, une couche éditoriale SPIP, une veille
+RSS extensible, des sauvegardes par périmètre et une réception contrôlée de mails.
+
+ARCHITECTURE CIBLE
+- Conserver le monolithe modulaire FastAPI/PostgreSQL/PostGIS et les migrations
+  idempotentes ; préserver les routes et données 5.x pendant la transition.
+- Conserver les runners Python et R séparés, non privilégiés et sans réseau.
+  network_mode:none est une coupure réelle, jamais une simulation d'allowlist.
+- Une allowlist d'egress n'existe que si un proxy dédié, testé et auditable est
+  intégré. Tant que ce n'est pas le cas, afficher « runner indisponible » et
+  « réseau disabled » sans prétendre exécuter un téléchargement depuis le runner.
+- SPIP 4.2–4.4 porte l'éditorial et la consultation protégée ; HDP conserve les
+  traitements, les règles, le catalogue et les secrets. Utiliser la passerelle
+  versionnée hdp-spip/1.0, à droits minimaux.
+- Limiter la V6 à des données publiques. N'ajouter aucun flux de données sensibles.
+
+DÉCISIONS FONCTIONNELLES FIGÉES
+
+1. SPIP ET PUBLICATION
+- Cible : serveur accessible depuis Internet.
+- Un opérateur HDP unique accède aux fonctions privées avec passkey ou clé de
+  sécurité ; l'origine WebAuthn Internet est HTTPS et exacte.
+- Chaque visiteur SPIP possède un compte nominatif protégé par mot de passe.
+- SPIP prend en charge documentation, actualités, curation des flux et alertes,
+  publication ou partage de projets.
+- Toute publication HDP vers SPIP commence par un brouillon et exige une
+  validation manuelle. Retrait, accusé de livraison et révocation sont audités.
+- Ne jamais donner à SPIP un accès aux runners, à PostgreSQL ou aux secrets de
+  connecteurs. Qualifier l'équivalence écran par écran avant remplacement.
+
+2. RÈGLES ET ALERTES
+- Représenter une règle par un arbre JSON versionné de groupes AND/OR imbriqués.
+- Combiner les propriétés d'un signal et plusieurs événements distincts dans le
+  temps : comptage dans une fenêtre, séquence ordonnée, absence attendue,
+  variation et tendance par référence fixe ou glissante.
+- Définir des modèles globaux hérités et surchargeables par projet. Une nouvelle
+  version globale est proposée au projet et ne remplace jamais automatiquement
+  sa version épinglée.
+- Proposer notification, classement ou tâche HDP, recherche/actualisation,
+  brouillon de mail ou SPIP, script Python/R et webhook.
+- Séparer évaluation, demande d'action et exécution. Les actions sûres sont
+  automatiques seulement dans des limites configurées ; tout dépassement passe
+  en attente de validation. Script, webhook, envoi et publication sont manuels.
+- Réserver une clé d'idempotence avant tout effet externe et conserver la preuve
+  de chaque condition, la version de règle et la version des données examinées.
+- Fournir dans l'interface un constructeur visuel ET/OU, l'arbre, une formule
+  lisible et une simulation sans effet avant enregistrement.
+
+3. CONNECTEURS, PARAMÈTRES ET CATALOGUE
+- Inventorier tous les endpoints officiellement documentés de chaque source.
+- Pour chacun, conserver méthode, URL, version, documentation, authentification,
+  quotas, formats, délai, pagination, tri, hôtes autorisés, cache et paramètres
+  techniques du connecteur.
+- Recenser tous les paramètres de chemin, requête, en-tête et corps : type,
+  obligation, défaut, liste de valeurs, limites et dépendances.
+- Recenser tous les champs documentés et observés des réponses, y compris chemins
+  imbriqués, cardinalité, nullabilité et version d'apparition.
+- Conserver toutes les métadonnées brutes des jeux et fichiers avant
+  normalisation, leur lignée et leur confiance. Ne jamais fabriquer une valeur
+  absente ; utiliser « indisponible » avec provenance explicite.
+- L'inventaire est complet mais l'activation est progressive. États minimaux :
+  inventoried, contract_imported, adapter_implemented, tests_validated,
+  active_global, active_project, suspended, obsolete.
+- Activer d'abord le socle commun discover, describe, search, preview, acquire,
+  refresh, provenance sur toutes les sources. Si l'API ne le permet pas, créer
+  dans HDP un équivalent à la demande avec cache.
+- Générer les formulaires de recherche depuis les contrats : cases à cocher et
+  menus pour les valeurs contraintes, champs typés pour les autres paramètres.
+- Dans chaque encart de source, placer Paramétrages avec dichotomie globale /
+  projet. Exposer Endpoints, Paramètres d'entrée, Champs de réponse, Métadonnées,
+  Technique, Historique, activation, Portail, Documentation, API et fichier de
+  configuration en lecture.
+- Enregistrer une planification ne suffit pas : intégrer et tester le travailleur
+  qui exécute effectivement les mises à jour planifiées.
+
+4. ÉQUIVALENTS, CACHE ET FRAÎCHEUR
+- Générer à la demande et mettre en cache les capacités absentes : pagination
+  vers JSON/CSV/Parquet, schéma observé, aperçu borné, comparaison de versions,
+  normalisation M49/ISO et formats géographiques lorsque possible.
+- Construire une clé sans secret incluant source, version d'API, endpoint,
+  paramètres canoniques, format, connecteur et transformation.
+- Publier atomiquement après contrôle de taille et d'empreinte ; partager les
+  artefacts publics identiques.
+- Invalider par ETag/Last-Modified, fréquence déclarée, durée configurable,
+  changement de version technique ou actualisation forcée.
+- Une politique unique s'applique à chaque projet. Défaut : stale_if_error,
+  c'est-à-dire actualiser d'abord et utiliser l'ancienne version seulement en
+  cas d'échec, dans l'ancienneté autorisée.
+- Garder configurables les calculs d'ancienneté fixe, multiple de fréquence,
+  fréquence plafonnée par le projet ou décision manuelle. Ne choisir le défaut
+  d'interface qu'après arbitrage du propriétaire.
+
+5. RSS ET VEILLE SANITAIRE MONDIALE
+- Maintenir un registre daté et versionné de flux RSS/Atom/API officiels, avec
+  organisme, pays/région, thème, langue, licence, fréquence, état, preuve et date
+  de dernière vérification.
+- Rechercher dans les sources officielles ; détecter doublons, redirections,
+  flux morts et dérives sans perdre l'historique.
+- Fournir l'entrée de nouveaux flux avec validation URL, aperçu, test du parseur,
+  fréquence, rattachement projet, approbation, activation et suspension.
+- Appliquer XML durci, SSRF, IP publique épinglée, redirections revalidées,
+  ETag/Last-Modified, quotas, limites et déduplication.
+- Alimenter catalogue, signaux, règles et chronologie après validation. Ne pas
+  qualifier « exhaustive » une liste non vérifiée à la date de livraison.
+
+6. INSTALLATION ET BIBLIOTHÈQUE
+- L'installateur Windows doit journaliser une activité, borner winget et Docker
+  Compose, permettre l'annulation et préserver données et volumes.
+- Créer en fin d'installation un raccourci Bureau natif vers le lanceur HDP.
+- Prévoir sa suppression par une procédure de désinstallation future.
+- Distinguer Linux poste et Linux serveur ; ne pas imposer un raccourci graphique
+  à un serveur sans session de bureau.
+- En mode poste local, Ouvrir le dossier contenant utilise un chemin canonique et
+  confiné. En mode distant, remplacer cette action par téléchargement ou
+  exploration serveur confinée sans divulguer le chemin hôte.
+
+7. SAUVEGARDES ET CHRONOLOGIES
+- Fournir sauvegarde/restauration globale PostgreSQL, sauvegarde d'un projet avec
+  dépendances et fichiers, et sauvegarde des signaux globale ou projet/période.
+- Produire manifeste, version de schéma, inventaire d'exclusions et SHA-256.
+- Prévalider toute restauration dans une base temporaire, sans secret, collision
+  silencieuse ni écrasement implicite.
+- Chronologie globale : démarrages, migrations, contrats, activations,
+  suspensions et interventions sur tables globales.
+- Chronologie projet : recherches, acquisitions, cache, scripts, règles, alertes,
+  validations et mises à jour.
+
+8. MAILS
+- Séparer réception, analyse, classement, signal et brouillon ; aucun envoi
+  implicite.
+- Pour l'import EML manuel, borner taille/corps/pièces jointes, désactiver le
+  contenu actif, dédupliquer, masquer les adresses, conserver empreinte et
+  provenance, et mettre en quarantaine ce qui n'est pas analysé antimalware.
+- Avant le connecteur réseau, faire arbitrer IMAP OAuth2/OIDC, IMAP avec secret
+  d'application ou passerelle entrante, puis préciser fournisseur, dossiers,
+  fréquence, conservation et politique des pièces jointes.
+- Exposer les champs validés aux règles uniquement après rattachement au projet.
+
+SÉCURITÉ NON NÉGOCIABLE
+- WebAuthn avec vérification utilisateur, cookie Secure/HttpOnly/SameSite adapté,
+  session opaque dont seule l'empreinte est stockée ; aucune clé dans une URL.
+- Contrôles Host, Origin et CSRF exacts ; aucune mutation via GET.
+- SQL analysé par AST, vues projet et rôle non privilégié hdp_reader.
+- Téléchargements HTTP contre SSRF avec IP publique validée et épinglée ; chaque
+  redirection est revalidée.
+- Conteneurs non-root et en lecture seule hors volumes nécessaires.
+- Aucun secret dans contrats, cache, logs, aperçus, sauvegardes ou archives.
+- Toute action externe est auditable, limitée, idempotente et révocable lorsque
+  le protocole le permet.
+
+MÉTHODE DE DÉVELOPPEMENT OBLIGATOIRE
+1. Traduire chaque demande fonctionnelle en options techniques, effets, risques
+   et critères d'acceptation ; poser une question uniquement si le choix change
+   matériellement la solution.
+2. Modifier par petits lots et préserver les données existantes.
+3. Après chaque lot, exécuter tools/run_v6_quality_gate.py et corriger tout échec
+   automatisable avant de poursuivre.
+4. Mettre à jour TODO_Mises_a_jour_HDP.md, HDP_STATE.json, CHANGELOG.md, la notice
+   et le présent prompt.
+5. Distinguer tests unitaires, statiques, intégration Docker, PHP/SPIP, appels
+   réels, restauration et recette Windows. Ne jamais remplacer une preuve absente
+   par une affirmation.
+6. Ne produire archive/EXE qu'à la demande. Un artefact de développement porte
+   le suffixe -dev et n'est pas une version de production.
+
+CONTRÔLES DE LIVRAISON
+- Suite Python complète verte et nombre de tests consigné.
+- Analyse AST Python, JavaScript inline et migrations PostgreSQL.
+- runner.c compilé avec -std=c17 -Wall -Wextra -Werror.
+- Installateur compilé sur Windows x64 ; vérifier PE32+ GUI, métadonnées 6.0.0,
+  nom v6.0.0-dev et SHA-256.
+- Archive reconstruite par tools/package_v6_release.py ; vérifier son manifeste,
+  son SHA-256 et la présence du prompt, du rapport, du code, des tests, des
+  migrations, du plugin SPIP, du payload Linux et de l'EXE.
+- Recettes Docker, Windows, SPIP, restauration et connecteurs réels consignées
+  séparément ; leur absence interdit le qualificatif « production ».
+
+ARTEFACTS ATTENDUS
+- HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0-dev.exe
+- HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0-dev.exe.sha256
+- HumanitarianDataPlatform_Archive_complete_v6.0.0-dev.zip
+- HumanitarianDataPlatform_Archive_complete_v6.0.0-dev.zip.sha256
+- HDP_Prompt_recreation_global_v6.0.0.txt
+- docs/RAPPORT_CONFORMITE_ET_EVALUATION_V6.md
+- BUILD_MANIFEST.json à la racine interne de l'archive.
+
+INTERDICTIONS DE PRÉSENTATION
+Ne pas écrire « toutes les demandes sont exécutées », « exhaustif », « testé sur
+Windows », « restaurable », « plugin SPIP validé » ou « prêt pour la production »
+si les preuves correspondantes ne sont pas présentes. Fournir à la place une
+matrice Réalisé / Partiel / Non réalisé / Non testé et les prochains blocages.

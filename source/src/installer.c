@@ -1,6 +1,7 @@
 #define UNICODE
 #define _UNICODE
 #define WIN32_LEAN_AND_MEAN
+#define COBJMACROS
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -10,6 +11,8 @@
 #include <shlobj.h>
 #include <winhttp.h>
 #include <bcrypt.h>
+#include <objbase.h>
+#include <shobjidl.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -20,7 +23,7 @@
 #include "payload_generated.h"
 
 #define APP_NAME L"Humanitarian Data Platform"
-#define APP_VERSION L"5.0.2"
+#define APP_VERSION L"6.0.0-dev"
 #define MAIN_CLASS L"HDP_NATIVE_INSTALLER_30"
 
 #define ID_PATH 1001
@@ -37,7 +40,14 @@
 #define ID_LOG 1012
 #define ID_R_MODULE 1013
 #define ID_GITHUB_TOKEN 1014
+#define ID_CANCEL 1015
 #define ID_ACTIVITY_TIMER 2001
+
+#define WINGET_TIMEOUT_MS (30UL * 60UL * 1000UL)
+#define COMPOSE_PULL_TIMEOUT_MS (30UL * 60UL * 1000UL)
+#define COMPOSE_BUILD_TIMEOUT_MS (45UL * 60UL * 1000UL)
+#define COMPOSE_UP_TIMEOUT_MS (10UL * 60UL * 1000UL)
+#define COMPOSE_LOGS_TIMEOUT_MS (2UL * 60UL * 1000UL)
 
 #define WM_HDP_LOG (WM_APP + 1)
 #define WM_HDP_STATUS (WM_APP + 2)
@@ -69,6 +79,7 @@ static HWND g_analyze;
 static HWND g_install;
 static HWND g_open_folder;
 static HWND g_open_log;
+static HWND g_cancel;
 static HWND g_progress;
 static HWND g_status;
 static HWND g_log;
@@ -84,8 +95,13 @@ static ULONGLONG g_docker_disk_free_bytes;
 static wchar_t g_stage_status[512] = L"Prêt";
 static int g_stage_progress;
 static ULONGLONG g_stage_started;
+static volatile LONG g_cancel_requested;
 
 static BOOL http_is_healthy(USHORT port);
+
+static BOOL cancel_requested(void) {
+    return InterlockedCompareExchange(&g_cancel_requested, 0, 0) != 0;
+}
 
 static wchar_t *heap_wcsdup(const wchar_t *text) {
     size_t count = wcslen(text) + 1;
@@ -272,7 +288,8 @@ static int decode_and_post(const char *buffer, DWORD length) {
     return 0;
 }
 
-static DWORD run_process_capture(const wchar_t *application, const wchar_t *arguments, const wchar_t *working_directory) {
+static DWORD run_process_capture_timeout(const wchar_t *application, const wchar_t *arguments,
+                                         const wchar_t *working_directory, DWORD timeout_ms) {
     SECURITY_ATTRIBUTES security = { sizeof(SECURITY_ATTRIBUTES), NULL, TRUE };
     HANDLE read_pipe = NULL;
     HANDLE write_pipe = NULL;
@@ -299,31 +316,90 @@ static DWORD run_process_capture(const wchar_t *application, const wchar_t *argu
     }
     _snwprintf(command, cmd_length, L"\"%ls\" %ls", application, arguments);
     BOOL created = CreateProcessW(application, command, NULL, NULL, TRUE,
-                                  CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
+                                  CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED,
                                   NULL, working_directory, &startup, &process);
     HeapFree(GetProcessHeap(), 0, command);
-    CloseHandle(write_pipe);
     if (!created) {
         DWORD error = GetLastError();
+        CloseHandle(write_pipe);
         CloseHandle(read_pipe);
         return error;
     }
 
+    HANDLE job = CreateJobObjectW(NULL, NULL);
+    BOOL job_assigned = FALSE;
+    if (job) {
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits;
+        ZeroMemory(&limits, sizeof(limits));
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        if (SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits))) {
+            job_assigned = AssignProcessToJobObject(job, process.hProcess);
+        }
+    }
+    ResumeThread(process.hThread);
+    CloseHandle(write_pipe);
+
     char buffer[4096];
     DWORD received = 0;
     ULONGLONG last_display = 0;
-    while (ReadFile(read_pipe, buffer, sizeof(buffer), &received, NULL) && received > 0) {
-        append_log_bytes(buffer, received);
-        ULONGLONG now = GetTickCount64();
-        if (last_display == 0 || now - last_display >= 1000) {
-            decode_and_post(buffer, received);
-            last_display = now;
-        }
-    }
-    CloseHandle(read_pipe);
-    WaitForSingleObject(process.hProcess, INFINITE);
+    ULONGLONG started = GetTickCount64();
+    ULONGLONG next_heartbeat = 30ULL * 1000ULL;
     DWORD exit_code = ERROR_GEN_FAILURE;
-    GetExitCodeProcess(process.hProcess, &exit_code);
+    BOOL cancelled = FALSE;
+    BOOL timed_out = FALSE;
+
+    for (;;) {
+        DWORD available = 0;
+        if (PeekNamedPipe(read_pipe, NULL, 0, NULL, &available, NULL)) {
+            while (available > 0) {
+                DWORD requested = available < sizeof(buffer) ? available : (DWORD)sizeof(buffer);
+                if (!ReadFile(read_pipe, buffer, requested, &received, NULL) || received == 0) break;
+                append_log_bytes(buffer, received);
+                ULONGLONG now = GetTickCount64();
+                if (last_display == 0 || now - last_display >= 1000) {
+                    decode_and_post(buffer, received);
+                    last_display = now;
+                }
+                if (!PeekNamedPipe(read_pipe, NULL, 0, NULL, &available, NULL)) break;
+            }
+        }
+
+        DWORD wait_result = WaitForSingleObject(process.hProcess, 0);
+        if (wait_result == WAIT_OBJECT_0) {
+            GetExitCodeProcess(process.hProcess, &exit_code);
+            break;
+        }
+        if (wait_result == WAIT_FAILED) {
+            exit_code = GetLastError();
+            break;
+        }
+
+        ULONGLONG elapsed = GetTickCount64() - started;
+        if (cancel_requested()) {
+            cancelled = TRUE;
+        } else if (timeout_ms > 0 && elapsed >= timeout_ms) {
+            timed_out = TRUE;
+        }
+        if (cancelled || timed_out) {
+            if (job_assigned) TerminateJobObject(job, cancelled ? ERROR_CANCELLED : ERROR_TIMEOUT);
+            else TerminateProcess(process.hProcess, cancelled ? ERROR_CANCELLED : ERROR_TIMEOUT);
+            WaitForSingleObject(process.hProcess, 5000);
+            exit_code = cancelled ? ERROR_CANCELLED : ERROR_TIMEOUT;
+            break;
+        }
+        if (elapsed >= next_heartbeat) {
+            wchar_t heartbeat[320];
+            _snwprintf(heartbeat, sizeof(heartbeat) / sizeof(wchar_t),
+                       L"Commande toujours active : %llu secondes écoulées. Le journal brut continue d'être enregistré.\r\n",
+                       (unsigned long long)(elapsed / 1000ULL));
+            post_log(heartbeat);
+            next_heartbeat += 30ULL * 1000ULL;
+        }
+        Sleep(200);
+    }
+
+    CloseHandle(read_pipe);
+    if (job) CloseHandle(job);
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
     return exit_code;
@@ -390,7 +466,7 @@ static BOOL install_winget_package(const wchar_t *package_id, const wchar_t *dis
     wchar_t message[512];
     _snwprintf(message, sizeof(message) / sizeof(wchar_t), L"Installation de %ls via winget…\r\n", display_name);
     post_log(message);
-    DWORD result = run_process_capture(winget, args, NULL);
+    DWORD result = run_process_capture_timeout(winget, args, NULL, WINGET_TIMEOUT_MS);
     if (result != 0) {
         _snwprintf(message, sizeof(message) / sizeof(wchar_t), L"Échec de %ls : winget a retourné le code %lu.\r\n", display_name, result);
         post_log(message);
@@ -631,7 +707,9 @@ static BOOL secret_line_is_valid(const wchar_t *secret) {
 static BOOL is_managed_environment_line(const char *line, size_t length) {
     static const char *keys[] = {
         "POSTGRES_PASSWORD", "RELIEFWEB_APPNAME", "HDX_HAPI_APP_IDENTIFIER",
-        "GITHUB_TOKEN", "HDP_LOCAL_TOKEN", "HDP_SQL_PASSWORD", "HDP_PORT"
+        "GITHUB_TOKEN", "HDP_LOCAL_TOKEN", "HDP_SQL_PASSWORD", "HDP_PORT",
+        "HDP_AUTH_MODE", "HDP_WEBAUTHN_RP_ID", "HDP_WEBAUTHN_ORIGIN",
+        "HDP_COOKIE_SECURE", "HDP_ALLOWED_HOSTS"
     };
     for (size_t index = 0; index < sizeof(keys) / sizeof(keys[0]); index++) {
         size_t key_length = strlen(keys[index]);
@@ -665,7 +743,7 @@ static BOOL write_environment(const wchar_t *install_dir, const wchar_t *reliefw
     if (existing) {
         wchar_t backup_path[MAX_PATH * 4];
         _snwprintf(backup_path, sizeof(backup_path) / sizeof(wchar_t),
-                   L"%ls\\.env.backup-before-v5.0.2", install_dir);
+                   L"%ls\\.env.backup-before-v6.0.0", install_dir);
         if (!CopyFileW(env_path, backup_path, FALSE)) {
             HeapFree(GetProcessHeap(), 0, existing);
             return FALSE;
@@ -721,9 +799,12 @@ static BOOL write_environment(const wchar_t *install_dir, const wchar_t *reliefw
         managed, sizeof(managed),
         "POSTGRES_PASSWORD=%s\r\nRELIEFWEB_APPNAME=%s\r\n"
         "HDX_HAPI_APP_IDENTIFIER=%s\r\nGITHUB_TOKEN=%s\r\n"
-        "HDP_LOCAL_TOKEN=%s\r\nHDP_SQL_PASSWORD=%s\r\nHDP_PORT=%u\r\n",
+        "HDP_LOCAL_TOKEN=%s\r\nHDP_SQL_PASSWORD=%s\r\nHDP_PORT=%u\r\n"
+        "HDP_AUTH_MODE=passkey\r\nHDP_WEBAUTHN_RP_ID=localhost\r\n"
+        "HDP_WEBAUTHN_ORIGIN=http://localhost:%u\r\nHDP_COOKIE_SECURE=false\r\n"
+        "HDP_ALLOWED_HOSTS=localhost,127.0.0.1,api\r\n",
         password, appname_utf8, existing_hapi_identifier, github_token_utf8,
-        local_token, sql_password, host_port
+        local_token, sql_password, host_port, host_port
     );
     if (managed_length <= 0 || managed_length >= (int)sizeof(managed)) ok = FALSE;
     if (ok) {
@@ -818,6 +899,10 @@ static BOOL ensure_docker_ready(wchar_t *docker, DWORD capacity) {
     DWORD timed_out_probes = 0;
     DWORD last_result = initial_result;
     while (GetTickCount64() - started < 6ULL * 60ULL * 1000ULL) {
+        if (cancel_requested()) {
+            post_log(L"Attente de Docker annulée par l'utilisateur.\r\n");
+            return FALSE;
+        }
         BOOL probe_timed_out = FALSE;
         last_result = probe_docker_engine(docker, &probe_timed_out);
         if (last_result == 0) {
@@ -886,6 +971,49 @@ static void open_url(const wchar_t *url) {
     ShellExecuteW(NULL, L"open", url, NULL, NULL, SW_SHOWNORMAL);
 }
 
+static BOOL create_desktop_shortcut(const wchar_t *install_dir, BOOL include_r) {
+    wchar_t desktop[MAX_PATH * 4];
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_DESKTOPDIRECTORY | CSIDL_FLAG_CREATE,
+                                NULL, SHGFP_TYPE_CURRENT, desktop))) {
+        return FALSE;
+    }
+
+    wchar_t target[MAX_PATH * 4];
+    _snwprintf(target, sizeof(target) / sizeof(wchar_t), L"%ls\\%ls", install_dir,
+               include_r ? L"start-hdp-with-r.cmd" : L"start-hdp.cmd");
+    if (!file_exists(target)) return FALSE;
+
+    wchar_t shortcut[MAX_PATH * 4];
+    _snwprintf(shortcut, sizeof(shortcut) / sizeof(wchar_t),
+               L"%ls\\Humanitarian Data Platform.lnk", desktop);
+
+    HRESULT initialized = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    BOOL must_uninitialize = SUCCEEDED(initialized);
+    if (initialized == RPC_E_CHANGED_MODE) must_uninitialize = FALSE;
+    else if (FAILED(initialized)) return FALSE;
+
+    IShellLinkW *link = NULL;
+    HRESULT result = CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER,
+                                      &IID_IShellLinkW, (void **)&link);
+    if (SUCCEEDED(result)) result = IShellLinkW_SetPath(link, target);
+    if (SUCCEEDED(result)) result = IShellLinkW_SetWorkingDirectory(link, install_dir);
+    if (SUCCEEDED(result)) {
+        result = IShellLinkW_SetDescription(
+            link, include_r
+                ? L"Démarrer Humanitarian Data Platform avec le module R"
+                : L"Démarrer Humanitarian Data Platform");
+    }
+    IPersistFile *persist = NULL;
+    if (SUCCEEDED(result)) {
+        result = IShellLinkW_QueryInterface(link, &IID_IPersistFile, (void **)&persist);
+    }
+    if (SUCCEEDED(result)) result = IPersistFile_Save(persist, shortcut, TRUE);
+    if (persist) IPersistFile_Release(persist);
+    if (link) IShellLinkW_Release(link);
+    if (must_uninitialize) CoUninitialize();
+    return SUCCEEDED(result);
+}
+
 static DWORD WINAPI install_thread(LPVOID parameter) {
     InstallOptions *options = (InstallOptions *)parameter;
     BOOL success = FALSE;
@@ -927,7 +1055,8 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
     post_log(L"Téléchargement silencieux de l'image PostgreSQL/PostGIS. Cette étape peut durer plusieurs minutes au premier lancement.\r\n");
     _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
                L"compose -f \"%ls\\compose.yaml\" pull --quiet db", options->install_dir);
-    DWORD compose_result = run_process_capture(docker, compose_args, options->install_dir);
+    DWORD compose_result = run_process_capture_timeout(
+        docker, compose_args, options->install_dir, COMPOSE_PULL_TIMEOUT_MS);
     if (compose_result != 0) {
         wchar_t error[256];
         _snwprintf(error, sizeof(error) / sizeof(wchar_t), L"Le téléchargement PostgreSQL/PostGIS a retourné le code %lu.\r\n", compose_result);
@@ -940,7 +1069,8 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
     post_log(L"Construction silencieuse de l'API et du runner Python sans réseau. Le compteur d'activité confirme que le processus continue.\r\n");
     _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
                L"compose -f \"%ls\\compose.yaml\" build --quiet api runner-python", options->install_dir);
-    compose_result = run_process_capture(docker, compose_args, options->install_dir);
+    compose_result = run_process_capture_timeout(
+        docker, compose_args, options->install_dir, COMPOSE_BUILD_TIMEOUT_MS);
     if (compose_result != 0) {
         wchar_t error[256];
         _snwprintf(error, sizeof(error) / sizeof(wchar_t), L"La construction de l'API Python a retourné le code %lu.\r\n", compose_result);
@@ -954,7 +1084,8 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
         post_log(L"Le module R a été sélectionné. Son image est volumineuse ; le premier téléchargement peut être long.\r\n");
         _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
                    L"compose -f \"%ls\\compose.yaml\" --profile analytics build --quiet r-service runner-r", options->install_dir);
-        compose_result = run_process_capture(docker, compose_args, options->install_dir);
+        compose_result = run_process_capture_timeout(
+            docker, compose_args, options->install_dir, COMPOSE_BUILD_TIMEOUT_MS);
         if (compose_result != 0) {
             wchar_t error[256];
             _snwprintf(error, sizeof(error) / sizeof(wchar_t), L"La construction du module R a retourné le code %lu.\r\n", compose_result);
@@ -974,19 +1105,21 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
         _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
                    L"compose -f \"%ls\\compose.yaml\" up -d --no-build db runner-python api", options->install_dir);
     }
-    compose_result = run_process_capture(docker, compose_args, options->install_dir);
+    compose_result = run_process_capture_timeout(
+        docker, compose_args, options->install_dir, COMPOSE_UP_TIMEOUT_MS);
     if (compose_result != 0) {
         wchar_t error[256];
         _snwprintf(error, sizeof(error) / sizeof(wchar_t), L"Le démarrage Docker Compose a retourné le code %lu.\r\n", compose_result);
         post_log(error);
         _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
                    L"compose -f \"%ls\\compose.yaml\" --profile analytics logs --no-color --tail 120", options->install_dir);
-        run_process_capture(docker, compose_args, options->install_dir);
+        run_process_capture_timeout(docker, compose_args, options->install_dir, COMPOSE_LOGS_TIMEOUT_MS);
         goto done;
     }
 
     post_status(L"Vérification de l'interface web…", 90);
     for (int attempt = 0; attempt < 100; attempt++) {
+        if (cancel_requested()) goto done;
         if (http_is_healthy(options->host_port)) {
             success = TRUE;
             break;
@@ -998,34 +1131,34 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
         post_log(L"Les conteneurs ont démarré, mais l'interface n'a pas répondu dans le délai prévu. Consultez le journal ci-dessus.\r\n");
         _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
                    L"compose -f \"%ls\\compose.yaml\" logs --no-color --tail 120", options->install_dir);
-        run_process_capture(docker, compose_args, options->install_dir);
+        run_process_capture_timeout(docker, compose_args, options->install_dir, COMPOSE_LOGS_TIMEOUT_MS);
         goto done;
     }
 
     post_status(L"Installation terminée — ouverture du navigateur", 100);
-    wchar_t env_path[MAX_PATH * 4];
-    _snwprintf(env_path, sizeof(env_path) / sizeof(wchar_t), L"%ls\\.env", options->install_dir);
-    DWORD env_size = 0;
-    char *env_bytes = read_file_bytes(env_path, &env_size);
-    char local_token_utf8[128] = {0};
-    if (env_bytes) {
-        extract_env_value(env_bytes, "HDP_LOCAL_TOKEN", local_token_utf8, sizeof(local_token_utf8));
-        HeapFree(GetProcessHeap(), 0, env_bytes);
-    }
-    wchar_t local_token_wide[128] = {0};
-    MultiByteToWideChar(CP_UTF8, 0, local_token_utf8, -1, local_token_wide,
-                        sizeof(local_token_wide) / sizeof(wchar_t));
     wchar_t local_url[384];
     _snwprintf(local_url, sizeof(local_url) / sizeof(wchar_t),
-               L"http://localhost:%u/?token=%ls", options->host_port, local_token_wide);
+               L"http://localhost:%u/", options->host_port);
     wchar_t success_message[512];
     _snwprintf(success_message, sizeof(success_message) / sizeof(wchar_t),
                L"Installation réussie. Interface : %ls\r\n", local_url);
     post_log(success_message);
+    if (create_desktop_shortcut(options->install_dir, options->install_r_module)) {
+        post_log(L"Raccourci « Humanitarian Data Platform » créé sur le Bureau.\r\n");
+    } else {
+        post_log(L"Avertissement : le raccourci Bureau n'a pas pu être créé. Utilisez start-hdp.cmd dans le dossier d'installation.\r\n");
+    }
     open_url(local_url);
 
 done:
-    if (!success) post_status(L"Installation interrompue — consultez le journal", 0);
+    if (!success) {
+        if (cancel_requested()) {
+            post_log(L"Installation annulée par l'utilisateur. Les données et volumes existants sont conservés.\r\n");
+            post_status(L"Installation annulée — données conservées", 0);
+        } else {
+            post_status(L"Installation interrompue — consultez le journal", 0);
+        }
+    }
     HeapFree(GetProcessHeap(), 0, options);
     PostMessageW(g_main, WM_HDP_FINISHED, success ? 1 : 0, 0);
     return 0;
@@ -1040,6 +1173,7 @@ static void set_controls_installing(BOOL installing) {
     EnableWindow(g_install, !installing);
     EnableWindow(g_open_folder, !installing);
     EnableWindow(g_r_module, !installing);
+    EnableWindow(g_cancel, installing);
     set_dependency_control(g_docker, L"Docker Desktop (requis)", g_docker_present, g_winget_present);
     set_dependency_control(g_git, L"Git (optionnel)", g_git_present, g_winget_present);
     set_dependency_control(g_vscode, L"Visual Studio Code (optionnel)", g_vscode_present, g_winget_present);
@@ -1132,6 +1266,7 @@ static void begin_install(void) {
     append_log_control(is_upgrade
         ? L"\r\n--- Mise à niveau d'une installation existante ---\r\n"
         : L"\r\n--- Nouvelle installation ---\r\n");
+    InterlockedExchange(&g_cancel_requested, 0);
     set_controls_installing(TRUE);
     wcsncpy(g_stage_status, L"Démarrage de l'installation", (sizeof(g_stage_status) / sizeof(wchar_t)) - 1);
     g_stage_status[(sizeof(g_stage_status) / sizeof(wchar_t)) - 1] = 0;
@@ -1168,6 +1303,7 @@ static void layout_controls(int width, int height) {
     MoveWindow(g_install, margin + button_width + gap, 332, 205, 30, TRUE);
     MoveWindow(g_open_folder, margin + button_width + gap + 215, 332, 145, 30, TRUE);
     MoveWindow(g_open_log, margin + button_width + gap + 370, 332, 120, 30, TRUE);
+    MoveWindow(g_cancel, margin + button_width + gap + 500, 332, 100, 30, TRUE);
     MoveWindow(g_progress, margin, 380, content_width, 18, TRUE);
     MoveWindow(g_status, margin, 405, content_width, 23, TRUE);
     int log_height = height - 468;
@@ -1188,7 +1324,7 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
         case WM_CREATE: {
             g_font = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
             HWND header = create_control(L"STATIC", L"Humanitarian Data Platform", SS_LEFT, 0, window);
-            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 5.0.2 — données humanitaires et sanitaires", SS_LEFT, 0, window);
+            HWND subtitle = create_control(L"STATIC", L"Installateur Windows natif 6.0.0-dev — données humanitaires et sanitaires", SS_LEFT, 0, window);
             HWND path_label = create_control(L"STATIC", L"Dossier d'installation", SS_LEFT, 0, window);
             HWND relief_label = create_control(L"STATIC", L"Appname ReliefWeb", SS_LEFT, 0, window);
             HWND github_label = create_control(L"STATIC", L"Jeton GitHub", SS_LEFT, 0, window);
@@ -1216,6 +1352,8 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
             g_install = create_control(L"BUTTON", L"Installer / mettre à niveau", BS_DEFPUSHBUTTON | WS_TABSTOP, ID_INSTALL, window);
             g_open_folder = create_control(L"BUTTON", L"Ouvrir le dossier", BS_PUSHBUTTON | WS_TABSTOP, ID_OPEN_FOLDER, window);
             g_open_log = create_control(L"BUTTON", L"Ouvrir le journal", BS_PUSHBUTTON | WS_TABSTOP, ID_OPEN_LOG, window);
+            g_cancel = create_control(L"BUTTON", L"Annuler", BS_PUSHBUTTON | WS_TABSTOP, ID_CANCEL, window);
+            EnableWindow(g_cancel, FALSE);
             g_progress = create_control(PROGRESS_CLASSW, L"", PBS_SMOOTH, ID_PROGRESS, window);
             SendMessageW(g_progress, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
             g_status = create_control(L"STATIC", L"Prêt pour l'analyse de l'environnement.", SS_LEFT, ID_STATUS, window);
@@ -1261,6 +1399,14 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
                 }
                 case ID_OPEN_LOG:
                     ShellExecuteW(NULL, L"open", g_log_path, NULL, NULL, SW_SHOWNORMAL);
+                    return 0;
+                case ID_CANCEL:
+                    if (g_installing && !cancel_requested()) {
+                        InterlockedExchange(&g_cancel_requested, 1);
+                        EnableWindow(g_cancel, FALSE);
+                        append_log_control(L"Annulation demandée : arrêt contrôlé de la commande en cours…\r\n");
+                        SetWindowTextW(g_status, L"Annulation en cours — conservation des données");
+                    }
                     return 0;
             }
             break;
@@ -1333,7 +1479,15 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
             return 0;
         case WM_CLOSE:
             if (g_installing) {
-                MessageBoxW(window, L"Une installation est en cours. Attendez sa fin avant de fermer cette fenêtre.", APP_NAME, MB_OK | MB_ICONWARNING);
+                int answer = MessageBoxW(
+                    window,
+                    L"Une installation est en cours. Voulez-vous demander son annulation contrôlée ?\n\nLes données et volumes existants seront conservés.",
+                    APP_NAME, MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+                if (answer == IDYES && !cancel_requested()) {
+                    InterlockedExchange(&g_cancel_requested, 1);
+                    EnableWindow(g_cancel, FALSE);
+                    append_log_control(L"Annulation demandée depuis la fermeture de la fenêtre…\r\n");
+                }
                 return 0;
             }
             DestroyWindow(window);

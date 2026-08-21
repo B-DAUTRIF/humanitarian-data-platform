@@ -37,7 +37,7 @@ services:
       retries: 12
 
   spool-init:
-    image: hdp-runner-python:5.0.2
+    image: hdp-runner-python:6.0.0-dev
     build:
       context: ./runner
       dockerfile: Dockerfile.python
@@ -59,7 +59,7 @@ services:
     restart: "no"
 
   runner-python:
-    image: hdp-runner-python:5.0.2
+    image: hdp-runner-python:6.0.0-dev
     build:
       context: ./runner
       dockerfile: Dockerfile.python
@@ -86,7 +86,7 @@ services:
         condition: service_completed_successfully
 
   runner-r:
-    image: hdp-runner-r:5.0.2
+    image: hdp-runner-r:6.0.0-dev
     build:
       context: ./runner
       dockerfile: Dockerfile.r
@@ -127,6 +127,10 @@ services:
       HDP_MAX_UPLOAD_BYTES: ${HDP_MAX_UPLOAD_BYTES:-536870912}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       HDP_LOCAL_TOKEN: ${HDP_LOCAL_TOKEN}
+      HDP_AUTH_MODE: ${HDP_AUTH_MODE:-passkey}
+      HDP_WEBAUTHN_RP_ID: ${HDP_WEBAUTHN_RP_ID:-localhost}
+      HDP_WEBAUTHN_ORIGIN: ${HDP_WEBAUTHN_ORIGIN:-http://localhost:8080}
+      HDP_COOKIE_SECURE: ${HDP_COOKIE_SECURE:-false}
       HDP_ALLOWED_HOSTS: ${HDP_ALLOWED_HOSTS:-localhost,127.0.0.1,api}
       EXECUTION_SPOOL_DIR: /app/execution_spool
       HDP_TILE_URL: ${HDP_TILE_URL:-https://tile.openstreetmap.org/{z}/{x}/{y}.png}

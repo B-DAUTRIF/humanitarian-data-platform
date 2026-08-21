@@ -5,6 +5,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 COPY requirements.txt .
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir -r requirements.txt
 COPY --chown=65532:65532 app ./app
 COPY --chown=65532:65532 static ./static

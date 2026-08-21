@@ -1,15 +1,295 @@
 # Todo-list des mises à jour — Humanitarian Data Platform
 
+## Programme HDP 6.0.0 — règles, connecteurs et catalogue
+
+> **État au 21 août 2026** — HDP 6.0.0 devient la version de développement.
+> La dernière livraison installable qualifiée reste la 5.0.2. La branche
+> distante `develop/5.2` demeure la référence historique immédiatement
+> antérieure. Aucun EXE, ZIP ou `main` 6.0.0 ne doit être annoncé avant la
+> qualification complète.
+
+La notice de référence est conservée dans
+[`docs/NOTICE_TECHNIQUE_FONCTIONNELLE_V6.md`](docs/NOTICE_TECHNIQUE_FONCTIONNELLE_V6.md).
+Une case n'est cochée que si le code, les migrations, les tests et la preuve de
+non-régression correspondants existent.
+
+**Dernier jalon local 6.0.0-dev — reprise complète de l'archive au 21 août
+2026** : 227 tests Python réussis, 19 migrations
+et 161 instructions analysées par `pglast`, trois scripts JavaScript inline
+valides, import FastAPI réussi et schéma OpenAPI généré avec 163 routes, dont 49
+chemins `/api/v6`. Ce jalon n'a pas été publié et ne vaut pas qualification
+Docker, Windows, PHP/SPIP ou connecteurs réels.
+
+### HDP6-001 — Gouvernance et compatibilité
+
+- [x] intégrer toutes les décisions de la notice dans la todo-list versionnée ;
+- [x] déclarer `6.0.0-dev` comme version de développement sans renommer les
+  artefacts 5.0.2 ;
+- [x] conserver les tables, routes et paramètres 5.x pendant les migrations ;
+- [x] maintenir `HDP_STATE.json` pour le lot local 1 ;
+- [ ] réconcilier README, référence API, architecture et wiki ;
+- [ ] n'effectuer aucune publication, fusion ou livraison sans validation
+  explicite et preuve de qualification.
+
+### HDP6-010 — Moteur de règles ET/OU versionné
+
+- [x] représenter chaque règle par un arbre JSON immuable de groupes `AND`/`OR`
+  et de feuilles typées ;
+- [x] valider l'arbre côté serveur avec profondeur, taille et opérateurs bornés ;
+- [x] conserver définition, versions, portée globale/projet, empreinte SHA-256,
+  auteur logique et date ;
+- [x] permettre l'héritage d'une règle globale, la surcharge par projet et la
+  proposition explicite d'une nouvelle version sans remplacement automatique ;
+- [x] fournir une simulation sans action avec preuve condition par condition ;
+- [ ] migrer les règles 5.x plates vers un arbre compatible sans perte.
+
+### HDP6-011 — Corrélations temporelles
+
+- [x] appliquer réellement `lookback_hours` ;
+- [x] prendre en charge le nombre d'événements dans une fenêtre ;
+- [x] prendre en charge une séquence ordonnée d'événements ;
+- [x] prendre en charge l'absence d'un événement attendu ;
+- [x] prendre en charge variation et tendance par rapport à une valeur fixe ou
+  à une référence glissante ;
+- [x] borner fenêtres, volumes d'événements et coût d'évaluation ;
+- [x] enregistrer événements examinés, référence, résultat et version de données.
+
+### HDP6-012 — Actions, limites et idempotence
+
+- [ ] séparer évaluation, demande d'action et exécution asynchrone ;
+- [x] réserver une clé d'idempotence avant tout effet externe ;
+- [ ] automatiser seulement notifications internes, classements, tâches HDP et
+  recherches/actualisations dans les limites configurées ;
+- [ ] produire les mails et publications SPIP sous forme de brouillons soumis à
+  validation ;
+- [x] maintenir scripts Python/R et webhooks en validation
+  manuelle avec version et empreinte exactes ;
+- [x] placer tout dépassement de volume, durée, requêtes ou téléchargement en
+  `pending_approval` ;
+- [x] conserver l'indisponibilité réelle des runners et de l'egress tant que
+  l'infrastructure n'est pas intégrée.
+
+### HDP6-020 — Inventaire exhaustif des connecteurs
+
+- [ ] inventorier tous les endpoints officiellement documentés de chaque source ;
+- [ ] versionner la documentation officielle et la date de vérification ;
+- [ ] recenser paramètres de chemin, requête, en-tête et corps, avec types,
+  valeurs par défaut, obligations, listes, limites, dépendances, pagination et tri ;
+- [ ] recenser tous les champs documentés et observés dans les réponses, y compris
+  chemins imbriqués, cardinalité, nullabilité et version d'apparition ;
+- [ ] recenser toutes les métadonnées des jeux et fichiers ;
+- [ ] recenser méthode, URL, authentification, quotas, formats, délais, cache,
+  hôtes autorisés, version et paramètres techniques ;
+- [x] distinguer strictement inventaire documentaire et exécution effective.
+
+### HDP6-021 — Activation progressive et socle commun
+
+- [x] gérer les états `inventoried`, `contract_imported`, `adapter_implemented`,
+  `tests_validated`, `active_global`, `active_project`, `suspended`, `obsolete` ;
+- [x] activer les endpoints progressivement, sans assimiler inventaire et support ;
+- [ ] faire atteindre à toutes les sources le socle `discover`, `describe`,
+  `search`, `preview`, `acquire`, `refresh`, `provenance` avant les fonctions
+  spécialisées ;
+- [ ] générer formulaires et contrôles depuis les contrats serveur ;
+- [ ] conserver les paramètres historiques lors des évolutions de contrat.
+
+### HDP6-030 — Catalogue central et fidélité des données
+
+- [x] créer le schéma central versionné des versions d'API, endpoints,
+  paramètres, champs de réponse, capacités et métadonnées ;
+- [x] conserver les métadonnées brutes immuables avant normalisation ;
+- [x] exposer l'identifiant interne des métadonnées nécessaire à l'agrégation ;
+- [x] ne jamais fabriquer une métadonnée absente : utiliser une valeur
+  explicitement indisponible avec niveau de confiance ;
+- [x] signaler toute dérive de contrat au lieu de supprimer silencieusement un
+  champ nouveau ou modifié ;
+- [x] tracer champ brut, champ normalisé, recette, version du connecteur et
+  paramètres d'acquisition ;
+- [x] corriger la sémantique `ready` des plans d'agrégation en validant réellement
+  géographie, unités, clés de jointure, périodes et licences.
+
+### HDP6-031 — Équivalents fonctionnels HDP
+
+- [x] générer à la demande et mettre en cache un équivalent déclaré lorsqu'une
+  capacité du socle manque ;
+- [ ] paginer une API et produire JSON, Parquet et CSV lorsqu'aucun fichier
+  téléchargeable n'existe ;
+- [ ] combiner documentation officielle et champs observés lorsqu'aucun schéma
+  n'existe, avec provenance et confiance ;
+- [ ] produire un aperçu borné et non persistant ;
+- [ ] comparer ETag, Last-Modified, empreinte ou contenu lorsqu'aucune fonction de
+  mise à jour n'existe ;
+- [ ] normaliser les géographies vers M49/ISO et produire GeoJSON/GeoPackage
+  lorsque les données le permettent.
+
+### HDP6-040 — Cache, fraîcheur et politique de projet
+
+- [x] construire une clé canonique incluant source, version, endpoint, paramètres,
+  format, version du connecteur et version de transformation, sans secret ;
+- [x] partager les artefacts publics identiques sans dupliquer les fichiers ;
+- [x] revalider avec ETag/Last-Modified, fréquence déclarée, durée par source,
+  version technique et forçage utilisateur ;
+- [x] écrire temporairement, vérifier taille et empreinte, puis publier atomiquement ;
+- [x] appliquer une politique unique à tout le projet ;
+- [x] appliquer par défaut `stale_if_error` : actualiser d'abord, puis utiliser
+  l'ancienne version uniquement après échec et dans l'ancienneté autorisée ;
+- [x] rendre configurables les quatre calculs d'ancienneté maximale : durée fixe,
+  multiple de fréquence, fréquence avec plafond projet, décision manuelle ;
+- [ ] **arbitrage restant** : choisir le calcul proposé par défaut dans l'interface.
+
+### HDP6-050 — Interface des sources et des règles
+
+- [x] ajouter un bouton **Paramétrages** dans chaque encart de source ;
+- [x] conserver les portées globale et projet dans ce sous-menu ;
+- [ ] afficher Endpoints, Paramètres d'entrée, Champs de réponse, Métadonnées,
+  Technique, Historique et état d'activation ;
+- [x] afficher en lecture le fichier de configuration et les liens Portail,
+  Documentation et API ;
+- [x] présenter listes, cases à cocher et menus pour les valeurs contraintes,
+  et champs typés pour les valeurs libres ;
+- [ ] fournir un constructeur visuel ET/OU, une formule textuelle, un arbre et une
+  simulation avant enregistrement ;
+- [ ] limiter l'interface à environ cinq niveaux d'imbrication tout en laissant le
+  moteur et le schéma de données gérer les arbres valides plus profonds.
+
+### HDP6-060 — Chronologie, sécurité et exploitation
+
+- [ ] enrichir la chronologie globale avec migrations, contrats, activations,
+  suspensions et opérations sur les tables globales ;
+- [ ] enrichir la chronologie projet avec recherches, acquisitions, cache,
+  scripts, règles, alertes, validations et mises à jour ;
+- [ ] désactiver par défaut les endpoints d'écriture ou d'administration ;
+- [x] contrôler SSRF, redirections, hôtes, quotas, tailles, pagination et temps
+  maximum avant l'exécution ;
+- [x] exclure les secrets des contrats V6, clés de cache et paramètres d'action ;
+- [x] maintenir le périmètre V6 à des données publiques.
+
+### HDP6-070 — Tests, qualification et livraison
+
+- [ ] tester les contrats de paramètres, réponses et erreurs de chaque endpoint ;
+- [ ] tester les dérives de schéma et l'absence de perte de champs bruts ;
+- [ ] tester cache, concurrence, revalidation HTTP, reprise et stockage atomique ;
+- [x] tester ET/OU imbriqués, fenêtres, séquences, absences, tendances et limites ;
+- [ ] prouver qu'une même règle et une même version de données ne répètent jamais
+  une action externe ;
+- [x] exécuter le diagnostic complet du lot 1 et distinguer tests statiques,
+  unitaires, intégration, Docker, appels réels et recette Windows ;
+- [ ] corriger ou soumettre tout bug découvert avant de poursuivre ;
+- [ ] ne produire archive, EXE et publication `main` qu'à la qualification finale
+  explicitement demandée.
+
+### HDP6-080 — Intégration SPIP et publication contrôlée
+
+- [x] consigner l'évaluation validée : équivalence fonctionnelle réalisable sous
+  forme hybride, avec SPIP pour l'éditorial et HDP pour les traitements, plutôt
+  que par réécriture intégrale du moteur Python/R en PHP ;
+- [x] retenir un serveur accessible par Internet, un opérateur HDP unique et des
+  données exclusivement publiques ;
+- [x] retenir une authentification forte de l'opérateur par passkey ou clé de
+  sécurité et des comptes nominatifs protégés pour chaque visiteur ;
+- [x] retenir SPIP pour documentation, actualités, curation des flux et alertes,
+  ainsi que publication ou partage de projets ;
+- [x] imposer une validation manuelle avant toute publication HDP vers SPIP ;
+- [x] définir le contrat d'échange versionné HDP–SPIP, ses droits minimaux, son
+  journal d'audit et la révocation des jetons ;
+- [x] développer le plugin SPIP de consultation/curation et la passerelle de
+  brouillons, sans donner à SPIP accès aux runners ni aux secrets HDP ;
+- [ ] tester WebAuthn/passkeys, comptes visiteurs, séparation des rôles,
+  prévisualisation, validation, retrait et traçabilité des publications ;
+- [ ] qualifier l'équivalence écran par écran avant tout remplacement du site HDP.
+
+### HDP6-090 — Veille sanitaire mondiale, RSS et ajout de sources
+
+- [x] définir le périmètre d'exhaustivité mondial et la date de référence afin
+  qu'« exhaustif » reste vérifiable et versionné ;
+- [ ] rechercher uniquement dans les documentations et registres officiels les
+  flux sanitaires, épidémiologiques et d'alertes disponibles par RSS/Atom/API ;
+- [x] conserver organisme, pays/région, thème, langue, URL officielle, protocole,
+  licence, fréquence, état, preuve documentaire et date de dernière vérification ;
+- [ ] détecter doublons, redirections, flux morts, changements de format et
+  dérives de schéma sans perdre l'historique ;
+- [x] livrer un module d'entrée de nouveau flux avec validation d'URL, aperçu,
+  test de parseur, fréquence, projet, activation et désactivation ;
+- [x] appliquer les protections SSRF, hôtes autorisés, taille, délai, XML durci,
+  déduplication, ETag et Last-Modified avant activation ;
+- [x] intégrer les flux validés au catalogue, aux signaux, aux règles et à la
+  chronologie, sans assimiler un portail sans flux à un connecteur actif.
+
+### HDP6-100 — Installation, raccourci et bibliothèque locale
+
+- [x] supprimer les attentes indéfinies de `winget` et Docker Compose, journaliser
+  l'activité et permettre une annulation contrôlée sans supprimer les volumes ;
+- [x] créer en fin d'installation Windows un raccourci Bureau natif vers le
+  lanceur de l'instance installée ;
+- [ ] supprimer ce raccourci dans la future procédure de désinstallation ;
+- [ ] définir séparément le comportement Linux poste et Linux serveur, où un
+  raccourci graphique peut être inadapté ou inexistant ;
+- [ ] ajouter dans la bibliothèque l'action **Ouvrir le dossier contenant** pour
+  le mode poste local uniquement, avec chemin canonique et confinement ;
+- [x] pour une instance distante, remplacer l'ouverture d'un chemin serveur par
+  une action explicite et autorisée de téléchargement ou d'exploration confinée ;
+- [ ] tester chemins avec espaces/Unicode, fichiers supprimés, liens symboliques,
+  droits insuffisants et tentative de sortie du répertoire autorisé.
+
+### HDP6-110 — Sauvegardes SQL par périmètre
+
+- [ ] conserver la sauvegarde/restauration globale existante et la requalifier
+  après les migrations 6.0.0 ;
+- [x] ajouter une sauvegarde cohérente d'un projet incluant ses dépendances,
+  fichiers, lignées, règles, cache référencé et chronologie ;
+- [ ] ajouter une sauvegarde des signaux, globale ou limitée à un projet et à une
+  période, avec règles, évaluations et actions associées ;
+- [x] produire manifeste, version de schéma, périmètre, empreintes, inventaire des
+  exclusions et contrôle de compatibilité avant restauration ;
+- [ ] garantir transaction cohérente, restauration dans une base temporaire,
+  absence de secrets et absence d'écrasement silencieux ;
+- [ ] tester restauration globale, projet isolé, signaux isolés, archive altérée,
+  version incompatible et collision d'identifiants.
+
+### HDP6-120 — Lecture et réception de mails
+
+- [ ] arbitrer le mode d'accès : IMAP avec secret d'application, OAuth 2/OIDC ou
+  passerelle entrante dédiée ;
+- [ ] arbitrer les boîtes/dossiers suivis, pièces jointes autorisées, conservation,
+  fréquence, déduplication et rattachement aux projets ;
+- [x] séparer réception, analyse, classement, création de signal et brouillon de
+  réponse ; aucun envoi ne doit être implicite ;
+- [ ] analyser les messages et pièces jointes en environnement borné, sans contenu
+  actif, avec quotas, empreinte, provenance et quarantaine ;
+- [x] exposer les champs de mail aux règles ET/OU et à la chronologie après
+  validation du modèle de données et des obligations de confidentialité ;
+- [ ] tester messages multipart, encodages, pièces jointes, doublons, rebonds,
+  authentification expirée, boîte indisponible et contenus malveillants.
+
+### HDP6-130 — Méthode de développement guidée
+
+Dernier passage du jalon : **réussi localement le 21 août 2026** après correction
+de deux défauts détectés par son premier passage. Les recettes Docker, Windows et
+connecteurs réels restent non exécutées et ne sont pas assimilées à une
+qualification.
+
+- [x] traiter les descriptions fonctionnelles comme source du besoin et traduire
+  chaque lot en options techniques, effets, risques et critères d'acceptation ;
+- [x] ne pas produire automatiquement archive complète ou EXE à chaque étape ;
+- [x] diagnostiquer l'application complète après le lot local 1 et consigner les
+  contrôles exécutés ou indisponibles ;
+- [x] formaliser le jalon réexécutable dans
+  `docs/V6_IMPLEMENTATION_GATE.md` et `tools/run_v6_quality_gate.py` ;
+- [ ] **tâche récurrente** : reprendre la même boucle diagnostic → questions →
+  décision → code → non-régression après chaque nouvelle implémentation V6 ;
+- [ ] **tâche récurrente** : mettre à jour `HDP_STATE.json`, la todo-list et le
+  changelog après chaque passage du jalon ;
+- [ ] revenir vers le propriétaire pour tout bug, ambiguïté fonctionnelle ou
+  extension d'autorité avant d'étendre le périmètre.
+
 ## Référence de travail 5.2 - décision du 16 août 2026
 
-- [x] désigner **HDP 5.2** comme version de travail active ;
+- [x] désigner **HDP 5.2** comme version de travail active avant le passage 6.0.0 ;
 - [x] conserver la version 5.0.2 comme dernière livraison qualifiée et ne pas
   renommer ses EXE, ZIP, empreintes ou documents ;
 - [x] publier la décision dans les fichiers canoniques du dépôt privé sans
   force-push ;
-- [ ] attribuer à chaque futur changement 5.2 un périmètre, des critères
-  d'acceptation et des preuves de validation ;
-- [ ] reconstruire, tester et qualifier séparément les livrables 5.2 avant de
+- [ ] reconstruire, tester et qualifier séparément les livrables futurs avant de
   les annoncer comme version installable.
 
 ## Correctif V5.0.2 - session CSRF locale
