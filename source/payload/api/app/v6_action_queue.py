@@ -70,7 +70,7 @@ def recover_stale_action_requests(connection: Any, now: datetime, *, limit: int 
            FOR UPDATE SKIP LOCKED LIMIT %s""",
         (now, limit),
     ).fetchall()
-    for request_id, attempt_count, max_attempts, cancel_requested_at in rows:
+    for request_id, attempt_count, max_attempts, cancel_requested_at, project_id in rows:
         if cancel_requested_at is not None:
             status, error, next_attempt_at = "cancelled", "cancel_requested_before_lease_expiry", None
         elif int(attempt_count) < int(max_attempts):
@@ -95,7 +95,7 @@ def recover_stale_action_requests(connection: Any, now: datetime, *, limit: int 
         )
         _record_timeline(
             connection,
-            {"id": request_id, "project_id": row[4], "worker_id": "lease-recovery"},
+            {"id": request_id, "project_id": project_id, "worker_id": "lease-recovery"},
             "action.lease_expired",
             status,
             "Bail d'action expiré",
@@ -285,7 +285,7 @@ def execute_claimed_action_request(
            FROM action_requests r
            JOIN rule_evaluations e ON e.id=r.evaluation_id
            LEFT JOIN project_data_policies p ON p.project_id=r.project_id
-           WHERE r.id=%s FOR UPDATE""",
+           WHERE r.id=%s FOR UPDATE OF r""",
         (request["id"],),
     ).fetchone()
     if not row:

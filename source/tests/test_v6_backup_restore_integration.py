@@ -19,8 +19,12 @@ API_ROOT = Path(__file__).resolve().parents[1] / "payload" / "api"
 sys.path.insert(0, str(API_ROOT))
 
 from app.v6_backup import (  # noqa: E402
+    ACTION_WORKER_SCHEMA_VERSION,
     BackupError,
+    SIGNALS_RESTORE_ACTION_WORKER_TABLES,
+    SIGNALS_RESTORE_CORE_TABLES,
     TEMPORARY_RESTORE_DATABASE_PREFIX,
+    _scoped_restore_inventory,
     build_manifest,
     create_global_dump,
     export_project_graph,
@@ -33,6 +37,40 @@ from app.v6_backup import (  # noqa: E402
 
 TEST_DATABASE_URL = os.getenv("HDP_BACKUP_RESTORE_TEST_DATABASE_URL", "").strip()
 SCHEMA_VERSIONS = ["fixture-001"]
+
+
+def _signals_inventory_manifest(tables: set[str], schema_versions: list[str]) -> dict[str, object]:
+    return {
+        "manifest_version": "1.0",
+        "scope": "signals",
+        "schema_versions": schema_versions,
+        "restore_automatically_authorized": False,
+        "files": [
+            {"name": f"{table}.jsonl", "size_bytes": 0, "sha256": "0" * 64}
+            for table in sorted(tables)
+        ],
+        "row_counts": {table: 0 for table in tables},
+    }
+
+
+class SignalsInventoryCompatibilityTest(unittest.TestCase):
+    def test_legacy_signal_manifest_keeps_the_original_required_tables(self) -> None:
+        manifest = _signals_inventory_manifest(set(SIGNALS_RESTORE_CORE_TABLES), ["fixture-001"])
+        self.assertEqual(set(_scoped_restore_inventory(manifest)), SIGNALS_RESTORE_CORE_TABLES)
+
+    def test_action_worker_migration_requires_all_new_effect_tables(self) -> None:
+        incomplete = _signals_inventory_manifest(
+            set(SIGNALS_RESTORE_CORE_TABLES),
+            ["fixture-001", ACTION_WORKER_SCHEMA_VERSION],
+        )
+        with self.assertRaisesRegex(BackupError, "action_drafts"):
+            _scoped_restore_inventory(incomplete)
+        complete_tables = SIGNALS_RESTORE_CORE_TABLES | SIGNALS_RESTORE_ACTION_WORKER_TABLES
+        complete = _signals_inventory_manifest(
+            set(complete_tables),
+            ["fixture-001", ACTION_WORKER_SCHEMA_VERSION],
+        )
+        self.assertEqual(set(_scoped_restore_inventory(complete)), complete_tables)
 
 
 @unittest.skipUnless(

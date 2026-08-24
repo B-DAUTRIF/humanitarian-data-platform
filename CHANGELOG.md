@@ -11,7 +11,7 @@
   brouillons et mise en file des recherches/actualisations ;
 - scripts Python/R, webhooks et tout effet réseau maintenus hors des exécuteurs
   automatiques ;
-- 255 tests recensés localement, dont sept nouvelles recettes PostgreSQL
+- 257 tests recensés localement, dont sept nouvelles recettes PostgreSQL
   réservées à la CI distante.
 
 ## 6.0.0-dev - fermeture transitive des projets - 24 août 2026

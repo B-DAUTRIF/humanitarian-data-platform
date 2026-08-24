@@ -5,7 +5,7 @@
   "working_version": "6.0.0-dev",
   "latest_qualified_release": "5.0.2",
   "previous_working_line": "5.2",
-  "state_generated_at": "2026-08-24T10:26:50+02:00",
+  "state_generated_at": "2026-08-24T10:40:12+02:00",
   "status": "implementation_in_progress",
   "basis": {
     "archive": "HumanitarianDataPlatform_Archive_complete_v5.0.2.zip",
@@ -13,17 +13,18 @@
     "remote_reference_branch": "develop/5.2",
     "remote_reference_commit": "d0257a402a958439f6f28e6b3de2290112bfbbfc",
     "working_branch": "codex/v6-build-20260821",
-    "local_worktree_base_commit": "eeee8034542d3c0486ca839077438b6813dacf3c",
+    "local_worktree_base_commit": "a42899d2219051f1a731ba433f02de130086bbb0",
     "pull_request": 8,
     "remote_published": true,
     "remote_publication_scope": "development branch and draft pull request only",
     "merged_to_main": false,
     "local_evidence_sync_published": true,
-    "local_action_worker_lot_published": false
+    "local_action_worker_candidate_published": true,
+    "local_action_worker_fix_published": false
   },
   "baseline_tests": {
-    "executed": 255,
-    "passed": 242,
+    "executed": 257,
+    "passed": 244,
     "skipped": 13,
     "failures": 0,
     "errors": 0,
@@ -62,11 +63,11 @@
     "compatibility_fixes": "lookback, signal idempotence, aggregation readiness and V5 route/table preservation"
   },
   "last_implementation_gate": {
-    "executed_at": "2026-08-24T10:26:50+02:00",
+    "executed_at": "2026-08-24T10:40:12+02:00",
     "result": "passed",
     "blocking_failures": [],
     "qualification_complete": false,
-    "python_tests": "242 passed, 13 skipped locally",
+    "python_tests": "244 passed, 13 skipped locally",
     "python_ast": "70 files parsed",
     "postgresql": "20 migrations and 188 statements parsed",
     "javascript": "3 inline scripts valid across index and passkey login",
@@ -97,11 +98,11 @@
     "qualification_complete": false
   },
   "last_failed_candidate": {
-    "commit": "89a24079da4bbcdc465e7a8262977a55588e664f",
-    "validation_workflow_run": 32699450467,
-    "windows_workflow_run": 32699450506,
-    "cause": "the duplicate-project test was rejected earlier by the exactly-one-project manifest rule",
-    "correction": "keep the safer manifest rule and exercise transactional collision rollback with a duplicated child artifact instead"
+    "commit": "a42899d2219051f1a731ba433f02de130086bbb0",
+    "validation_workflow_run": 32707156756,
+    "windows_workflow_run": 32707156742,
+    "cause": "PostgreSQL rejected FOR UPDATE on the nullable policy join; stale-lease unpacking retained the previous arity; legacy signal fixtures were treated as if migration 6.0.0-011 were already present",
+    "correction": "lock action_requests explicitly with FOR UPDATE OF r, unpack project_id, and make the five effect tables mandatory only when the action-worker schema version is declared"
   },
   "program": {
     "notice": "docs/NOTICE_TECHNIQUE_FONCTIONNELLE_V6.md",

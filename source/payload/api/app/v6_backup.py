@@ -29,7 +29,7 @@ BACKUP_SCOPES = {"global", "project", "signals"}
 GLOBAL_DUMP_NAME = "postgresql-global.dump"
 TEMPORARY_RESTORE_DATABASE_PREFIX = "hdp_restore_"
 MAX_BACKUP_JSONL_LINE_BYTES = 16 * 1024 * 1024
-SIGNALS_RESTORE_TABLES = {
+SIGNALS_RESTORE_CORE_TABLES = {
     "projects",
     "signal_events",
     "signal_rules",
@@ -39,12 +39,16 @@ SIGNALS_RESTORE_TABLES = {
     "rule_evaluations",
     "action_requests",
     "action_executions",
+}
+SIGNALS_RESTORE_ACTION_WORKER_TABLES = {
     "internal_notifications",
     "project_tasks",
     "signal_classifications",
     "action_drafts",
     "automated_data_jobs",
 }
+SIGNALS_RESTORE_TABLES = SIGNALS_RESTORE_CORE_TABLES | SIGNALS_RESTORE_ACTION_WORKER_TABLES
+ACTION_WORKER_SCHEMA_VERSION = "6.0.0-011-action-workers"
 SENSITIVE_FIELD_MARKERS = (
     "authorization",
     "cookie",
@@ -869,9 +873,12 @@ def _scoped_restore_inventory(manifest: dict[str, Any]) -> dict[str, dict[str, A
     tables, other_files = _jsonl_restore_inventory(manifest)
     if other_files:
         raise BackupError(f"fichiers inattendus dans le bundle signaux: {sorted(other_files)}")
-    if set(tables) != SIGNALS_RESTORE_TABLES:
-        missing = sorted(SIGNALS_RESTORE_TABLES - set(tables))
-        unexpected = sorted(set(tables) - SIGNALS_RESTORE_TABLES)
+    required = set(SIGNALS_RESTORE_CORE_TABLES)
+    if ACTION_WORKER_SCHEMA_VERSION in manifest["schema_versions"]:
+        required.update(SIGNALS_RESTORE_ACTION_WORKER_TABLES)
+    missing = sorted(required - set(tables))
+    unexpected = sorted(set(tables) - SIGNALS_RESTORE_TABLES)
+    if missing or unexpected:
         raise BackupError(
             f"inventaire signaux incomplet: absentes={missing}, inattendues={unexpected}"
         )
