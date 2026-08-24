@@ -25,7 +25,7 @@ Les statuts employés sont :
 | Demande | Statut | Preuve actuelle | Reste à faire |
 |---|---|---|---|
 | Refonte en plugin SPIP avec site équivalent | Partiel / non qualifié | passerelle `hdp-spip/1.0`, brouillons approuvés manuellement, plugin SPIP 4.2–4.4 | recette PHP/SPIP, comptes visiteurs, déploiement Internet, équivalence écran par écran |
-| Règles combinant ET et OU | Réalisé pour le moteur | arbre strict imbriqué, simulation, versionnement, tests AND/OR | constructeur visuel complet et migration des anciennes règles plates |
+| Règles combinant ET et OU | Réalisé pour le moteur et la migration V5 | arbre strict imbriqué, simulation, versionnement et basculement transactionnel des règles plates avec action HDX | constructeur visuel complet et recette sur données V5 représentatives |
 | Corrélations entre événements | Réalisé pour le moteur | comptage, séquence, absence, variation/tendance fixe ou glissante | essais de charge et scénarios métier représentatifs |
 | Actions automatiques contrôlées | Partiel avancé / travailleurs internes vérifiés | travailleur d'actions, travaux de données et vue opérateur vérifiés sur PostgreSQL 16 ; décisions, tentatives, brouillons et résultats par source ; 267/267 tests distants | qualifier les appels connecteurs réels et les exécuteurs externes séparés |
 | Règles globales héritées/surchargeables | Réalisé | versions proposées, adoption/rejet, surcharge/restauration par projet | recette multi-projets et ergonomie de comparaison des versions |

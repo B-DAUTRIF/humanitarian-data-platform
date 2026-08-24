@@ -22,6 +22,7 @@ class V6StaticContractTest(unittest.TestCase):
         cls.action_queue = (API_APP / "v6_action_queue.py").read_text(encoding="utf-8")
         cls.action_observability = (API_APP / "v6_action_observability.py").read_text(encoding="utf-8")
         cls.data_jobs = (API_APP / "v6_data_jobs.py").read_text(encoding="utf-8")
+        cls.legacy_rules = (API_APP / "v6_legacy_rules.py").read_text(encoding="utf-8")
         cls.storage = (API_APP / "v6_storage.py").read_text(encoding="utf-8")
         cls.openapi = (API_APP / "v6_openapi.py").read_text(encoding="utf-8")
         cls.backup = (API_APP / "v6_backup.py").read_text(encoding="utf-8")
@@ -38,6 +39,7 @@ class V6StaticContractTest(unittest.TestCase):
             ("v6_action_queue.py", self.action_queue),
             ("v6_action_observability.py", self.action_observability),
             ("v6_data_jobs.py", self.data_jobs),
+            ("v6_legacy_rules.py", self.legacy_rules),
             ("v6_storage.py", self.storage),
             ("v6_openapi.py", self.openapi),
             ("v6_backup.py", self.backup),
@@ -59,6 +61,7 @@ class V6StaticContractTest(unittest.TestCase):
             '/rules/simulate',
             '/projects/{project_id}/rules',
             '/projects/{project_id}/rules/{definition_id}/evaluate',
+            '/projects/{project_id}/rules/migrate-legacy',
             '/connectors/contracts/validate',
             '/connectors/contracts/diff',
             '/sources/{source_id}/endpoints',
@@ -180,6 +183,7 @@ class V6StaticContractTest(unittest.TestCase):
         self.assertIn('version="6.0.0-010-public-mail-ingestion"', self.migrations)
         self.assertIn('version="6.0.0-011-action-workers"', self.migrations)
         self.assertIn('version="6.0.0-012-data-job-workers"', self.migrations)
+        self.assertIn('version="6.0.0-013-legacy-rule-migration"', self.migrations)
 
     def test_action_worker_is_transactional_idempotent_and_network_closed(self) -> None:
         for marker in (
@@ -209,6 +213,8 @@ class V6StaticContractTest(unittest.TestCase):
         ):
             self.assertIn(marker, self.data_jobs)
         self.assertIn("await execute_acquisition(", self.main)
+        self.assertIn("await perform_datagrid_search(", self.main)
+        self.assertIn("legacy_datagrid_search_and_due_refresh", self.action_queue)
         self.assertIn("automated_data_job_source=source", self.main)
         self.assertNotIn("download_public_file", self.data_jobs)
         for marker in (
@@ -353,7 +359,7 @@ class V6StaticContractTest(unittest.TestCase):
         gate_script = PROJECT_ROOT / "tools" / "run_v6_quality_gate.py"
         todo = (PROJECT_ROOT / "TODO_Mises_a_jour_HDP.md").read_text(encoding="utf-8")
         self.assertTrue(notice.is_file())
-        self.assertIn("58 chemins V6", api_v6.read_text(encoding="utf-8"))
+        self.assertIn("59 chemins V6", api_v6.read_text(encoding="utf-8"))
         self.assertIn("Compléments V6 de développement", architecture.read_text(encoding="utf-8"))
         self.assertIn("6.0.0-dev", wiki_home.read_text(encoding="utf-8"))
         self.assertTrue(gate_notice.is_file())

@@ -1,5 +1,17 @@
 # Journal des versions
 
+## 6.0.0-dev - migration transactionnelle des règles V5 - 24 août 2026
+
+- prévisualisation sans mutation des règles de signaux plates encore présentes ;
+- conservation des seuils, lieux/thèmes avec la comparaison historique, fenêtre
+  temporelle, dimensions Data Grid, gabarit de requête et remise à échéance ;
+- création atomique d'une définition et d'une version V6 liées à la règle V5 ;
+- désactivation de l'exécution V5 seulement après création complète de
+  l'équivalent V6, avec relance idempotente et événement de chronologie ;
+- exécution de l'action historique par le travailleur borné, sans ouvrir
+  l'egress des runners ;
+- 276 tests recensés localement, dont 21 recettes PostgreSQL réservées à la CI.
+
 ## 6.0.0-dev - cohérence documentaire et recommandation de cache - 24 août 2026
 
 - référence distincte des 58 chemins API V6 et conservation explicite de la

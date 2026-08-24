@@ -126,7 +126,7 @@ from .source_registry import (
 from .sql_workspace import ALLOWED_SQL_RELATIONS, validate_readonly_sql
 from .spip_bridge import router as spip_router
 from .technology_registry import technology_catalog
-from .v5_features import router as v5_router
+from .v5_features import DataGridSearch, perform_datagrid_search, router as v5_router
 from .v6_features import (
     dispatch_event_to_v6_rules,
     process_next_action_request,
@@ -143,6 +143,7 @@ from .v6_data_jobs import (
     mark_data_job_failed,
     validate_data_job_parameters,
 )
+from .v6_legacy_rules import LEGACY_DATAGRID_ACTION, validate_legacy_datagrid_parameters
 from .script_runtime import (
     TERMINAL_STATUSES,
     ensure_spool_layout,
@@ -2718,18 +2719,24 @@ def claim_automated_data_job(
 
 async def execute_claimed_automated_data_job(job: dict[str, Any]) -> dict[str, Any]:
     try:
-        parameters = validate_data_job_parameters(job["parameters"])
-        unknown_sources = sorted(set(parameters["sources"]) - set(CONNECTORS))
-        if unknown_sources:
-            raise DataJobError(f"Sources non interrogeables: {unknown_sources}")
-    except DataJobError as exc:
+        legacy_datagrid = job["job_type"] == LEGACY_DATAGRID_ACTION
+        if legacy_datagrid:
+            parameters = validate_legacy_datagrid_parameters(job["parameters"])
+            sources = ["hdx"]
+        else:
+            parameters = validate_data_job_parameters(job["parameters"])
+            sources = parameters["sources"]
+            unknown_sources = sorted(set(sources) - set(CONNECTORS))
+            if unknown_sources:
+                raise DataJobError(f"Sources non interrogeables: {unknown_sources}")
+    except (DataJobError, ValueError) as exc:
         with database_connection(autocommit=False) as connection:
             return mark_data_job_failed(connection, job, str(exc), permanent=True)
 
     with database_connection(autocommit=False) as connection:
-        initialize_data_job_sources(connection, job, parameters["sources"])
+        initialize_data_job_sources(connection, job, sources)
 
-    for source in parameters["sources"]:
+    for source in sources:
         with database_connection(autocommit=False) as connection:
             if data_job_cancel_requested(connection, job["id"]):
                 finish_data_job_source(
@@ -2753,35 +2760,77 @@ async def execute_claimed_automated_data_job(job: dict[str, Any]) -> dict[str, A
                     )
             continue
         try:
-            acquisition = await execute_acquisition(
-                job["project_id"],
-                source,
-                parameters["query"],
-                parameters["result_limit"],
-                job["job_type"] == "data_refresh",
-                parameters=parameters["source_parameters"].get(source, {}),
-                automated_data_job_id=job["id"],
-                automated_data_job_source=source,
-            )
-            result = {
-                "acquisition_id": acquisition.acquisition_id,
-                "source": source,
-                "query": acquisition.query,
-                "retrieved_at": acquisition.retrieved_at.isoformat(),
-                "sha256": acquisition.sha256,
-                "item_count": acquisition.item_count,
-                "raw_path": acquisition.raw_path,
-                "downloads": acquisition.downloads,
-            }
-            with database_connection(autocommit=False) as connection:
-                finish_data_job_source(
-                    connection,
-                    job,
-                    source,
-                    "completed",
-                    result,
-                    acquisition_id=uuid.UUID(acquisition.acquisition_id),
+            if legacy_datagrid:
+                search = await perform_datagrid_search(
+                    job["project_id"],
+                    DataGridSearch(
+                        query=parameters["query"],
+                        dimensions=parameters["dimensions"],
+                        location=" ".join(parameters["locations"])[:160],
+                        rows=25,
+                    ),
                 )
+                refreshed = 0
+                if parameters["refresh_due_resources"]:
+                    started = datetime.now(UTC)
+                    locations = parameters["locations"]
+                    with database_connection(autocommit=False) as connection:
+                        update = connection.execute(
+                            """UPDATE resource_refresh_schedules s
+                               SET next_run_at=%s,updated_at=%s
+                               FROM local_resources r
+                               WHERE s.resource_id=r.id AND s.project_id=%s AND s.enabled=TRUE
+                                 AND r.expected_update_at IS NOT NULL AND r.expected_update_at<=%s
+                                 AND (r.geographic_scope IS NULL OR r.geographic_scope ILIKE ANY(%s))""",
+                            (
+                                started,
+                                started,
+                                job["project_id"],
+                                started,
+                                [f"%{item}%" for item in locations] or ["%"],
+                            ),
+                        )
+                        refreshed = update.rowcount
+                result = {
+                    "source": source,
+                    "query": search["query"],
+                    "datasets_found": search["count"],
+                    "metadata_records_updated": search["metadata_records_updated"],
+                    "coverage": search["coverage"],
+                    "refreshes_queued": refreshed,
+                }
+                with database_connection(autocommit=False) as connection:
+                    finish_data_job_source(connection, job, source, "completed", result)
+            else:
+                acquisition = await execute_acquisition(
+                    job["project_id"],
+                    source,
+                    parameters["query"],
+                    parameters["result_limit"],
+                    job["job_type"] == "data_refresh",
+                    parameters=parameters["source_parameters"].get(source, {}),
+                    automated_data_job_id=job["id"],
+                    automated_data_job_source=source,
+                )
+                result = {
+                    "acquisition_id": acquisition.acquisition_id,
+                    "source": source,
+                    "query": acquisition.query,
+                    "retrieved_at": acquisition.retrieved_at.isoformat(),
+                    "sha256": acquisition.sha256,
+                    "item_count": acquisition.item_count,
+                    "raw_path": acquisition.raw_path,
+                    "downloads": acquisition.downloads,
+                }
+                with database_connection(autocommit=False) as connection:
+                    finish_data_job_source(
+                        connection,
+                        job,
+                        source,
+                        "completed",
+                        result,
+                        acquisition_id=uuid.UUID(acquisition.acquisition_id),
+                    )
         except Exception as exc:  # Chaque source conserve son résultat et n'arrête pas les suivantes.
             detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
             with database_connection(autocommit=False) as connection:

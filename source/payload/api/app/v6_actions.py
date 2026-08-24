@@ -5,6 +5,11 @@ import uuid
 from typing import Any, Mapping
 
 from .v6_data_jobs import DataJobError, validate_data_job_parameters
+from .v6_legacy_rules import (
+    LEGACY_DATAGRID_ACTION,
+    LegacyRuleMigrationError,
+    validate_legacy_datagrid_parameters,
+)
 
 
 ACTION_POLICY: dict[str, dict[str, str]] = {
@@ -13,6 +18,7 @@ ACTION_POLICY: dict[str, dict[str, str]] = {
     "hdp_task": {"risk": "safe", "control": "automatic_within_limits"},
     "data_search": {"risk": "safe", "control": "automatic_within_limits"},
     "data_refresh": {"risk": "safe", "control": "automatic_within_limits"},
+    LEGACY_DATAGRID_ACTION: {"risk": "safe", "control": "automatic_within_limits"},
     "email_draft": {"risk": "preparatory", "control": "draft_only"},
     "spip_draft": {"risk": "preparatory", "control": "draft_only"},
     "python_script": {"risk": "external", "control": "manual_approval"},
@@ -106,6 +112,13 @@ def validate_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 raise ActionValidationError(
                     f"{path}: estimated_bytes doit être positif pour une actualisation"
                 )
+        if action_type == LEGACY_DATAGRID_ACTION:
+            try:
+                validate_legacy_datagrid_parameters(parameters)
+            except LegacyRuleMigrationError as exc:
+                raise ActionValidationError(f"{path}.parameters: {exc}") from exc
+            if _estimate(parameters, "estimated_requests", f"{path}.parameters") < 1:
+                raise ActionValidationError(f"{path}: estimated_requests doit couvrir HDX")
         normalized.append({"type": action_type, "parameters": dict(parameters), "limits": dict(limits)})
     return normalized
 

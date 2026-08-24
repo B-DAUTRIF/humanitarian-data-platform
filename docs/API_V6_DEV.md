@@ -18,7 +18,7 @@ comme une qualification du déploiement Internet.
 
 ## Routes V6
 
-Le jalon compte 58 chemins V6 et 65 couples méthode/chemin.
+Le jalon compte 59 chemins V6 et 66 couples méthode/chemin.
 
 | Méthode | Route | Domaine |
 |---|---|---|
@@ -53,6 +53,7 @@ Le jalon compte 58 chemins V6 et 65 couples méthode/chemin.
 | `GET`, `PUT` | `/api/v6/projects/{project_id}/data-policy` | Lire ou définir la politique de fraîcheur |
 | `POST` | `/api/v6/projects/{project_id}/rss/sources/{feed_source_id}/subscriptions` | Abonner le projet à un flux approuvé |
 | `GET`, `POST` | `/api/v6/projects/{project_id}/rules` | Lister ou créer les règles du projet |
+| `POST` | `/api/v6/projects/{project_id}/rules/migrate-legacy` | Prévisualiser ou confirmer le basculement transactionnel des règles V5 |
 | `POST` | `/api/v6/projects/{project_id}/rules/{definition_id}/evaluate` | Évaluer une version de règle |
 | `POST` | `/api/v6/projects/{project_id}/rules/{definition_id}/inheritance` | Décider une adoption ou surcharge |
 | `PUT` | `/api/v6/projects/{project_id}/sources/{source_id}/catalog-schedule` | Configurer une mise à jour de catalogue |

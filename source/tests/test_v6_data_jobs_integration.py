@@ -89,9 +89,10 @@ class AutomatedDataJobsPostgresIntegrationTest(unittest.TestCase):
         )
         for statement in statements:
             connection.execute(statement)
-        migration = next(item for item in MIGRATIONS if item.version == "6.0.0-012-data-job-workers")
-        for statement in migration.statements:
-            connection.execute(statement)
+        for version in ("6.0.0-012-data-job-workers", "6.0.0-013-legacy-rule-migration"):
+            migration = next(item for item in MIGRATIONS if item.version == version)
+            for statement in migration.statements:
+                connection.execute(statement)
 
     def _job(self, *, sources: list[str] | None = None, maximum: int = 3) -> uuid.UUID:
         job_id = uuid.uuid4()
@@ -133,6 +134,30 @@ class AutomatedDataJobsPostgresIntegrationTest(unittest.TestCase):
         first = self._claim()
         self.assertIsNotNone(first)
         self.assertIsNone(self._claim())
+
+    def test_legacy_datagrid_job_type_is_accepted_and_claimed(self) -> None:
+        job_id = uuid.uuid4()
+        parameters = {
+            "query": "cholera France",
+            "dimensions": ["affected-people"],
+            "locations": ["France"],
+            "refresh_due_resources": True,
+            "estimated_requests": 1,
+            "estimated_bytes": 0,
+            "estimated_duration_seconds": 45,
+        }
+        with psycopg.connect(self.database_url, autocommit=True) as connection:
+            connection.execute(
+                """INSERT INTO automated_data_jobs
+                   (id,project_id,request_id,job_type,parameters,status,created_at,updated_at)
+                   VALUES (%s,%s,%s,'legacy_datagrid_search_and_due_refresh',%s,'queued',%s,%s)""",
+                (job_id, self.project_id, uuid.uuid4(), Jsonb(parameters), NOW, NOW),
+            )
+        claimed = self._claim()
+        self.assertIsNotNone(claimed)
+        assert claimed is not None
+        self.assertEqual(claimed["id"], job_id)
+        self.assertEqual(claimed["job_type"], "legacy_datagrid_search_and_due_refresh")
 
     def test_operator_view_lists_jobs_without_optional_status_type_ambiguity(self) -> None:
         job_id = self._job(sources=["hdx"])

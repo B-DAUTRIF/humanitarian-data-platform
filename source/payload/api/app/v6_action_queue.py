@@ -12,7 +12,14 @@ from .v6_actions import action_status
 
 
 AUTOMATIC_ACTION_TYPES = frozenset(
-    {"notification", "classification", "hdp_task", "data_search", "data_refresh"}
+    {
+        "notification",
+        "classification",
+        "hdp_task",
+        "data_search",
+        "data_refresh",
+        "legacy_datagrid_search_and_due_refresh",
+    }
 )
 DRAFT_ACTION_TYPES = frozenset({"email_draft", "spip_draft"})
 EXECUTABLE_ACTION_TYPES = AUTOMATIC_ACTION_TYPES | DRAFT_ACTION_TYPES
@@ -240,7 +247,7 @@ def _create_effect(
             request_id,
         )
         return {"effect_type": "signal_classification", "effect_id": str(stored_id), "idempotent_replay": repeated}
-    if action_type in {"data_search", "data_refresh"}:
+    if action_type in {"data_search", "data_refresh", "legacy_datagrid_search_and_due_refresh"}:
         stored_id, repeated = _insert_idempotent(
             connection,
             """INSERT INTO automated_data_jobs

@@ -82,6 +82,12 @@ from .v6_rules import (
     rule_sha256,
     validate_rule_tree,
 )
+from .v6_legacy_rules import (
+    LEGACY_DATAGRID_ACTION,
+    LegacyRuleMigrationError,
+    materialize_legacy_datagrid_action,
+    migrate_legacy_signal_rules,
+)
 from .source_registry import connector_definition
 
 
@@ -152,6 +158,8 @@ def _event_from_row(row: tuple[Any, ...]) -> dict[str, Any]:
 def _maximum_window_hours(node: dict[str, Any]) -> float:
     if node["type"] == "group":
         return max((_maximum_window_hours(child) for child in node["children"]), default=1.0)
+    if node["type"] == "condition" and node.get("op") == "within_hours":
+        return float(node["value"])
     if node["type"] != "correlation":
         return 1.0
     if node["mode"] in {"count", "sequence", "absence"}:
@@ -193,6 +201,11 @@ class RuleTreeRequest(BaseModel):
 class RuleEvaluate(BaseModel):
     event_id: uuid.UUID
     simulate: bool = False
+
+
+class LegacyRuleMigrationRequest(BaseModel):
+    confirm: bool = False
+    actor: str = Field(default="local-operator", min_length=2, max_length=120)
 
 
 class RuleInheritanceDecision(BaseModel):
@@ -599,6 +612,20 @@ def create_project_rule(project_id: uuid.UUID, payload: RuleCreate) -> dict[str,
     return _create_rule("project", project_id, payload)
 
 
+@router.post("/projects/{project_id}/rules/migrate-legacy")
+def migrate_project_legacy_rules(
+    project_id: uuid.UUID, payload: LegacyRuleMigrationRequest
+) -> dict[str, Any]:
+    ensure_project(project_id)
+    try:
+        with db(autocommit=False) as connection:
+            return migrate_legacy_signal_rules(
+                connection, project_id, confirm=payload.confirm, actor=payload.actor
+            )
+    except LegacyRuleMigrationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/projects/{project_id}/rules")
 def list_rules(project_id: uuid.UUID) -> list[dict[str, Any]]:
     ensure_project(project_id)
@@ -933,7 +960,14 @@ def evaluate_stored_rule(project_id: uuid.UUID, definition_id: uuid.UUID, payloa
                 (project_id,),
             ).fetchone() or (100, 104_857_600, 300)
             for index, action in enumerate(actions):
-                status, reason = action_status(action, int(policy[0]), int(policy[1]), int(policy[2]))
+                effective_action = (
+                    materialize_legacy_datagrid_action(action, event)
+                    if action.get("type") == LEGACY_DATAGRID_ACTION
+                    else action
+                )
+                status, reason = action_status(
+                    effective_action, int(policy[0]), int(policy[1]), int(policy[2])
+                )
                 idempotency_key = _json_hash(
                     {
                         "project_id": str(project_id),
@@ -941,7 +975,7 @@ def evaluate_stored_rule(project_id: uuid.UUID, definition_id: uuid.UUID, payloa
                         "event_id": str(payload.event_id),
                         "input_sha256": input_sha,
                         "action_index": index,
-                        "action_type": action["type"],
+                        "action_type": effective_action["type"],
                     }
                 )
                 request_id = uuid.uuid4()
@@ -955,11 +989,11 @@ def evaluate_stored_rule(project_id: uuid.UUID, definition_id: uuid.UUID, payloa
                         request_id,
                         project_id,
                         evaluation_id,
-                        action["type"],
-                        ACTION_POLICY[action["type"]]["risk"],
+                        effective_action["type"],
+                        ACTION_POLICY[effective_action["type"]]["risk"],
                         status,
-                        Jsonb(action.get("parameters", {})),
-                        Jsonb(action.get("limits", {})),
+                        Jsonb(effective_action.get("parameters", {})),
+                        Jsonb(effective_action.get("limits", {})),
                         idempotency_key,
                         now,
                         reason,
@@ -968,7 +1002,7 @@ def evaluate_stored_rule(project_id: uuid.UUID, definition_id: uuid.UUID, payloa
                 action_requests.append(
                     {
                         "id": str(inserted[0]) if inserted else None,
-                        "type": action["type"],
+                        "type": effective_action["type"],
                         "status": status if inserted else "deduplicated",
                         "idempotency_key": idempotency_key,
                         "reason": reason,

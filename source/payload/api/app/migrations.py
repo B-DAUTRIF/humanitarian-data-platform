@@ -1463,6 +1463,14 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX IF NOT EXISTS automated_data_job_results_status_idx ON automated_data_job_results(job_id,status,source_id)",
         ),
     ),
+    Migration(
+        version="6.0.0-013-legacy-rule-migration",
+        description="Basculement transactionnel des règles de signaux V5 vers le moteur V6",
+        statements=(
+            "ALTER TABLE automated_data_jobs DROP CONSTRAINT IF EXISTS automated_data_jobs_job_type_check",
+            "ALTER TABLE automated_data_jobs ADD CONSTRAINT automated_data_jobs_job_type_check CHECK (job_type IN ('data_search','data_refresh','legacy_datagrid_search_and_due_refresh'))",
+        ),
+    ),
 )
 
 

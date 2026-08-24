@@ -28,6 +28,8 @@ CONDITION_OPERATORS = {
     "lte",
     "exists",
     "regex",
+    "within_hours",
+    "overlaps_text",
 }
 COMPARATORS = {"eq", "ne", "gt", "gte", "lt", "lte"}
 CORRELATION_MODES = {"count", "sequence", "absence", "trend"}
@@ -110,6 +112,12 @@ def _validate_node(node: Any, path: str, depth: int, counter: list[int]) -> dict
             raise RuleValidationError(f"{path}.op: opérateur non pris en charge")
         if operator != "exists" and "value" not in node:
             raise RuleValidationError(f"{path}.value: valeur requise")
+        if operator == "within_hours":
+            if field != "occurred_at":
+                raise RuleValidationError(f"{path}.field: occurred_at requis pour within_hours")
+            _positive_number(node.get("value"), f"{path}.value", maximum=MAX_WINDOW_HOURS)
+        if operator == "overlaps_text" and not isinstance(node.get("value"), list):
+            raise RuleValidationError(f"{path}.value: liste requise pour overlaps_text")
         return {"type": "condition", "field": field, "op": operator, "value": node.get("value")}
 
     if node_type == "correlation":
@@ -303,13 +311,28 @@ def _compare(left: Any, operator: str, right: Any) -> bool:
             return re.search(right, str(left), flags=re.IGNORECASE) is not None
         except re.error:
             return False
+    if operator == "overlaps_text":
+        if not isinstance(right, (list, tuple, set)):
+            return False
+        observed_text = " ".join(str(item) for item in left) if isinstance(left, (list, tuple, set)) else str(left)
+        observed_text = observed_text.casefold()
+        return any(str(item).casefold() in observed_text for item in right)
     return False
 
 
-def _condition_result(node: Mapping[str, Any], event: Mapping[str, Any]) -> tuple[bool, dict[str, Any]]:
+def _condition_result(
+    node: Mapping[str, Any], event: Mapping[str, Any], now: datetime
+) -> tuple[bool, dict[str, Any]]:
     exists, observed = _resolve_field(event, str(node["field"]))
     operator = str(node["op"])
-    matched = exists == bool(node.get("value", True)) if operator == "exists" else exists and _compare(observed, operator, node.get("value"))
+    if operator == "within_hours" and exists:
+        try:
+            observed_at = _event_time({"occurred_at": observed})
+            matched = now - timedelta(hours=float(node["value"])) <= observed_at <= now
+        except (TypeError, ValueError):
+            matched = False
+    else:
+        matched = exists == bool(node.get("value", True)) if operator == "exists" else exists and _compare(observed, operator, node.get("value"))
     return matched, {
         "type": "condition",
         "field": node["field"],
@@ -456,7 +479,7 @@ def _evaluate_node(
     now: datetime,
 ) -> tuple[bool, dict[str, Any]]:
     if node["type"] == "condition":
-        return _condition_result(node, event)
+        return _condition_result(node, event, now)
     if node["type"] == "correlation":
         return _correlation_result(node, event, events, now)
     results = [_evaluate_node(child, event, events, now) for child in node["children"]]
@@ -499,7 +522,11 @@ def legacy_signal_rule_tree(rule: Mapping[str, Any]) -> dict[str, Any]:
     locations = list(rule.get("locations") or [])
     themes = list(rule.get("themes") or [])
     if locations:
-        children.append({"type": "condition", "field": "locations", "op": "in", "value": locations})
+        children.append({"type": "condition", "field": "locations", "op": "overlaps_text", "value": locations})
     if themes:
-        children.append({"type": "condition", "field": "themes", "op": "in", "value": themes})
+        children.append({"type": "condition", "field": "themes", "op": "overlaps_text", "value": themes})
+    lookback_hours = int(rule.get("lookback_hours", 168))
+    children.append(
+        {"type": "condition", "field": "occurred_at", "op": "within_hours", "value": lookback_hours}
+    )
     return validate_rule_tree({"type": "group", "operator": "AND", "children": children})

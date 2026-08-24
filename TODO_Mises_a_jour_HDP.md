@@ -44,7 +44,9 @@ Windows/Docker, SPIP/HTTPS, mails réseau ou connecteurs réels.
 - [x] permettre l'héritage d'une règle globale, la surcharge par projet et la
   proposition explicite d'une nouvelle version sans remplacement automatique ;
 - [x] fournir une simulation sans action avec preuve condition par condition ;
-- [ ] migrer les règles 5.x plates vers un arbre compatible sans perte.
+- [x] migrer les règles 5.x plates vers un arbre compatible sans perte : aperçu
+  obligatoire, seuils/comparaison textuelle/fenêtre/gabarit/action HDX conservés,
+  puis désactivation V5 et liens d'audit dans une transaction unique.
 
 ### HDP6-011 — Corrélations temporelles
 

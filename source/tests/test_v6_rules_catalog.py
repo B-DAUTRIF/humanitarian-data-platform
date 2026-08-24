@@ -32,6 +32,13 @@ from app.v6_rules import (  # noqa: E402
     rule_sha256,
     validate_rule_tree,
 )
+from app.v6_legacy_rules import (  # noqa: E402
+    LEGACY_DATAGRID_ACTION,
+    LegacyRuleMigrationError,
+    legacy_datagrid_action,
+    materialize_legacy_datagrid_action,
+    validate_legacy_query_template,
+)
 from app.v6_storage import (  # noqa: E402
     StorageValidationError,
     content_addressed_path,
@@ -162,11 +169,51 @@ class RuleEngineTest(unittest.TestCase):
 
     def test_legacy_rule_is_converted_without_losing_thresholds(self) -> None:
         tree = legacy_signal_rule_tree(
-            {"min_severity": 0.4, "min_confidence": 0.6, "locations": ["France"], "themes": ["cholera"]}
+            {
+                "min_severity": 0.4,
+                "min_confidence": 0.6,
+                "locations": ["France"],
+                "themes": ["cholera"],
+                "lookback_hours": 24,
+            }
         )
         self.assertEqual(tree["operator"], "AND")
         self.assertTrue(evaluate_rule(tree, event("x", 0), [event("x", 0)], now=NOW)["matched"])
+        self.assertFalse(evaluate_rule(tree, event("old", 48), [event("old", 48)], now=NOW)["matched"])
+        self.assertTrue(
+            evaluate_rule(
+                tree,
+                event("casefold", 0, locations=["Nord de la FRANCE"], themes=["Cholera outbreak"]),
+                [],
+                now=NOW,
+            )["matched"]
+        )
+        self.assertEqual(tree["children"][-1]["op"], "within_hours")
         self.assertEqual(len(rule_sha256(tree)), 64)
+
+
+class LegacyRuleMigrationHelperTest(unittest.TestCase):
+    def test_legacy_action_materializes_only_the_three_historical_fields(self) -> None:
+        action = legacy_datagrid_action(
+            {
+                "query_template": "{title} {themes} {locations}",
+                "data_grid_dimensions": ["affected-people"],
+                "refresh_due_resources": True,
+            }
+        )
+        materialized = materialize_legacy_datagrid_action(
+            action,
+            {"title": "Alerte", "themes": ["cholera"], "locations": ["France", "Mayotte"]},
+        )
+        self.assertEqual(materialized["type"], LEGACY_DATAGRID_ACTION)
+        self.assertEqual(materialized["parameters"]["query"], "Alerte cholera France Mayotte")
+        self.assertEqual(materialized["parameters"]["locations"], ["France", "Mayotte"])
+        self.assertTrue(materialized["parameters"]["refresh_due_resources"])
+
+    def test_legacy_template_rejects_unknown_fields_and_formatting(self) -> None:
+        for invalid in ("{unknown}", "{title!r}", "{themes:>10}", "{title"):
+            with self.subTest(invalid=invalid), self.assertRaises(LegacyRuleMigrationError):
+                validate_legacy_query_template(invalid)
 
 
 def base_contract() -> dict:
@@ -621,6 +668,17 @@ class CatalogAndCacheTest(unittest.TestCase):
 
 
 class ActionPolicyTest(unittest.TestCase):
+    def test_migrated_legacy_datagrid_action_is_safe_bounded_and_validated(self) -> None:
+        action = legacy_datagrid_action(
+            {
+                "query_template": "{title} {themes} {locations}",
+                "data_grid_dimensions": ["affected-people"],
+                "refresh_due_resources": True,
+            }
+        )
+        self.assertEqual(validate_actions([action])[0]["type"], LEGACY_DATAGRID_ACTION)
+        self.assertEqual(action_status(action, 10, 1024, 60), ("queued", "automatic_within_limits"))
+
     def test_safe_action_is_queued_only_within_project_limits(self) -> None:
         action = {
             "type": "data_refresh",

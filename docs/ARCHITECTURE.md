@@ -60,6 +60,12 @@ résultat, ses tentatives et son acquisition idempotente. Les effets externes
 restent soumis à validation ou désactivés tant que leur infrastructure n'est
 pas qualifiée.
 
+Les règles de signaux V5 peuvent être prévisualisées puis basculées
+transactionnellement. La version V6 conserve les seuils, la comparaison
+textuelle historique des thèmes et lieux, la fenêtre temporelle, le gabarit de
+requête et l'action HDX ; la règle V5 n'est désactivée qu'après création de ces
+objets et de leurs liens d'audit.
+
 Les sauvegardes globale, projet et signaux sont prévalidées avant toute
 restauration. Leur recette automatisée crée une base PostgreSQL 16 neuve,
 refuse les collisions, exécute une transaction unique puis supprime la base
