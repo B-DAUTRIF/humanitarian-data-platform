@@ -10,7 +10,8 @@
   l'équivalent V6, avec relance idempotente et événement de chronologie ;
 - exécution de l'action historique par le travailleur borné, sans ouvrir
   l'egress des runners ;
-- 276 tests recensés localement, dont 21 recettes PostgreSQL réservées à la CI.
+- 276/276 tests réussis à distance sur PostgreSQL 16, sans test ignoré ; Linux,
+  sécurité statique et Windows restent verts.
 
 ## 6.0.0-dev - cohérence documentaire et recommandation de cache - 24 août 2026
 

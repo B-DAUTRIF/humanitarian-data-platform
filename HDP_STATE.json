@@ -5,7 +5,7 @@
   "working_version": "6.0.0-dev",
   "latest_qualified_release": "5.0.2",
   "previous_working_line": "5.2",
-  "state_generated_at": "2026-08-24T13:59:10+02:00",
+  "state_generated_at": "2026-08-24T14:05:11+02:00",
   "status": "implementation_in_progress",
   "basis": {
     "archive": "HumanitarianDataPlatform_Archive_complete_v5.0.2.zip",
@@ -13,7 +13,7 @@
     "remote_reference_branch": "develop/5.2",
     "remote_reference_commit": "d0257a402a958439f6f28e6b3de2290112bfbbfc",
     "working_branch": "codex/v6-build-20260821",
-    "local_worktree_base_commit": "317cf6bc1a549c0204f96d98bcc8dc2240bb6eae",
+    "local_worktree_base_commit": "56aeb46cc8cd1b5c23f9ee40bf20c8f86fc61583",
     "pull_request": 8,
     "remote_published": true,
     "remote_publication_scope": "development branch and draft pull request only",
@@ -25,7 +25,7 @@
     "local_operator_tracking_candidate_published": true,
     "local_windows_uninstall_candidate_published": true,
     "local_cache_policy_candidate_published": true,
-    "local_legacy_rule_migration_candidate_published": false
+    "local_legacy_rule_migration_candidate_published": true
   },
   "baseline_tests": {
     "executed": 276,
@@ -82,7 +82,7 @@
     "action_workers": "internal action worker remotely verified by seven real PostgreSQL 16 tests covering claim, idempotence, approval, cancellation, retry, stale lease and external-action refusal",
     "data_job_workers": "five integration tests remotely verified on PostgreSQL 16 for claim, per-source completion, retry preservation, cancellation and unfiltered operator listing; live connector calls remain separately unqualified",
     "operator_tracking": "two integration tests remotely verified on PostgreSQL 16 for multi-attempt history, decisions, drafts, associated jobs and unfiltered project lists",
-    "legacy_rule_migration": "local contracts cover preview, strict template materialization, historical text overlap and lookback; two PostgreSQL recipes remain reserved for remote CI",
+    "legacy_rule_migration": "preview, strict template materialization, historical text overlap, lookback, linked atomic switch and idempotent replay verified on PostgreSQL 16",
     "windows_uninstall": "source contracts require a valid installer marker, compose down without volumes, exact payload deletion and target-verified shortcut removal; MSVC strict build passed and real Windows recipe remains pending",
     "backup_restore": "global, signal and project restores are remotely verified with exact compatibility, dependency order, confined assets, collision rollback and mandatory temporary-database deletion",
     "not_executed": [
@@ -96,13 +96,13 @@
     ]
   },
   "remote_ci_evidence": {
-    "head_commit": "a97f515a2e4a8a9df270e6621ca3be08af359a6e",
-    "validation_workflow_run": 32723335956,
-    "windows_workflow_run": 32723336009,
-    "python_tests": "271 passed, no skipped tests",
-    "workflow_artifact_id": 9518571636,
-    "workflow_artifact_sha256": "0da4bd21291602a1269ea3b2d5a59d8825e691a654afb793f4c88690e41e90f4",
-    "artifact_expires_at": "2026-09-23T11:44:20Z",
+    "head_commit": "56aeb46cc8cd1b5c23f9ee40bf20c8f86fc61583",
+    "validation_workflow_run": 32724838720,
+    "windows_workflow_run": 32724838669,
+    "python_tests": "276 passed, no skipped tests",
+    "workflow_artifact_id": 9519106605,
+    "workflow_artifact_sha256": "da9ff40e0a427e9a7d7fa96c1554cc23d3c3b0195eb8f53e52ddd5bbb52dc52b",
+    "artifact_expires_at": "2026-09-23T12:01:49Z",
     "temporary_global_restore_integration": "passed on PostgreSQL 16 with collision non-deletion proof",
     "temporary_signals_restore_integration": "passed on PostgreSQL 16 with dependency-order and collision rollback proof",
     "temporary_project_restore_integration": "passed on PostgreSQL 16 with transitive graph, physical asset and child-collision rollback proof",

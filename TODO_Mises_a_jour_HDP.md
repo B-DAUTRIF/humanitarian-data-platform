@@ -14,10 +14,10 @@ Une case n'est cochée que si le code, les migrations, les tests et la preuve de
 non-régression correspondants existent.
 
 **Dernier jalon distant validé au 24 août 2026** : le commit fonctionnel
-`a97f515a2e4a…` a réussi 271 tests
+`56aeb46cc8cd…` a réussi 276 tests
 Python sans test ignoré sur PostgreSQL 16. La validation Linux, les images R,
 les contrôles JavaScript/OpenAPI/sécurité et la construction Windows MSVC
-stricte sont verts. Le schéma compte 172 routes, 136 chemins OpenAPI et 58
+stricte sont verts. Le schéma compte 173 routes, 137 chemins OpenAPI et 59
 chemins `/api/v6`. Ces preuves ne remplacent pas les recettes interactives
 Windows/Docker, SPIP/HTTPS, mails réseau ou connecteurs réels.
 
