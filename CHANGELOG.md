@@ -1,5 +1,19 @@
 # Journal des versions
 
+## 6.0.0-dev - file d'actions interne - 24 août 2026
+
+- séparation effective entre évaluation, demande et travailleur asynchrone ;
+- réclamation PostgreSQL concurrente avec bail, `SKIP LOCKED`, reprise des baux
+  expirés, tentatives bornées et temporisation progressive ;
+- annulation transactionnelle avant tout effet et nouvelle vérification des
+  limites projet au moment de l'exécution ;
+- effets idempotents pour notifications internes, classifications, tâches HDP,
+  brouillons et mise en file des recherches/actualisations ;
+- scripts Python/R, webhooks et tout effet réseau maintenus hors des exécuteurs
+  automatiques ;
+- 255 tests recensés localement, dont sept nouvelles recettes PostgreSQL
+  réservées à la CI distante.
+
 ## 6.0.0-dev - fermeture transitive des projets - 24 août 2026
 
 - remplacement de l'inventaire manuel du projet par une fermeture transitive

@@ -19,6 +19,14 @@ from pydantic import BaseModel, Field
 from psycopg.types.json import Jsonb
 
 from .v6_actions import ACTION_POLICY, ActionValidationError, action_status, validate_actions
+from .v6_action_queue import (
+    ActionQueueError,
+    cancel_action_request,
+    claim_next_action_request,
+    decide_action_request,
+    execute_claimed_action_request,
+    mark_action_request_failed,
+)
 from .v6_catalog import (
     CAPABILITIES,
     ENDPOINT_STATES,
@@ -374,6 +382,117 @@ class DatabaseBackupCreate(BaseModel):
 class DatabaseBackupTemporaryRestoreRequest(BaseModel):
     confirmation: str = Field(pattern="^RESTORE_IN_TEMPORARY_DATABASE$")
     actor: str = Field(default="local-operator", min_length=2, max_length=120)
+
+
+class ActionDecisionRequest(BaseModel):
+    decision: str = Field(pattern="^(approve|reject)$")
+    reason: str = Field(min_length=2, max_length=2000)
+    actor: str = Field(default="local-operator", min_length=2, max_length=120)
+
+
+class ActionCancelRequest(BaseModel):
+    reason: str = Field(min_length=2, max_length=2000)
+    actor: str = Field(default="local-operator", min_length=2, max_length=120)
+
+
+class ActionWorkerRunRequest(BaseModel):
+    worker_id: str = Field(default="manual-local-worker", min_length=2, max_length=120)
+    lease_seconds: int = Field(default=120, ge=5, le=900)
+
+
+def _action_queue_http_error(exc: ActionQueueError) -> HTTPException:
+    status_code = 404 if "introuvable" in str(exc).casefold() else 409
+    return HTTPException(status_code=status_code, detail=str(exc))
+
+
+def process_next_action_request(
+    worker_id: str = "hdp-scheduler-action-worker",
+    lease_seconds: int = 120,
+) -> dict[str, Any] | None:
+    with db(autocommit=False) as connection:
+        request = claim_next_action_request(
+            connection,
+            worker_id,
+            lease_seconds=lease_seconds,
+        )
+    if request is None:
+        return None
+    try:
+        with db(autocommit=False) as connection:
+            return execute_claimed_action_request(connection, request)
+    except Exception as exc:
+        with db(autocommit=False) as connection:
+            return mark_action_request_failed(connection, request, str(exc))
+
+
+@router.get("/projects/{project_id}/actions")
+def project_action_requests(
+    project_id: uuid.UUID,
+    status: str | None = Query(default=None, pattern="^(queued|pending_approval|approved|rejected|running|cancel_requested|cancelled|completed|failed|blocked)$"),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[dict[str, Any]]:
+    ensure_project(project_id)
+    with db() as connection:
+        rows = connection.execute(
+            """SELECT r.id,r.evaluation_id,r.action_type,r.risk_level,r.status,r.parameters,
+                      r.limits,r.idempotency_key,r.requested_at,r.decided_at,r.decided_by,
+                      r.decision_reason,r.attempt_count,r.max_attempts,r.next_attempt_at,
+                      r.cancel_requested_at,r.cancelled_at,r.completed_at,r.last_error,
+                      x.status,x.started_at,x.finished_at,x.output_sha256,x.result,x.error
+               FROM action_requests r
+               LEFT JOIN LATERAL (
+                    SELECT status,started_at,finished_at,output_sha256,result,error
+                    FROM action_executions WHERE request_id=r.id
+                    ORDER BY attempt_number DESC LIMIT 1
+               ) x ON TRUE
+               WHERE r.project_id=%s AND (%s IS NULL OR r.status=%s)
+               ORDER BY r.requested_at DESC,r.id LIMIT %s""",
+            (project_id, status, status, limit),
+        ).fetchall()
+    keys = (
+        "id", "evaluation_id", "action_type", "risk_level", "status", "parameters",
+        "limits", "idempotency_key", "requested_at", "decided_at", "decided_by",
+        "decision_reason", "attempt_count", "max_attempts", "next_attempt_at",
+        "cancel_requested_at", "cancelled_at", "completed_at", "last_error",
+        "last_execution_status", "last_started_at", "last_finished_at",
+        "last_output_sha256", "last_result", "last_execution_error",
+    )
+    return [dict(zip(keys, row, strict=True)) for row in rows]
+
+
+@router.post("/actions/{request_id}/decision")
+def decide_queued_action(request_id: uuid.UUID, payload: ActionDecisionRequest) -> dict[str, Any]:
+    try:
+        with db(autocommit=False) as connection:
+            return decide_action_request(
+                connection,
+                request_id,
+                payload.decision,
+                payload.actor,
+                payload.reason,
+            )
+    except ActionQueueError as exc:
+        raise _action_queue_http_error(exc) from exc
+
+
+@router.post("/actions/{request_id}/cancel")
+def cancel_queued_action(request_id: uuid.UUID, payload: ActionCancelRequest) -> dict[str, Any]:
+    try:
+        with db(autocommit=False) as connection:
+            return cancel_action_request(
+                connection,
+                request_id,
+                payload.actor,
+                payload.reason,
+            )
+    except ActionQueueError as exc:
+        raise _action_queue_http_error(exc) from exc
+
+
+@router.post("/action-worker/run-once")
+def run_action_worker_once(payload: ActionWorkerRunRequest) -> dict[str, Any]:
+    result = process_next_action_request(payload.worker_id, payload.lease_seconds)
+    return result or {"status": "idle"}
 
 
 @router.get("/rule-schema")
@@ -2582,6 +2701,11 @@ def create_database_backup(payload: DatabaseBackupCreate) -> dict[str, Any]:
                         "rule_evaluations": "SELECT * FROM rule_evaluations WHERE project_id=%s AND triggering_event_id=ANY(%s)",
                         "action_requests": """SELECT r.* FROM action_requests r JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
                         "action_executions": """SELECT x.* FROM action_executions x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
+                        "internal_notifications": """SELECT x.* FROM internal_notifications x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
+                        "project_tasks": """SELECT x.* FROM project_tasks x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
+                        "signal_classifications": "SELECT * FROM signal_classifications WHERE project_id=%s AND signal_event_id=ANY(%s)",
+                        "action_drafts": """SELECT x.* FROM action_drafts x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
+                        "automated_data_jobs": """SELECT x.* FROM automated_data_jobs x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
                         "rule_definitions": """SELECT DISTINCT d.* FROM rule_definitions d JOIN rule_evaluations e ON e.definition_id=d.id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
                         "rule_versions": """SELECT DISTINCT v.* FROM rule_versions v JOIN rule_evaluations e ON e.rule_version_id=v.id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
                     }

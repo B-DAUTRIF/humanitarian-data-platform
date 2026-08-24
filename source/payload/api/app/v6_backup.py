@@ -39,6 +39,11 @@ SIGNALS_RESTORE_TABLES = {
     "rule_evaluations",
     "action_requests",
     "action_executions",
+    "internal_notifications",
+    "project_tasks",
+    "signal_classifications",
+    "action_drafts",
+    "automated_data_jobs",
 }
 SENSITIVE_FIELD_MARKERS = (
     "authorization",

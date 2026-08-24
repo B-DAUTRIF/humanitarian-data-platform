@@ -127,7 +127,11 @@ from .sql_workspace import ALLOWED_SQL_RELATIONS, validate_readonly_sql
 from .spip_bridge import router as spip_router
 from .technology_registry import technology_catalog
 from .v5_features import router as v5_router
-from .v6_features import dispatch_event_to_v6_rules, router as v6_router
+from .v6_features import (
+    dispatch_event_to_v6_rules,
+    process_next_action_request,
+    router as v6_router,
+)
 from .script_runtime import (
     TERMINAL_STATUSES,
     ensure_spool_layout,
@@ -2690,6 +2694,9 @@ async def scheduler_loop() -> None:
                     await fetch_rss_subscription(rss_subscription_id)
                 except Exception:
                     pass
+                continue
+            action_result = await asyncio.to_thread(process_next_action_request)
+            if action_result:
                 continue
         except asyncio.CancelledError:
             raise

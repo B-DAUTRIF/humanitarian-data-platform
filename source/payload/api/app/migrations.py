@@ -1331,6 +1331,104 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX IF NOT EXISTS mail_project_links_project_idx ON mail_project_links(project_id, linked_at DESC)",
         ),
     ),
+    Migration(
+        version="6.0.0-011-action-workers",
+        description="File d'actions idempotente, reprise, annulation et effets internes auditables",
+        statements=(
+            "ALTER TABLE action_requests DROP CONSTRAINT IF EXISTS action_requests_status_check",
+            """ALTER TABLE action_requests ADD CONSTRAINT action_requests_status_check
+               CHECK (status IN ('queued','pending_approval','approved','rejected','running',
+                                 'cancel_requested','cancelled','completed','failed','blocked'))""",
+            "ALTER TABLE action_requests ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count BETWEEN 0 AND 100)",
+            "ALTER TABLE action_requests ADD COLUMN IF NOT EXISTS max_attempts INTEGER NOT NULL DEFAULT 3 CHECK (max_attempts BETWEEN 1 AND 10)",
+            "ALTER TABLE action_requests ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ",
+            "ALTER TABLE action_requests ADD COLUMN IF NOT EXISTS lease_owner TEXT",
+            "ALTER TABLE action_requests ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ",
+            "ALTER TABLE action_requests ADD COLUMN IF NOT EXISTS cancel_requested_at TIMESTAMPTZ",
+            "ALTER TABLE action_requests ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ",
+            "ALTER TABLE action_requests ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ",
+            "ALTER TABLE action_requests ADD COLUMN IF NOT EXISTS last_error TEXT",
+            "ALTER TABLE action_executions DROP CONSTRAINT IF EXISTS action_executions_status_check",
+            """ALTER TABLE action_executions ADD CONSTRAINT action_executions_status_check
+               CHECK (status IN ('running','completed','failed','blocked','cancelled'))""",
+            "ALTER TABLE action_executions ADD COLUMN IF NOT EXISTS worker_id TEXT",
+            """
+            CREATE TABLE IF NOT EXISTS internal_notifications (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                request_id UUID NOT NULL UNIQUE REFERENCES action_requests(id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL DEFAULT '',
+                severity TEXT NOT NULL CHECK (severity IN ('info','warning','critical')),
+                created_at TIMESTAMPTZ NOT NULL,
+                read_at TIMESTAMPTZ
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS project_tasks (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                request_id UUID NOT NULL UNIQUE REFERENCES action_requests(id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                priority TEXT NOT NULL CHECK (priority IN ('low','normal','high','urgent')),
+                status TEXT NOT NULL CHECK (status IN ('open','in_progress','completed','cancelled')),
+                created_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS signal_classifications (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                request_id UUID NOT NULL UNIQUE REFERENCES action_requests(id) ON DELETE CASCADE,
+                signal_event_id UUID NOT NULL REFERENCES signal_events(id) ON DELETE CASCADE,
+                labels JSONB NOT NULL DEFAULT '[]'::jsonb,
+                created_at TIMESTAMPTZ NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS action_drafts (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                request_id UUID NOT NULL UNIQUE REFERENCES action_requests(id) ON DELETE CASCADE,
+                channel TEXT NOT NULL CHECK (channel IN ('email','spip')),
+                status TEXT NOT NULL CHECK (status IN ('draft','approved','rejected','withdrawn')),
+                document JSONB NOT NULL,
+                content_sha256 CHAR(64) NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL,
+                decided_at TIMESTAMPTZ,
+                decided_by TEXT,
+                decision_reason TEXT NOT NULL DEFAULT ''
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS automated_data_jobs (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                request_id UUID NOT NULL UNIQUE REFERENCES action_requests(id) ON DELETE CASCADE,
+                job_type TEXT NOT NULL CHECK (job_type IN ('data_search','data_refresh')),
+                parameters JSONB NOT NULL DEFAULT '{}'::jsonb,
+                status TEXT NOT NULL CHECK (status IN ('queued','running','completed','partial','failed','cancelled')),
+                result JSONB NOT NULL DEFAULT '{}'::jsonb,
+                error TEXT,
+                created_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL,
+                started_at TIMESTAMPTZ,
+                finished_at TIMESTAMPTZ
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS action_requests_worker_idx ON action_requests(status,next_attempt_at,requested_at)",
+            "CREATE INDEX IF NOT EXISTS action_requests_lease_idx ON action_requests(lease_expires_at) WHERE status IN ('running','cancel_requested')",
+            "CREATE INDEX IF NOT EXISTS action_executions_request_idx ON action_executions(request_id,attempt_number DESC)",
+            "CREATE INDEX IF NOT EXISTS internal_notifications_project_idx ON internal_notifications(project_id,created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS project_tasks_project_idx ON project_tasks(project_id,status,updated_at DESC)",
+            "CREATE INDEX IF NOT EXISTS signal_classifications_signal_idx ON signal_classifications(signal_event_id,created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS action_drafts_project_idx ON action_drafts(project_id,status,updated_at DESC)",
+            "CREATE INDEX IF NOT EXISTS automated_data_jobs_worker_idx ON automated_data_jobs(status,created_at)",
+        ),
+    ),
 )
 
 

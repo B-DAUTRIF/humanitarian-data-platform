@@ -19,6 +19,7 @@ class V6StaticContractTest(unittest.TestCase):
         cls.rules = (API_APP / "v6_rules.py").read_text(encoding="utf-8")
         cls.catalog = (API_APP / "v6_catalog.py").read_text(encoding="utf-8")
         cls.actions = (API_APP / "v6_actions.py").read_text(encoding="utf-8")
+        cls.action_queue = (API_APP / "v6_action_queue.py").read_text(encoding="utf-8")
         cls.storage = (API_APP / "v6_storage.py").read_text(encoding="utf-8")
         cls.openapi = (API_APP / "v6_openapi.py").read_text(encoding="utf-8")
         cls.backup = (API_APP / "v6_backup.py").read_text(encoding="utf-8")
@@ -32,6 +33,7 @@ class V6StaticContractTest(unittest.TestCase):
             ("v6_rules.py", self.rules),
             ("v6_catalog.py", self.catalog),
             ("v6_actions.py", self.actions),
+            ("v6_action_queue.py", self.action_queue),
             ("v6_storage.py", self.storage),
             ("v6_openapi.py", self.openapi),
             ("v6_backup.py", self.backup),
@@ -85,6 +87,10 @@ class V6StaticContractTest(unittest.TestCase):
             '/projects/{project_id}/rules/{definition_id}/inheritance',
             '/timeline',
             '/projects/{project_id}/timeline',
+            '/projects/{project_id}/actions',
+            '/actions/{request_id}/decision',
+            '/actions/{request_id}/cancel',
+            '/action-worker/run-once',
         ):
             self.assertIn(route, self.features)
 
@@ -149,6 +155,11 @@ class V6StaticContractTest(unittest.TestCase):
             "mail_messages",
             "mail_attachments",
             "mail_project_links",
+            "internal_notifications",
+            "project_tasks",
+            "signal_classifications",
+            "action_drafts",
+            "automated_data_jobs",
         ):
             self.assertIn(f"CREATE TABLE IF NOT EXISTS {table}", self.migrations)
         self.assertIn('version="6.0.0-003-connector-activation"', self.migrations)
@@ -159,6 +170,24 @@ class V6StaticContractTest(unittest.TestCase):
         self.assertIn('version="6.0.0-008-passkey-operator-auth"', self.migrations)
         self.assertIn('version="6.0.0-009-spip-publication-bridge"', self.migrations)
         self.assertIn('version="6.0.0-010-public-mail-ingestion"', self.migrations)
+        self.assertIn('version="6.0.0-011-action-workers"', self.migrations)
+
+    def test_action_worker_is_transactional_idempotent_and_network_closed(self) -> None:
+        for marker in (
+            "FOR UPDATE SKIP LOCKED",
+            "recover_stale_action_requests",
+            "cancel_requested",
+            "lease_expires_at",
+            "automatic_request_limit",
+            "ON CONFLICT (request_id) DO NOTHING",
+            "action.retry_scheduled",
+            "action.completed",
+        ):
+            self.assertIn(marker, self.action_queue)
+        self.assertIn("EXECUTABLE_ACTION_TYPES", self.action_queue)
+        self.assertNotIn('"webhook"}', self.action_queue)
+        self.assertNotIn("download_public_file", self.action_queue)
+        self.assertNotIn("subprocess", self.action_queue)
 
     def test_cache_materialization_is_content_addressed_and_versioned(self) -> None:
         for marker in (

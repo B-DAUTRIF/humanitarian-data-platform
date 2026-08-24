@@ -58,7 +58,7 @@ remplace pas la recette Windows/Docker du déploiement cible.
 
 ### HDP6-012 — Actions, limites et idempotence
 
-- [ ] séparer évaluation, demande d'action et exécution asynchrone ;
+- [x] séparer évaluation, demande d'action et exécution asynchrone ;
 - [x] réserver une clé d'idempotence avant tout effet externe ;
 - [ ] automatiser seulement notifications internes, classements, tâches HDP et
   recherches/actualisations dans les limites configurées ;
@@ -70,6 +70,16 @@ remplace pas la recette Windows/Docker du déploiement cible.
   `pending_approval` ;
 - [x] conserver l'indisponibilité réelle des runners et de l'egress tant que
   l'infrastructure n'est pas intégrée.
+- [x] réclamer les demandes concurrentes avec `FOR UPDATE SKIP LOCKED`, bail,
+  reprise des baux expirés, tentatives bornées et temporisation progressive ;
+- [x] annuler une demande en attente ou en cours sans effet partiel et réévaluer
+  les limites projet dans la transaction qui précède l'effet ;
+- [x] produire idempotemment les notifications, classements, tâches et brouillons
+  internes, puis mettre en file les recherches et actualisations ;
+- [ ] exécuter les travaux `automated_data_jobs` avec les connecteurs réels,
+  quotas de source, reprise, annulation et résultat partiel par source ;
+- [ ] exposer dans l'interface le suivi des tentatives, décisions, brouillons et
+  travaux de données associés.
 
 ### HDP6-020 — Inventaire exhaustif des connecteurs
 

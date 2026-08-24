@@ -113,6 +113,17 @@ disproportionnée et créerait deux moteurs techniques difficiles à qualifier.
   statut et clé d'idempotence.
 - `action_executions` conserve le résultat, les erreurs, les empreintes et la
   chronologie.
+- Le travailleur interne réclame une seule demande par transaction avec
+  `FOR UPDATE SKIP LOCKED`, pose un bail borné et reprend les baux expirés sans
+  exécuter deux fois le même effet. Chaque effet possède en plus une contrainte
+  unique sur `request_id`.
+- Les notifications, classifications et tâches sont des objets HDP internes. Les
+  courriels et publications ne deviennent que des brouillons. Les recherches et
+  actualisations sont mises dans `automated_data_jobs` ; leur connecteur réseau
+  reste un travail distinct non activé par ce lot.
+- Une annulation observée avant l'effet termine la tentative sans créer d'objet.
+  Les quotas du projet sont relus sous verrou juste avant l'effet et peuvent
+  replacer la demande en `pending_approval`.
 
 Une règle est un arbre composé de groupes logiques et de feuilles `condition` ou
 `correlation`. Le schéma est versionné, strict, borné et validé côté serveur.
@@ -201,6 +212,9 @@ envoi automatique n'est inclus.
 
 - Réserver la clé d'idempotence avant notification, téléchargement ou webhook.
 - Utiliser une file de travaux pour séparer évaluation et exécution.
+- Ne jamais faire réclamer par le travailleur interne les types `python_script`,
+  `r_script` ou `webhook`, même après une approbation enregistrée ; leur exécuteur
+  sécurisé reste indisponible.
 - Conserver `network_mode: none` pour les runners tant qu'aucun egress réel,
   contrôlé et auditable n'est disponible.
 - Versionner le code Python/R et vérifier son SHA-256 avant exécution.
