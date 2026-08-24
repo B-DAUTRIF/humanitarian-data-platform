@@ -24,6 +24,12 @@ EML publics, ainsi qu'un travailleur PostgreSQL pour les actions internes. Les
 sept recettes de ce travailleur passent sur PostgreSQL 16 distant ; ces éléments
 ne constituent pas encore une livraison installable.
 
+Le parcours des règles propose désormais un constructeur visuel de groupes ET/OU,
+conditions et corrélations. Chaque modification actualise une formule textuelle et
+l'arbre JSON utilisé pour la validation et la simulation. L'édition visuelle est
+bornée à cinq niveaux ; un arbre valide plus profond reste disponible dans le mode
+JSON avancé et demeure soumis à la limite serveur de douze niveaux.
+
 Trois distinctions restent essentielles : l'importeur exhaustif d'un contrat
 ne signifie pas que les inventaires officiels des dix sources sont déjà tous
 peuplés ; une planification enregistrée ne signifie pas encore que son adaptateur
@@ -56,9 +62,10 @@ des connecteurs et restaurations restent séparées.
    source, version technique ou forçage utilisateur. Une politique unique
    s'applique à tout le projet. Le défaut fonctionnel validé est
    `stale_if_error`.
-9. Le mode de calcul de l'ancienneté maximale reste à arbitrer. Le modèle doit
-   prendre en charge durée fixe, multiple de la fréquence source, fréquence avec
-   plafond projet et décision manuelle, sans imposer silencieusement un défaut.
+9. Le modèle prend en charge durée fixe, multiple de la fréquence source,
+   fréquence avec plafond projet et décision manuelle. L'interface recommande
+   trois fréquences source avec un plafond de sept jours, sans modifier un projet
+   resté en arbitrage manuel avant enregistrement opérateur.
 10. La cible SPIP est un serveur Internet : un opérateur unique utilise une
     passkey ou une clé de sécurité ; chaque visiteur possède un compte nominatif.
     Seules des données publiques sont admises et chaque publication est validée

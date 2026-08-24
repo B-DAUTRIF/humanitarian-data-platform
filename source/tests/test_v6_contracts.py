@@ -334,6 +334,29 @@ class V6StaticContractTest(unittest.TestCase):
             self.assertIn(f'id="{element_id}"', self.html)
         self.assertIn("button('Paramétrages'", self.html)
 
+    def test_visual_rule_builder_keeps_formula_json_and_depth_limit_explicit(self) -> None:
+        for element_id in (
+            "v6-rule-builder",
+            "v6-rule-formula",
+            "v6-rule-advanced",
+            "v6-rule-load-json",
+            "v6-rule-reset",
+        ):
+            self.assertIn(f'id="{element_id}"', self.html)
+        for marker in (
+            "V6_RULE_UI_MAX_DEPTH=5",
+            "function v6RuleFormula",
+            "function v6RuleDepth",
+            "function loadV6RuleBuilderFromJson",
+            "depth>V6_RULE_UI_MAX_DEPTH",
+            "édition visuelle verrouillée",
+            "syncV6RulePresentation",
+            "Ajouter un sous-groupe",
+            "Ajouter une corrélation",
+        ):
+            self.assertIn(marker, self.html)
+        self.assertIn("MAX_RULE_DEPTH = 12", self.rules)
+
     def test_ui_proposes_a_bounded_frequency_based_stale_policy_without_silent_migration(self) -> None:
         self.assertIn("Fréquence × 3, plafond 7 jours — recommandé", self.html)
         self.assertIn("recommendationRequired?3:''", self.html)

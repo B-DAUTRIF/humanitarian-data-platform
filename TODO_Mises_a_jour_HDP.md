@@ -168,9 +168,9 @@ Windows/Docker, SPIP/HTTPS, mails réseau ou connecteurs réels.
   Documentation et API ;
 - [x] présenter listes, cases à cocher et menus pour les valeurs contraintes,
   et champs typés pour les valeurs libres ;
-- [ ] fournir un constructeur visuel ET/OU, une formule textuelle, un arbre et une
+- [x] fournir un constructeur visuel ET/OU, une formule textuelle, un arbre et une
   simulation avant enregistrement ;
-- [ ] limiter l'interface à environ cinq niveaux d'imbrication tout en laissant le
+- [x] limiter l'interface à cinq niveaux d'imbrication tout en laissant le
   moteur et le schéma de données gérer les arbres valides plus profonds.
 
 ### HDP6-060 — Chronologie, sécurité et exploitation

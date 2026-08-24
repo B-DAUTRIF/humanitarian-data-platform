@@ -1,5 +1,16 @@
 # Journal des versions
 
+## 6.0.0-dev - constructeur visuel de règles - 24 août 2026
+
+- composition visuelle de groupes ET/OU, conditions et quatre modes de
+  corrélation, sans exécution d'action pendant la simulation ;
+- formule textuelle et arbre JSON actualisés depuis un même état d'interface ;
+- mode JSON avancé rechargeable explicitement dans le constructeur ;
+- édition visuelle bornée à cinq niveaux sans réduire la limite serveur de douze
+  niveaux ni empêcher l'enregistrement d'un arbre profond valide ;
+- contrat statique de non-régression ajouté ; recette ergonomique réelle encore
+  distincte de la validation automatisée.
+
 ## 6.0.0-dev - migration transactionnelle des règles V5 - 24 août 2026
 
 - prévisualisation sans mutation des règles de signaux plates encore présentes ;

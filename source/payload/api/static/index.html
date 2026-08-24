@@ -97,6 +97,23 @@
     .schema-grid .wide { grid-column:1 / -1; }
     .schema-help { margin:4px 0 0; color:var(--muted); font-size:11px; line-height:1.35; }
     .request-preview { margin:14px 0 0; padding:12px; min-height:90px; overflow:auto; white-space:pre-wrap; border:1px solid var(--line); border-radius:9px; background:#06101d; color:#bae6fd; }
+    .rule-builder { display:grid; gap:10px; margin:8px 0 14px; }
+    .rule-node { border:1px solid var(--line); border-left:3px solid var(--accent2); border-radius:10px; padding:11px; background:#09172a; }
+    .rule-node[data-node-type="condition"] { border-left-color:var(--accent); }
+    .rule-node[data-node-type="correlation"] { border-left-color:var(--warn); }
+    .rule-node.locked { border-left-color:var(--danger); color:var(--muted); }
+    .rule-node-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+    .rule-node-title { color:#dbeafe; font-size:12px; font-weight:750; }
+    .rule-node-children { display:grid; gap:9px; margin:10px 0 0 12px; }
+    .rule-node-controls { display:flex; gap:6px; flex-wrap:wrap; }
+    .rule-node-controls button { width:auto; margin:0; padding:6px 8px; border-radius:7px; border:1px solid var(--line); color:var(--text); background:#172c47; font-size:11px; }
+    .rule-node-controls button.danger { color:#fecdd3; background:#3b1d2a; }
+    .rule-node-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0 8px; }
+    .rule-node-fields label { margin-top:7px; }
+    .rule-formula { display:block; min-height:48px; margin:7px 0 14px; padding:11px; border:1px solid var(--line); border-radius:9px; background:#06101d; color:#bae6fd; font:12px ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .rule-formula.unsynced { color:var(--warn); }
+    .rule-advanced { border:1px solid var(--line); border-radius:9px; padding:10px; background:#081421; }
+    .rule-advanced summary { cursor:pointer; color:#bae6fd; font-size:12px; }
     .filters { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin:12px 0 16px; }
     #map-canvas { height:560px; border:1px solid var(--line); border-radius:12px; background:#081421; color:#111; }
     .map-fallback { height:100%; display:grid; place-items:center; color:var(--muted); padding:20px; text-align:center; }
@@ -119,7 +136,7 @@
     .sql-table th,.sql-table td { border:1px solid var(--line); padding:8px; text-align:left; vertical-align:top; max-width:420px; overflow-wrap:anywhere; }
     .sql-table th { background:#13243a; position:sticky; top:0; }
     .table-wrap { overflow:auto; max-height:520px; }
-    @media(max-width:900px) { .grid,.grid.equal { grid-template-columns:1fr; } .header-inner { align-items:flex-start; padding:15px 0; flex-direction:column; } .context { min-width:0; width:100%; } header { position:static; } .metrics { grid-template-columns:1fr 1fr; } .filters { grid-template-columns:1fr 1fr; } .link-grid { grid-template-columns:1fr 1fr; } }
+    @media(max-width:900px) { .grid,.grid.equal { grid-template-columns:1fr; } .header-inner { align-items:flex-start; padding:15px 0; flex-direction:column; } .context { min-width:0; width:100%; } header { position:static; } .metrics { grid-template-columns:1fr 1fr; } .filters { grid-template-columns:1fr 1fr; } .link-grid { grid-template-columns:1fr 1fr; } .rule-node-fields { grid-template-columns:1fr 1fr; } }
     @media(max-width:680px) { .source-grid { grid-template-columns:1fr; } }
   </style>
 </head>
@@ -197,11 +214,17 @@
     <div class="grid equal">
       <div class="card">
         <h2>Constructeur de règles ET/OU — V6</h2>
-        <p class="intro">L'arbre JSON permet les groupes ET/OU imbriqués et les corrélations de comptage, séquence, absence ou tendance. La validation et la simulation n'exécutent aucune action.</p>
+        <p class="intro">Composez les groupes ET/OU et les corrélations visuellement. La formule et l'arbre JSON restent synchronisés ; validation et simulation n'exécutent aucune action.</p>
         <form id="v6-rule-form">
           <label for="v6-rule-name">Nom de la règle</label><input id="v6-rule-name" required minlength="2" maxlength="120" value="Vigilance sanitaire combinée">
-          <label for="v6-rule-tree">Arbre de conditions</label>
-          <textarea id="v6-rule-tree" maxlength="200000" spellcheck="false">{
+          <div class="item-head"><label>Construction visuelle — cinq niveaux maximum</label><div class="rule-node-controls"><button id="v6-rule-reset" type="button">Nouvel arbre ET</button></div></div>
+          <div id="v6-rule-builder" class="rule-builder" aria-label="Constructeur visuel de règle"></div>
+          <label for="v6-rule-formula">Formule textuelle synchronisée</label>
+          <output id="v6-rule-formula" class="rule-formula" aria-live="polite"></output>
+          <details id="v6-rule-advanced" class="rule-advanced">
+            <summary>Mode JSON avancé — moteur limité à douze niveaux</summary>
+            <label for="v6-rule-tree">Arbre de conditions</label>
+            <textarea id="v6-rule-tree" maxlength="200000" spellcheck="false">{
   "type": "group",
   "operator": "AND",
   "children": [
@@ -213,6 +236,9 @@
     {"type": "correlation", "mode": "count", "window_hours": 168, "comparator": "gte", "threshold": 3}
   ]
 }</textarea>
+            <p class="schema-help">Une modification JSON n'altère pas le constructeur tant que vous ne la chargez pas. Un arbre dépassant cinq niveaux reste validable et enregistrable ici, mais son édition visuelle est verrouillée.</p>
+            <div class="actions"><button id="v6-rule-load-json" class="secondary" type="button">Charger le JSON dans le constructeur</button></div>
+          </details>
           <label>Actions proposées</label>
           <div class="source-picker" id="v6-rule-actions">
             <label class="check"><input class="v6-action" type="checkbox" value="notification" checked> Notification</label>
@@ -936,6 +962,122 @@
   function readV6RuleTree(){try{return JSON.parse(q('#v6-rule-tree').value);}catch(error){throw new Error(`Arbre JSON invalide : ${error.message}`);}}
   function readV6Event(){try{return JSON.parse(q('#v6-rule-event').value);}catch(error){throw new Error(`Événement JSON invalide : ${error.message}`);}}
   function readV6Actions(){return [...document.querySelectorAll('.v6-action:checked')].map(input=>({type:input.value,parameters:{},limits:{}}));}
+  const V6_RULE_UI_MAX_DEPTH=5;
+  const V6_RULE_OPERATORS=['eq','ne','contains','not_contains','in','not_in','gt','gte','lt','lte','exists','regex','within_hours','overlaps_text'];
+  const V6_RULE_COMPARATORS=['eq','ne','gt','gte','lt','lte'];
+  const V6_RULE_OPERATOR_LABELS={eq:'égal à',ne:'différent de',contains:'contient',not_contains:'ne contient pas',in:'appartient à',not_in:'n’appartient pas à',gt:'>',gte:'≥',lt:'<',lte:'≤',exists:'existe',regex:'expression régulière',within_hours:'dans les dernières heures',overlaps_text:'recoupe le texte'};
+  const v6RuleDefaultCondition=()=>({type:'condition',field:'severity',op:'gte',value:.5});
+  const v6RuleDefaultGroup=()=>({type:'group',operator:'AND',children:[v6RuleDefaultCondition()]});
+  function v6RuleDefaultCorrelation(mode='count'){
+    if(mode==='sequence')return {type:'correlation',mode,window_hours:168,steps:[v6RuleDefaultCondition(),{type:'condition',field:'confidence',op:'gte',value:.7}]};
+    if(mode==='absence')return {type:'correlation',mode,window_hours:24,expected:v6RuleDefaultCondition()};
+    if(mode==='trend')return {type:'correlation',mode,field:'severity',aggregation:'mean',current_window_hours:24,baseline_window_hours:168,reference:'rolling',comparator:'gte',threshold:.2};
+    return {type:'correlation',mode:'count',window_hours:168,comparator:'gte',threshold:3};
+  }
+  function replaceV6RuleNode(target,replacement){Object.keys(target).forEach(key=>delete target[key]);Object.assign(target,replacement);}
+  function v6RuleDepth(node){
+    if(!node||typeof node!=='object')return 1;
+    let nested=[];
+    if(node.type==='group')nested=node.children||[];
+    if(node.type==='correlation'){
+      if(node.filter)nested.push(node.filter);
+      if(node.expected)nested.push(node.expected);
+      if(Array.isArray(node.steps))nested.push(...node.steps);
+    }
+    return 1+(nested.length?Math.max(...nested.map(v6RuleDepth)):0);
+  }
+  function v6RuleValueText(value){return typeof value==='string'?JSON.stringify(value):JSON.stringify(value??null);}
+  function v6RuleFormula(node){
+    if(!node||typeof node!=='object')return 'NŒUD INVALIDE';
+    if(node.type==='group')return `(${(node.children||[]).map(v6RuleFormula).join(node.operator==='OR'?' OU ':' ET ')})`;
+    if(node.type==='condition')return `${node.field||'?'} ${V6_RULE_OPERATOR_LABELS[node.op]||node.op||'?'} ${v6RuleValueText(node.value)}`;
+    if(node.type==='correlation'){
+      if(node.mode==='count')return `NOMBRE SUR ${node.window_hours} h${node.filter?' DE '+v6RuleFormula(node.filter):''} ${V6_RULE_OPERATOR_LABELS[node.comparator]||node.comparator} ${node.threshold}`;
+      if(node.mode==='sequence')return `SÉQUENCE SUR ${node.window_hours} h (${(node.steps||[]).map(v6RuleFormula).join(' → ')})`;
+      if(node.mode==='absence')return `ABSENCE SUR ${node.window_hours} h DE ${v6RuleFormula(node.expected)}`;
+      if(node.mode==='trend')return `TENDANCE ${node.aggregation}(${node.field||'événements'}) ${node.comparator} ${node.threshold} · ${node.current_window_hours} h / ${node.baseline_window_hours} h`;
+      return `CORRÉLATION ${node.mode||'inconnue'}`;
+    }
+    return `NŒUD ${node.type||'inconnu'}`;
+  }
+  function v6RuleSelect(values,current,onChange,labels={}){const select=document.createElement('select');values.forEach(value=>{const option=document.createElement('option');option.value=value;option.textContent=labels[value]||value;option.selected=value===current;select.appendChild(option);});select.addEventListener('change',()=>onChange(select.value));return select;}
+  function v6RuleInput(value,onChange,{type='text',step=null,min=null}={}){const input=document.createElement('input');input.type=type;input.value=value??'';if(step!==null)input.step=step;if(min!==null)input.min=min;input.addEventListener('input',()=>onChange(type==='number'?Number(input.value):input.value));return input;}
+  function v6RuleField(container,label,control){const wrapper=document.createElement('div');const caption=document.createElement('label');caption.textContent=label;wrapper.append(caption,control);container.appendChild(wrapper);return control;}
+  function syncV6RulePresentation(){
+    q('#v6-rule-tree').value=JSON.stringify(state.v6RuleBuilderTree,null,2);
+    const formula=q('#v6-rule-formula');formula.textContent=v6RuleFormula(state.v6RuleBuilderTree);formula.classList.remove('unsynced');
+  }
+  function rerenderV6RuleBuilder(){syncV6RulePresentation();renderV6RuleBuilder();}
+  function renderV6RuleCondition(node,body){
+    const fields=document.createElement('div');fields.className='rule-node-fields';
+    v6RuleField(fields,'Champ',v6RuleInput(node.field,value=>{node.field=value;syncV6RulePresentation();}));
+    v6RuleField(fields,'Opérateur',v6RuleSelect(V6_RULE_OPERATORS,node.op,value=>{node.op=value;node.field=value==='within_hours'?'occurred_at':node.field;node.value=value==='exists'?true:['in','not_in','overlaps_text'].includes(value)?[]:['gt','gte','lt','lte','within_hours'].includes(value)?1:'';rerenderV6RuleBuilder();},V6_RULE_OPERATOR_LABELS));
+    let valueControl;
+    if(node.op==='exists')valueControl=v6RuleSelect(['true','false'],String(Boolean(node.value)),value=>{node.value=value==='true';syncV6RulePresentation();},{true:'oui',false:'non'});
+    else if(['in','not_in','overlaps_text'].includes(node.op))valueControl=v6RuleInput(Array.isArray(node.value)?node.value.join(', '):'',value=>{node.value=value.split(',').map(item=>item.trim()).filter(Boolean);syncV6RulePresentation();});
+    else if(['gt','gte','lt','lte','within_hours'].includes(node.op)||typeof node.value==='number')valueControl=v6RuleInput(node.value,value=>{node.value=value;syncV6RulePresentation();},{type:'number',step:'any'});
+    else if(typeof node.value==='boolean')valueControl=v6RuleSelect(['true','false'],String(node.value),value=>{node.value=value==='true';syncV6RulePresentation();},{true:'vrai',false:'faux'});
+    else valueControl=v6RuleInput(node.value,value=>{node.value=value;syncV6RulePresentation();});
+    v6RuleField(fields,node.op==='exists'?'Présence':'Valeur',valueControl);body.appendChild(fields);
+  }
+  function renderV6RuleCorrelation(node,body,depth){
+    const fields=document.createElement('div');fields.className='rule-node-fields';
+    const modeSelect=v6RuleSelect(['count','sequence','absence','trend'],node.mode,value=>{replaceV6RuleNode(node,v6RuleDefaultCorrelation(value));rerenderV6RuleBuilder();},{count:'comptage',sequence:'séquence',absence:'absence',trend:'tendance'});
+    [...modeSelect.options].forEach(option=>{if(depth>=V6_RULE_UI_MAX_DEPTH&&['sequence','absence'].includes(option.value))option.disabled=true;});
+    v6RuleField(fields,'Corrélation',modeSelect);
+    if(node.mode!=='trend')v6RuleField(fields,'Fenêtre (heures)',v6RuleInput(node.window_hours,value=>{node.window_hours=value;syncV6RulePresentation();},{type:'number',step:'any',min:'0.1'}));
+    if(node.mode==='count'){
+      v6RuleField(fields,'Comparateur',v6RuleSelect(V6_RULE_COMPARATORS,node.comparator,value=>{node.comparator=value;syncV6RulePresentation();},V6_RULE_OPERATOR_LABELS));
+      v6RuleField(fields,'Seuil',v6RuleInput(node.threshold,value=>{node.threshold=value;syncV6RulePresentation();},{type:'number',step:'any',min:'0.1'}));
+    }
+    if(node.mode==='trend'){
+      v6RuleField(fields,'Champ',v6RuleInput(node.field||'',value=>{node.field=value;syncV6RulePresentation();}));
+      v6RuleField(fields,'Agrégation',v6RuleSelect(['mean','sum','min','max','count'],node.aggregation,value=>{node.aggregation=value;syncV6RulePresentation();},{mean:'moyenne',sum:'somme',min:'minimum',max:'maximum',count:'nombre'}));
+      v6RuleField(fields,'Fenêtre actuelle (h)',v6RuleInput(node.current_window_hours,value=>{node.current_window_hours=value;syncV6RulePresentation();},{type:'number',step:'any',min:'0.1'}));
+      v6RuleField(fields,'Référence (h)',v6RuleInput(node.baseline_window_hours,value=>{node.baseline_window_hours=value;syncV6RulePresentation();},{type:'number',step:'any',min:'0.1'}));
+      v6RuleField(fields,'Type de référence',v6RuleSelect(['rolling','fixed'],node.reference,value=>{node.reference=value;if(value==='fixed'&&typeof node.baseline_value!=='number')node.baseline_value=0;else if(value==='rolling')delete node.baseline_value;rerenderV6RuleBuilder();},{rolling:'glissante',fixed:'fixe'}));
+      v6RuleField(fields,'Comparateur',v6RuleSelect(V6_RULE_COMPARATORS,node.comparator,value=>{node.comparator=value;syncV6RulePresentation();},V6_RULE_OPERATOR_LABELS));
+      v6RuleField(fields,'Seuil',v6RuleInput(node.threshold,value=>{node.threshold=value;syncV6RulePresentation();},{type:'number',step:'any'}));
+      if(node.reference==='fixed')v6RuleField(fields,'Valeur de référence',v6RuleInput(node.baseline_value,value=>{node.baseline_value=value;syncV6RulePresentation();},{type:'number',step:'any'}));
+    }
+    body.appendChild(fields);
+    const nested=document.createElement('div');nested.className='rule-node-children';
+    if(node.mode==='sequence'){
+      (node.steps||[]).forEach((step,index)=>nested.appendChild(renderV6RuleNode(step,depth+1,()=>{if(node.steps.length<=2)return;node.steps.splice(index,1);rerenderV6RuleBuilder();},node.steps.length<=2)));
+      if(depth<V6_RULE_UI_MAX_DEPTH){const controls=document.createElement('div');controls.className='rule-node-controls';controls.append(button('Ajouter une étape',()=>{node.steps.push(v6RuleDefaultCondition());rerenderV6RuleBuilder();}));nested.appendChild(controls);}
+    }else if(node.mode==='absence'&&node.expected)nested.appendChild(renderV6RuleNode(node.expected,depth+1,null));
+    else if(['count','trend'].includes(node.mode)){
+      if(node.filter)nested.appendChild(renderV6RuleNode(node.filter,depth+1,()=>{delete node.filter;rerenderV6RuleBuilder();}));
+      else if(depth<V6_RULE_UI_MAX_DEPTH){const controls=document.createElement('div');controls.className='rule-node-controls';controls.append(button('Ajouter un filtre',()=>{node.filter=v6RuleDefaultCondition();rerenderV6RuleBuilder();}));nested.appendChild(controls);}
+    }
+    if(nested.childElementCount)body.appendChild(nested);
+  }
+  function renderV6RuleNode(node,depth,remove,removalDisabled=false){
+    const wrapper=document.createElement('div');wrapper.className='rule-node';wrapper.dataset.nodeType=node.type||'unknown';
+    const head=document.createElement('div');head.className='rule-node-head';const title=document.createElement('span');title.className='rule-node-title';title.textContent=`Niveau ${depth} · ${node.type==='group'?'groupe':node.type==='condition'?'condition':node.type==='correlation'?'corrélation':'nœud inconnu'}`;
+    const controls=document.createElement('div');controls.className='rule-node-controls';
+    if(remove){const removeButton=button('Retirer',remove,'danger');removeButton.disabled=removalDisabled;controls.appendChild(removeButton);}
+    head.append(title,controls);wrapper.appendChild(head);const body=document.createElement('div');wrapper.appendChild(body);
+    if(node.type==='group'){
+      const fields=document.createElement('div');fields.className='rule-node-fields';v6RuleField(fields,'Opérateur du groupe',v6RuleSelect(['AND','OR'],node.operator,value=>{node.operator=value;syncV6RulePresentation();},{AND:'ET — toutes les conditions',OR:'OU — au moins une condition'}));body.appendChild(fields);
+      if(depth<V6_RULE_UI_MAX_DEPTH){controls.prepend(button('Ajouter une condition',()=>{node.children.push(v6RuleDefaultCondition());rerenderV6RuleBuilder();}));controls.prepend(button('Ajouter une corrélation',()=>{node.children.push(v6RuleDefaultCorrelation());rerenderV6RuleBuilder();}));}
+      if(depth+2<=V6_RULE_UI_MAX_DEPTH)controls.prepend(button('Ajouter un sous-groupe',()=>{node.children.push(v6RuleDefaultGroup());rerenderV6RuleBuilder();}));
+      const children=document.createElement('div');children.className='rule-node-children';(node.children||[]).forEach((child,index)=>children.appendChild(renderV6RuleNode(child,depth+1,()=>{if(node.children.length<=1)return;node.children.splice(index,1);rerenderV6RuleBuilder();},node.children.length<=1)));body.appendChild(children);
+    }else if(node.type==='condition')renderV6RuleCondition(node,body);
+    else if(node.type==='correlation')renderV6RuleCorrelation(node,body,depth);
+    else{wrapper.classList.add('locked');body.textContent='Ce type de nœud reste disponible dans le mode JSON avancé.';}
+    return wrapper;
+  }
+  function renderV6RuleBuilder(){
+    const container=q('#v6-rule-builder');container.innerHTML='';const depth=v6RuleDepth(state.v6RuleBuilderTree);state.v6RuleBuilderLocked=depth>V6_RULE_UI_MAX_DEPTH;
+    if(state.v6RuleBuilderLocked){const locked=document.createElement('div');locked.className='rule-node locked';locked.textContent=`Arbre de ${depth} niveaux : édition visuelle verrouillée au-delà de ${V6_RULE_UI_MAX_DEPTH}. Le JSON avancé reste modifiable, validable et enregistrable.`;container.appendChild(locked);return;}
+    container.appendChild(renderV6RuleNode(state.v6RuleBuilderTree,1,null));
+  }
+  function loadV6RuleBuilderFromJson(announce=true){
+    try{state.v6RuleBuilderTree=readV6RuleTree();syncV6RulePresentation();renderV6RuleBuilder();const depth=v6RuleDepth(state.v6RuleBuilderTree);if(announce)setStatus('#v6-rule-status',depth>V6_RULE_UI_MAX_DEPTH?`Arbre chargé : ${depth} niveaux. Édition JSON avancée conservée ; édition visuelle limitée à ${V6_RULE_UI_MAX_DEPTH}.`:`Arbre chargé dans le constructeur · ${depth} niveau(x).`);}
+    catch(error){setStatus('#v6-rule-status',error.message,true);}
+  }
+  loadV6RuleBuilderFromJson(false);
   function renderV6Rules(items){state.v6Rules=items;const container=q('#v6-rule-list');container.innerHTML='';if(!items.length)return empty(container,'Aucune règle V6 dans le projet.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=`${item.scope} · v${item.version_number}`;head.append(title,pill);const detail=document.createElement('small');detail.textContent=`${item.rule_tree.operator||item.rule_tree.type} · ${(item.actions||[]).map(action=>action.type).join(', ')||'aucune action'} · SHA-256 ${item.sha256}`;card.append(head,detail);container.appendChild(card);});}
   function renderV6Policy(policy){state.v6Policy=policy;const recommendationRequired=policy.arbitration_required||policy.max_stale_mode==='manual';q('#v6-stale-policy').value=policy.stale_policy||'stale_if_error';q('#v6-stale-mode').value=recommendationRequired?'frequency_with_project_cap':policy.max_stale_mode;q('#v6-stale-fixed').value=policy.fixed_duration_seconds||'';q('#v6-stale-multiple').value=policy.frequency_multiple||(recommendationRequired?3:'');q('#v6-stale-cap').value=policy.project_cap_seconds||(recommendationRequired?604800:'');setStatus('#v6-policy-status',recommendationRequired?'Recommandation proposée : trois fois la fréquence publiée, avec un plafond de 7 jours. Le projet reste en arbitrage manuel jusqu’à l’enregistrement.':'Politique active et applicable à tout le projet.');}
   async function loadV6Workspace(){if(!state.projectId)return;try{const [rules,policy]=await Promise.all([api(`/api/v6/projects/${state.projectId}/rules`),api(`/api/v6/projects/${state.projectId}/data-policy`)]);renderV6Rules(rules);renderV6Policy(policy);}catch(error){setStatus('#v6-rule-status',error.message,true);}}
@@ -1013,6 +1155,9 @@
   q('#action-operations-refresh').addEventListener('click',loadActionOperations);
   q('#action-status-filter').addEventListener('change',loadActionOperations);
   q('#data-job-status-filter').addEventListener('change',loadActionOperations);
+  q('#v6-rule-reset').addEventListener('click',()=>{if(!confirm('Remplacer le constructeur actuel par un nouvel arbre ET ?'))return;state.v6RuleBuilderTree=v6RuleDefaultGroup();rerenderV6RuleBuilder();setStatus('#v6-rule-status','Nouvel arbre ET prêt ; aucune règle enregistrée.');});
+  q('#v6-rule-load-json').addEventListener('click',()=>loadV6RuleBuilderFromJson(true));
+  q('#v6-rule-tree').addEventListener('input',()=>{q('#v6-rule-formula').classList.add('unsynced');q('#v6-rule-formula').textContent='JSON avancé modifié — chargez-le dans le constructeur pour resynchroniser la formule.';setStatus('#v6-rule-status','Le JSON avancé a changé. Validez-le directement ou chargez-le dans le constructeur visuel.');});
   q('#v6-rule-validate').addEventListener('click',async()=>{try{const data=await api('/api/v6/rules/validate',{method:'POST',body:JSON.stringify({rule_tree:readV6RuleTree()})});q('#v6-rule-proof').textContent=JSON.stringify(data.rule_tree,null,2);setStatus('#v6-rule-status',`Arbre valide · SHA-256 ${data.sha256}`);}catch(error){setStatus('#v6-rule-status',error.message,true);}});
   q('#v6-rule-simulate').addEventListener('click',async()=>{try{const event=readV6Event();const data=await api('/api/v6/rules/simulate',{method:'POST',body:JSON.stringify({rule_tree:readV6RuleTree(),event,events:[event],now:event.occurred_at})});q('#v6-rule-proof').textContent=JSON.stringify(data,null,2);setStatus('#v6-rule-status',data.matched?'Simulation positive ; aucune action exécutée.':'Simulation négative ; aucune action exécutée.');}catch(error){setStatus('#v6-rule-status',error.message,true);}});
   q('#v6-rule-form').addEventListener('submit',async event=>{event.preventDefault();try{const data=await api(`/api/v6/projects/${state.projectId}/rules`,{method:'POST',body:JSON.stringify({name:q('#v6-rule-name').value,description:'Règle créée dans le constructeur HDP 6',rule_tree:readV6RuleTree(),actions:readV6Actions()})});setStatus('#v6-rule-status',`Règle versionnée créée · ${data.sha256}`);await loadV6Workspace();}catch(error){setStatus('#v6-rule-status',error.message,true);}});
