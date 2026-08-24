@@ -292,14 +292,11 @@ preuves ne remplacent pas la recette Windows/Docker du déploiement cible.
 ### HDP6-130 — Méthode de développement guidée
 
 Dernier passage du jalon : **réussi localement et à distance le 24 août 2026**
-après qualification du travailleur d'actions interne. Les 257 tests distants
-passent sur PostgreSQL 16 sans test ignoré ; les treize tests d'intégration
-PostgreSQL sont seulement ignorés sur l'hôte local dépourvu de serveur. La
-recette du déploiement cible reste distincte.
-
-Le candidat suivant recense **265 tests** : 248 passent localement et dix-sept
-recettes PostgreSQL sont ignorées, dont quatre nouvelles pour les travaux de
-données. Il ne sera déclaré vérifié qu'après la CI PostgreSQL complète.
+après qualification des travailleurs d'actions et de travaux de données. Les
+265 tests distants passent sur PostgreSQL 16 sans test ignoré ; les dix-sept
+tests d'intégration PostgreSQL sont seulement ignorés sur l'hôte local dépourvu
+de serveur. Les appels connecteurs réels et la recette du déploiement cible
+restent des qualifications distinctes.
 
 - [x] traiter les descriptions fonctionnelles comme source du besoin et traduire
   chaque lot en options techniques, effets, risques et critères d'acceptation ;

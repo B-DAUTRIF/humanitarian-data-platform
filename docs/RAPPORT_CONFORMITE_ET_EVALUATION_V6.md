@@ -27,7 +27,7 @@ Les statuts employés sont :
 | Refonte en plugin SPIP avec site équivalent | Partiel / non qualifié | passerelle `hdp-spip/1.0`, brouillons approuvés manuellement, plugin SPIP 4.2–4.4 | recette PHP/SPIP, comptes visiteurs, déploiement Internet, équivalence écran par écran |
 | Règles combinant ET et OU | Réalisé pour le moteur | arbre strict imbriqué, simulation, versionnement, tests AND/OR | constructeur visuel complet et migration des anciennes règles plates |
 | Corrélations entre événements | Réalisé pour le moteur | comptage, séquence, absence, variation/tendance fixe ou glissante | essais de charge et scénarios métier représentatifs |
-| Actions automatiques contrôlées | Partiel avancé / travailleur interne vérifié | travailleur d'actions vérifié ; candidat de travaux de données avec sources explicites, bail, reprise ciblée, annulation entre sources, résultats partiels et acquisition unique ; 265 tests locaux dont 17 recettes PostgreSQL reportées | exécuter les quatre nouvelles recettes PostgreSQL, qualifier les appels connecteurs réels, l'interface et les exécuteurs externes séparés |
+| Actions automatiques contrôlées | Partiel avancé / travailleurs internes vérifiés | travailleur d'actions et travaux de données vérifiés sur PostgreSQL 16 ; sources explicites, bail, reprise ciblée, annulation entre sources, résultats partiels et acquisition unique ; 265/265 tests distants | qualifier les appels connecteurs réels, l'interface et les exécuteurs externes séparés |
 | Règles globales héritées/surchargeables | Réalisé | versions proposées, adoption/rejet, surcharge/restauration par projet | recette multi-projets et ergonomie de comparaison des versions |
 | Catalogue central de toutes les métadonnées | Partiel | schéma V6, brut immuable, normalisation, lignée, confiance, dérive | peupler et vérifier les inventaires officiels de toutes les sources |
 | Tous les endpoints officiels et tous leurs paramètres | Partiel | import OpenAPI 3/Swagger 2 et activation progressive | contrats officiels complets des dix sources, champs observés et preuves datées |
@@ -72,8 +72,9 @@ mise en production Internet ni à une veille sanitaire déclarée exhaustive.
 
 1. L'absence d'inventaires officiels complets peut donner une interface riche
    sans garantir que tous les paramètres et champs des sources sont disponibles.
-2. Le travailleur interne est vérifié, mais `automated_data_jobs` ne doit pas
-   ouvrir un chemin réseau ou synchrone non audité avant ses propres recettes.
+2. Les deux travailleurs internes sont vérifiés sur PostgreSQL 16, mais les
+   appels connecteurs réels, leurs quotas et l'annulation d'un transfert HTTP
+   en cours restent non qualifiés.
 3. Les chemins global, signaux et projet sont prouvés en base temporaire ; une
    recette sur données représentatives dans le déploiement cible reste nécessaire
    avant tout usage critique.

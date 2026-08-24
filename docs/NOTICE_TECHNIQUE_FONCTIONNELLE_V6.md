@@ -123,7 +123,8 @@ disproportionnée et créerait deux moteurs techniques difficiles à qualifier.
   actualisations sont mises dans `automated_data_jobs`. Un second travailleur les
   réclame avec bail, exécute uniquement les sources explicitement nommées via les
   adaptateurs HDP existants et conserve un résultat par source. Les recettes
-  PostgreSQL et les appels Internet réels restent deux preuves distinctes.
+  PostgreSQL sont vérifiées ; les appels Internet réels restent une preuve
+  distincte.
 - Une annulation observée avant l'effet termine la tentative sans créer d'objet.
   Les quotas du projet sont relus sous verrou juste avant l'effet et peuvent
   replacer la demande en `pending_approval`.

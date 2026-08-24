@@ -12,8 +12,8 @@
   acquisition persistée après interruption ;
 - réutilisation des adaptateurs HDP existants ; aucun script, webhook ou egress
   générique n'est ouvert par ce travailleur ;
-- 265 tests recensés localement, dont quatre nouvelles recettes PostgreSQL
-  réservées à la CI ; appels réels aux sources toujours non qualifiés.
+- 265/265 tests réussis à distance sur PostgreSQL 16, dont quatre recettes du
+  travailleur de données ; appels réels aux sources toujours non qualifiés.
 
 ## 6.0.0-dev - file d'actions interne - 24 août 2026
 
