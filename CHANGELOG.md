@@ -9,8 +9,8 @@
 - raccourci Bureau supprimé seulement après lecture du Shell Link et vérification
   qu'il cible le dossier sélectionné ;
 - Docker Desktop, Git et Visual Studio Code ne sont jamais désinstallés ;
-- 270 tests recensés localement ; compilation MSVC et recette Windows réelle
-  encore distinctes.
+- 270/270 tests distants et compilation MSVC stricte réussis ; la recette
+  interactive Windows/Docker reste distincte.
 
 ## 6.0.0-dev - suivi opérateur des actions - 24 août 2026
 

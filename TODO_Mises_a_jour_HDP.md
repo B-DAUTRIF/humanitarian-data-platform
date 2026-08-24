@@ -239,7 +239,8 @@ preuves ne remplacent pas la recette Windows/Docker du déploiement cible.
 - [x] créer en fin d'installation Windows un raccourci Bureau natif vers le
   lanceur de l'instance installée ;
 - [x] supprimer le raccourci dans la procédure de désinstallation seulement
-  après lecture de sa cible ; le code reste à compiler et à essayer sur Windows ;
+  après lecture de sa cible ; le code compile sous MSVC et reste à essayer sur
+  Windows avec Docker Desktop ;
 - [x] borner la désinstallation aux fichiers exacts du payload après vérification
   d'un marqueur HDP, arrêter Compose sans `-v` et conserver `.env`, données,
   sauvegardes, journaux, volumes et logiciels tiers ;
