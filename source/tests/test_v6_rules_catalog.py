@@ -50,6 +50,7 @@ from app.v6_backup import (  # noqa: E402
     pg_dump_command,
     prevalidate_backup_bundle,
     publish_bundle,
+    restore_global_backup_to_temporary_database,
 )
 
 
@@ -519,6 +520,54 @@ class CatalogAndCacheTest(unittest.TestCase):
             bundle = publish_bundle(root, "limit-test", [data], manifest)
             with self.assertRaisesRegex(BackupError, "taille décompressée autorisée"):
                 prevalidate_backup_bundle(bundle, max_uncompressed_bytes=1)
+
+    def test_temporary_restore_rejects_non_global_backup_before_database_access(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / "signals.jsonl"
+            data.write_text('{"id":"one"}\n', encoding="utf-8")
+            manifest = build_manifest(
+                backup_id="signals-not-restorable-globally",
+                application_version="6.0.0-dev",
+                schema_versions=["fixture-001"],
+                scope="signals",
+                selector={"signal_ids": ["one"]},
+                files=[data],
+                row_counts={"signals": 1},
+                created_at=NOW,
+            )
+            bundle = publish_bundle(root, "signals-not-restorable-globally", [data], manifest)
+            with self.assertRaisesRegex(BackupError, "seule une sauvegarde globale"):
+                restore_global_backup_to_temporary_database(
+                    bundle,
+                    "postgresql://operator:secret@127.0.0.1/hdp",
+                    expected_application_version="6.0.0-dev",
+                    expected_schema_versions=["fixture-001"],
+                )
+
+    def test_temporary_restore_rejects_incompatible_application_version(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dump = root / "postgresql-global.dump"
+            dump.write_bytes(b"not-opened-before-compatibility-check")
+            manifest = build_manifest(
+                backup_id="global-incompatible",
+                application_version="5.0.2",
+                schema_versions=["fixture-001"],
+                scope="global",
+                selector={},
+                files=[dump],
+                row_counts={"postgresql-global": -1},
+                created_at=NOW,
+            )
+            bundle = publish_bundle(root, "global-incompatible", [dump], manifest)
+            with self.assertRaisesRegex(BackupError, "version applicative"):
+                restore_global_backup_to_temporary_database(
+                    bundle,
+                    "postgresql://operator:secret@127.0.0.1/hdp",
+                    expected_application_version="6.0.0-dev",
+                    expected_schema_versions=["fixture-001"],
+                )
 
 
 class ActionPolicyTest(unittest.TestCase):

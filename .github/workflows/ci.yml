@@ -11,6 +11,18 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci-restore-placeholder-not-a-secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,8 +33,12 @@ jobs:
           node-version: "22"
       - name: Tests Python
         run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y postgresql-client
           python -m pip install -r source/payload/api/requirements.txt
           python -m unittest discover -s source/tests -p 'test_*.py'
+        env:
+          HDP_BACKUP_RESTORE_TEST_DATABASE_URL: postgresql://postgres:ci-restore-placeholder-not-a-secret@127.0.0.1:5432/postgres
       - name: Compilation Python
         run: python -m compileall -q source/payload/api/app source/payload/github-api source/tests tools
       - name: Syntaxe JavaScript

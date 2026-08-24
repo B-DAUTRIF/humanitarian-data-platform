@@ -171,8 +171,12 @@ inclut ses dépendances et le périmètre signaux inclut événements, règles,
 prévalidée et ne remplace aucune donnée silencieusement. La prévalidation
 vérifie sans extraction le confinement des chemins, les doublons, liens,
 chiffrement, limites, inventaire, tailles et empreintes. Elle ne restaure rien
-et ne constitue jamais une autorisation automatique. La restauration dans une
-base PostgreSQL temporaire reste une porte de qualification distincte.
+et ne constitue jamais une autorisation automatique. Pour le périmètre global,
+une action séparée exige une confirmation littérale, crée une nouvelle base au
+nom aléatoire, refuse toute collision, restaure en transaction unique, vérifie
+migrations et tables puis supprime obligatoirement la base temporaire. La recette
+PostgreSQL réelle est automatisée dans la CI et demeure une preuve distincte du
+jalon local ; les restaurations projet et signaux restent à développer.
 
 Le connecteur réseau de réception de mails reste à arbitrer entre IMAP, OAuth et
 passerelle entrante. Le premier socle implémenté importe manuellement un fichier

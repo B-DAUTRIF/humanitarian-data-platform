@@ -13,14 +13,14 @@ La notice de référence est conservée dans
 Une case n'est cochée que si le code, les migrations, les tests et la preuve de
 non-régression correspondants existent.
 
-**Dernier jalon local 6.0.0-dev — reprise vérifiée de l'archive au 24 août
-2026** : 237 tests Python réussis, 19 migrations
-et 161 instructions analysées par `pglast`, trois scripts JavaScript inline
-valides, import FastAPI réussi et schéma OpenAPI généré avec 164 routes, dont 50
-chemins `/api/v6`. Le contrôle de reprise vérifie désormais que le nombre de
-tests et l'inventaire Python de `HDP_STATE.json` correspondent au dépôt. Ce lot
-local n'a pas été publié et ne vaut pas qualification Docker, Windows, PHP/SPIP
-ou connecteurs réels.
+**Dernier jalon distant validé au 24 août 2026** : le commit parent
+`1d099647e5ab…` a réussi 237 tests Python, la validation Linux et la construction
+Windows. **Lot local courant** : 241 tests découverts, 239 réussis et deux tests
+d'intégration PostgreSQL ignorés faute de serveur local ; 19 migrations et 161
+instructions SQL sont analysées, et le schéma OpenAPI compte 165 routes dont 51
+chemins `/api/v6`. La restauration globale temporaire ne sera déclarée vérifiée
+qu'après exécution distante des deux tests réels. Ce jalon ne vaut pas
+qualification Windows installée, PHP/SPIP, connecteurs réels ou livraison.
 
 ### HDP6-001 — Gouvernance et compatibilité
 
@@ -248,8 +248,9 @@ ou connecteurs réels.
 - [x] prévalider le bundle sans l'extraire ni restaurer : refuser altération,
   traversée de chemin, lien symbolique, doublon, chiffrement, entrée inattendue
   et dépassement des limites ;
-- [ ] garantir transaction cohérente, restauration dans une base temporaire,
-  absence de secrets et absence d'écrasement silencieux ;
+- [x] pour la sauvegarde globale, garantir transaction unique, restauration
+  dans une base temporaire, absence de secret dans les commandes et traces,
+  refus des collisions sans écrasement, puis suppression obligatoire ;
 - [ ] tester restauration globale, projet isolé, signaux isolés, archive altérée,
   version incompatible et collision d'identifiants.
 
@@ -270,10 +271,11 @@ ou connecteurs réels.
 
 ### HDP6-130 — Méthode de développement guidée
 
-Dernier passage du jalon : **réussi localement le 24 août 2026** après ajout de
-la prévalidation bornée des sauvegardes. Les restaurations PostgreSQL réelles et
-les recettes Docker, Windows, PHP/SPIP et connecteurs réels restent non exécutées
-et ne sont pas assimilées à une qualification.
+Dernier passage du jalon : **réussi localement le 24 août 2026** après ajout du
+chemin de restauration globale temporaire. Les 239 tests locaux passent ; les
+deux tests PostgreSQL réels sont explicitement ignorés en l'absence de serveur
+et doivent passer dans la CI dédiée. Les recettes Windows installée, PHP/SPIP et
+connecteurs réels restent distinctes et ne sont pas assimilées à une qualification.
 
 - [x] traiter les descriptions fonctionnelles comme source du besoin et traduire
   chaque lot en options techniques, effets, risques et critères d'acceptation ;

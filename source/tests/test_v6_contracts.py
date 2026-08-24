@@ -78,6 +78,7 @@ class V6StaticContractTest(unittest.TestCase):
             '/projects/{project_id}/rss/sources/{feed_source_id}/subscriptions',
             '/backups',
             '/backups/{backup_id}/prevalidate',
+            '/backups/{backup_id}/restore/temporary',
             '/backups/{backup_id}/download',
             '/projects/{project_id}/data-policy',
             '/catalog',
@@ -216,13 +217,19 @@ class V6StaticContractTest(unittest.TestCase):
             "signal_ids",
             "restore_automatically_authorized",
             "prevalidate_backup_bundle",
+            "restore_global_backup_to_temporary_database",
             "Sauvegarde non restaurable",
+            "Restauration temporaire refusée",
             "L'empreinte de la sauvegarde est incohérente",
         ):
             self.assertIn(marker, self.features)
         self.assertIn("subprocess.run", self.backup)
         self.assertIn("PGPASSWORD", self.backup)
         self.assertIn('"restore_executed": False', self.backup)
+        self.assertIn('"restore_automatically_authorized": False', self.backup)
+        self.assertIn('"collision_policy": "reject_without_overwrite"', self.backup)
+        self.assertIn('"temporary_database_dropped": True', self.backup)
+        self.assertIn('"--single-transaction"', self.backup)
         dockerfile = (API_APP.parent / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn("postgresql-client", dockerfile)
 

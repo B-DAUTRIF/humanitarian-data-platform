@@ -1,5 +1,24 @@
 # Journal des versions
 
+## 6.0.0-dev - restauration PostgreSQL temporaire - 24 août 2026
+
+- ajout d'un chemin de restauration globale exigeant la confirmation littérale
+  `RESTORE_IN_TEMPORARY_DATABASE` et n'autorisant jamais une restauration
+  automatique ;
+- contrôle exact de la version applicative, des migrations, de l'inventaire et
+  de l'empreinte avant toute création de base ;
+- création d'une base PostgreSQL au nom aléatoire, refus des collisions sans
+  suppression, `pg_restore` en transaction unique, vérification des migrations
+  et des tables, puis suppression obligatoire de la base temporaire ;
+- ajout de `POST /api/v6/backups/{backup_id}/restore/temporary` et d'une trace
+  d'audit ne contenant ni secret ni nom de base temporaire ;
+- ajout d'une recette CI PostgreSQL 16 avec dump et restauration réels, contrôle
+  de suppression et contrôle de non-écrasement en cas de collision ;
+- jalon local : 241 tests découverts, 239 réussis et deux recettes PostgreSQL
+  explicitement ignorées faute de serveur local ; leur exécution distante reste
+  requise avant de déclarer cette porte qualifiée ;
+- restauration des bundles projet et signaux toujours non implémentée.
+
 ## 6.0.0-dev - prévalidation des sauvegardes - 24 août 2026
 
 - ajout d'une prévalidation ZIP bornée avant toute restauration : chemins,

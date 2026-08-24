@@ -57,6 +57,7 @@ from .v6_backup import (
     file_sha256,
     prevalidate_backup_bundle,
     publish_bundle,
+    restore_global_backup_to_temporary_database,
 )
 from .v6_rules import (
     CONDITION_OPERATORS,
@@ -364,6 +365,11 @@ class DatabaseBackupCreate(BaseModel):
     scope: str = Field(pattern="^(global|project|signals)$")
     project_id: uuid.UUID | None = None
     signal_ids: list[uuid.UUID] = Field(default_factory=list, max_length=10_000)
+    actor: str = Field(default="local-operator", min_length=2, max_length=120)
+
+
+class DatabaseBackupTemporaryRestoreRequest(BaseModel):
+    confirmation: str = Field(pattern="^RESTORE_IN_TEMPORARY_DATABASE$")
     actor: str = Field(default="local-operator", min_length=2, max_length=120)
 
 
@@ -2714,6 +2720,59 @@ def prevalidate_database_backup(backup_id: uuid.UUID) -> dict[str, Any]:
         "id": str(backup_id),
         **report,
         "message": "Prévalidation réussie; aucune restauration n'a été exécutée ni autorisée",
+    }
+
+
+@router.post("/backups/{backup_id}/restore/temporary")
+def restore_database_backup_temporarily(
+    backup_id: uuid.UUID,
+    payload: DatabaseBackupTemporaryRestoreRequest,
+) -> dict[str, Any]:
+    path = _completed_backup_file(backup_id)
+    with db() as connection:
+        schema_versions = [
+            str(row[0])
+            for row in connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
+        ]
+    try:
+        report = restore_global_backup_to_temporary_database(
+            path,
+            DATABASE_URL,
+            expected_application_version="6.0.0-dev",
+            expected_schema_versions=schema_versions,
+        )
+    except BackupError as exc:
+        raise HTTPException(status_code=409, detail=f"Restauration temporaire refusée: {exc}") from exc
+    now = datetime.now(UTC)
+    with db() as connection:
+        connection.execute(
+            """INSERT INTO application_timeline
+               (id,project_id,scope,event_type,object_type,object_id,status,summary,details,actor,occurred_at)
+               VALUES (%s,NULL,'global','backup.restore.verified','database_backup',%s,
+                       'completed',%s,%s,%s,%s)""",
+            (
+                uuid.uuid4(),
+                str(backup_id),
+                "Restauration globale vérifiée dans une base temporaire supprimée",
+                Jsonb(
+                    {
+                        "bundle_sha256": report["bundle_sha256"],
+                        "schema_version_count": report["schema_version_count"],
+                        "restored_table_count": report["restored_table_count"],
+                        "temporary_database_dropped": True,
+                        "collision_policy": "reject_without_overwrite",
+                    }
+                ),
+                payload.actor,
+                now,
+            ),
+        )
+    return {
+        "id": str(backup_id),
+        **report,
+        "message": "Restauration vérifiée dans une base PostgreSQL temporaire puis supprimée",
     }
 
 
