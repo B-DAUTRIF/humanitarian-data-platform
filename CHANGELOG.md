@@ -10,7 +10,8 @@
   avec plafond projet de sept jours ;
 - aucun projet resté en mode manuel n'est modifié silencieusement : la
   recommandation doit être enregistrée par l'opérateur ;
-- 271 tests recensés localement, dont 19 recettes PostgreSQL réservées à la CI.
+- 271/271 tests réussis à distance sur PostgreSQL 16 ; Linux et Windows sont
+  verts et l'installateur PE32+ x64 a été reconstruit.
 
 ## 6.0.0-dev - désinstallation Windows non destructive - 24 août 2026
 

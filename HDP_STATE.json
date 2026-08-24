@@ -5,7 +5,7 @@
   "working_version": "6.0.0-dev",
   "latest_qualified_release": "5.0.2",
   "previous_working_line": "5.2",
-  "state_generated_at": "2026-08-24T13:41:35+02:00",
+  "state_generated_at": "2026-08-24T13:45:57+02:00",
   "status": "implementation_in_progress",
   "basis": {
     "archive": "HumanitarianDataPlatform_Archive_complete_v5.0.2.zip",
@@ -13,7 +13,7 @@
     "remote_reference_branch": "develop/5.2",
     "remote_reference_commit": "d0257a402a958439f6f28e6b3de2290112bfbbfc",
     "working_branch": "codex/v6-build-20260821",
-    "local_worktree_base_commit": "2e69f04627f7ae7b636675c4ba7ae92d3f49b521",
+    "local_worktree_base_commit": "a97f515a2e4a8a9df270e6621ca3be08af359a6e",
     "pull_request": 8,
     "remote_published": true,
     "remote_publication_scope": "development branch and draft pull request only",
@@ -23,7 +23,8 @@
     "local_action_worker_fix_published": true,
     "local_data_job_worker_candidate_published": true,
     "local_operator_tracking_candidate_published": true,
-    "local_windows_uninstall_candidate_published": true
+    "local_windows_uninstall_candidate_published": true,
+    "local_cache_policy_candidate_published": true
   },
   "baseline_tests": {
     "executed": 271,
@@ -93,13 +94,13 @@
     ]
   },
   "remote_ci_evidence": {
-    "head_commit": "05cccb543ec5aaa2e1b753c3bbe8572845bf7241",
-    "validation_workflow_run": 32713172992,
-    "windows_workflow_run": 32713173081,
-    "python_tests": "270 passed, no skipped tests",
-    "workflow_artifact_id": 9514882006,
-    "workflow_artifact_sha256": "f7474cec9194a88911684bf3aa872c7e19489b9aa92f7df51108a79f270da89a",
-    "artifact_expires_at": "2026-09-23T09:45:14Z",
+    "head_commit": "a97f515a2e4a8a9df270e6621ca3be08af359a6e",
+    "validation_workflow_run": 32723335956,
+    "windows_workflow_run": 32723336009,
+    "python_tests": "271 passed, no skipped tests",
+    "workflow_artifact_id": 9518571636,
+    "workflow_artifact_sha256": "0da4bd21291602a1269ea3b2d5a59d8825e691a654afb793f4c88690e41e90f4",
+    "artifact_expires_at": "2026-09-23T11:44:20Z",
     "temporary_global_restore_integration": "passed on PostgreSQL 16 with collision non-deletion proof",
     "temporary_signals_restore_integration": "passed on PostgreSQL 16 with dependency-order and collision rollback proof",
     "temporary_project_restore_integration": "passed on PostgreSQL 16 with transitive graph, physical asset and child-collision rollback proof",
