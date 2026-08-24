@@ -61,9 +61,23 @@ from app.v6_backup import (  # noqa: E402
     restore_project_backup_to_temporary_database,
     restore_signals_backup_to_temporary_database,
 )
+from app.source_registry import source_configuration_definition  # noqa: E402
 
 
 NOW = datetime(2026, 8, 21, 10, 0, tzinfo=UTC)
+
+
+class SourceConfigurationTest(unittest.TestCase):
+    def test_reference_portal_has_a_read_only_configuration_dossier(self) -> None:
+        definition, configuration_file = source_configuration_definition("who-mortality")
+        self.assertEqual(configuration_file, "app/health_sources.py")
+        self.assertIsNone(definition["project_schema"])
+        self.assertIsNone(definition["technical_profile"])
+        self.assertIn("who.int", definition["portal_url"])
+
+    def test_unknown_source_has_no_configuration_dossier(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Source inconnue"):
+            source_configuration_definition("source-inconnue")
 
 
 def event(identifier: str, hours_ago: int, **values):

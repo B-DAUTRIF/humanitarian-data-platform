@@ -162,7 +162,7 @@ Windows/Docker, SPIP/HTTPS, mails réseau ou connecteurs réels.
 
 - [x] ajouter un bouton **Paramétrages** dans chaque encart de source ;
 - [x] conserver les portées globale et projet dans ce sous-menu ;
-- [ ] afficher Endpoints, Paramètres d'entrée, Champs de réponse, Métadonnées,
+- [x] afficher Endpoints, Paramètres d'entrée, Champs de réponse, Métadonnées,
   Technique, Historique et état d'activation ;
 - [x] afficher en lecture le fichier de configuration et les liens Portail,
   Documentation et API ;

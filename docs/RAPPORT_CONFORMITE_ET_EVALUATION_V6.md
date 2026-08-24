@@ -41,7 +41,7 @@ Les statuts employés sont :
 | Sauvegarde par projet | Réalisé en base temporaire / cible non qualifiée | fermeture transitive propriété/dépendance, fichier confiné adressé par contenu, import topologique, collision refusée ; 247/247 tests PostgreSQL 16 | requalifier sur un projet représentatif complet dans le déploiement cible |
 | Sauvegarde des signaux | Réalisé en base temporaire / portée à étendre | projet et règles inclus, neuf tables, tri des dépendances, transaction et collision refusée ; 244/244 tests PostgreSQL 16 | ajouter période et portée globale |
 | Champs de recherche propres aux sources | Partiel | paramètres contractuels, types et valeurs contraintes exposables | générateur uniforme de formulaires pour tous les contrats peuplés |
-| Configuration et paramètres API visibles par source | Partiel | liens Portail/Documentation/API/configuration et détail contractuel | exhaustive seulement après inventaires officiels complets |
+| Configuration et paramètres API visibles par source | Réalisé pour l'affichage / exhaustivité contractuelle partielle | dossier structuré Endpoints, Entrées, Réponses, Métadonnées, Technique, Historique et Activation ; portails de référence lisibles sans faux adaptateur | exhaustive seulement après inventaires officiels complets |
 | Paramétrages sous chaque source, global/projet | Réalisé | bouton par encart et deux portées conservées | recette ergonomique complète |
 | Chronologie globale et projet | Partiel | vues séparées et plusieurs événements V6 audités | couvrir migrations, contrats, tables globales et chaque exécution projet |
 | Ouvrir le dossier contenant | Partiel | exploration confinée distante sans divulgation du chemin | action native locale, liens symboliques, droits et fichiers supprimés |

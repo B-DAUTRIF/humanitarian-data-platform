@@ -88,7 +88,7 @@ from .v6_legacy_rules import (
     materialize_legacy_datagrid_action,
     migrate_legacy_signal_rules,
 )
-from .source_registry import connector_definition
+from .source_registry import source_configuration_definition
 
 
 router = APIRouter(prefix="/api/v6", tags=["HDP V6"])
@@ -1642,18 +1642,18 @@ def configure_project_endpoint(
 @router.get("/sources/{source_id}/configuration")
 def source_configuration(source_id: str) -> dict[str, Any]:
     try:
-        definition = connector_definition(source_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Connecteur introuvable") from exc
+        definition, configuration_file = source_configuration_definition(source_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Source introuvable") from exc
     return {
         "source_id": source_id,
-        "configuration_file": "app/source_registry.py",
+        "configuration_file": configuration_file,
         "read_only": True,
         "registry_version": definition["registry_version"],
         "verified_at": definition["verified_at"],
-        "base_url": definition["base_url"],
+        "base_url": definition.get("base_url") or definition.get("api_url") or definition.get("portal_url"),
         "global_settings_schema": definition["global_settings_schema"],
-        "project_schema": definition["project_schema"],
+        "project_schema": definition.get("project_schema") or {"type": "object", "properties": {}},
         "official_links": definition["official_links"],
         "documentation_evidence": definition["documentation_evidence"],
         "technical_profile": definition["technical_profile"],

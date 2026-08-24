@@ -330,9 +330,29 @@ class V6StaticContractTest(unittest.TestCase):
             "v6-policy-form",
             "source-configuration-link",
             "source-endpoint-list",
+            "source-contract-overview",
+            "source-endpoint-count",
+            "source-parameter-count",
+            "source-response-field-count",
+            "source-active-endpoint-count",
         ):
             self.assertIn(f'id="{element_id}"', self.html)
         self.assertIn("button('Paramétrages'", self.html)
+        for marker in (
+            "renderSourceContractOverview",
+            "renderSourceEndpointDetail",
+            "Ouvrir le dossier contractuel",
+            "Paramètres d'entrée",
+            "Champs de réponse",
+            "Métadonnées",
+            "Technique",
+            "Historique",
+            "État d'activation",
+            "sensible, valeur masquée",
+        ):
+            self.assertIn(marker, self.html)
+        self.assertIn("source_configuration_definition(source_id)", self.features)
+        self.assertIn('"secret_value_exposed": False', self.features)
 
     def test_visual_rule_builder_keeps_formula_json_and_depth_limit_explicit(self) -> None:
         for element_id in (

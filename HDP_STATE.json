@@ -5,7 +5,7 @@
   "working_version": "6.0.0-dev",
   "latest_qualified_release": "5.0.2",
   "previous_working_line": "5.2",
-  "state_generated_at": "2026-08-24T14:20:32+02:00",
+  "state_generated_at": "2026-08-24T14:29:57+02:00",
   "status": "implementation_in_progress",
   "basis": {
     "archive": "HumanitarianDataPlatform_Archive_complete_v5.0.2.zip",
@@ -13,7 +13,7 @@
     "remote_reference_branch": "develop/5.2",
     "remote_reference_commit": "d0257a402a958439f6f28e6b3de2290112bfbbfc",
     "working_branch": "codex/v6-build-20260821",
-    "local_worktree_base_commit": "26b09c2f2d3bb4dbc22224995398a23150dc736a",
+    "local_worktree_base_commit": "30004a9d03d58add6eae81186ac313d380832c6e",
     "pull_request": 8,
     "remote_published": true,
     "remote_publication_scope": "development branch and draft pull request only",
@@ -28,8 +28,8 @@
     "local_legacy_rule_migration_candidate_published": true
   },
   "baseline_tests": {
-    "executed": 277,
-    "passed": 256,
+    "executed": 279,
+    "passed": 258,
     "skipped": 21,
     "failures": 0,
     "errors": 0,
@@ -53,7 +53,7 @@
     "live_connector_calls_executed": false
   },
   "implemented_lot": {
-    "identifier": "v6-archive-rebuild-lots-1-to-15",
+    "identifier": "v6-archive-rebuild-lots-1-to-16",
     "rule_engine": "nested AND/OR, temporal correlations, validation, simulation and previewed transactional migration of flat V5 signal rules",
     "catalog": "raw immutable metadata, lineage, confidence, OpenAPI inventory and progressive activation",
     "cache": "content-addressed public artifacts, atomic publication, HTTP revalidation and an operator-saved recommendation of three source frequencies capped at seven days",
@@ -65,15 +65,15 @@
     "action_workers": "PostgreSQL-verified internal worker and data-job worker with per-source leases, retries, cancellation, idempotent acquisition linkage and a bounded legacy HDX Data Grid action; external actions remain manual-only",
     "installer": "timeouts, cancellation, activity logs, native Windows desktop shortcut and marker-gated non-destructive uninstall candidate",
     "api": "59 V6 OpenAPI paths",
-    "ui": "five-level visual AND/OR rule builder with synchronized formula/JSON and simulation, sources, RSS candidates, SPIP, mail, backups, dual timeline, confined folder exploration, operator action/data-job tracking and a non-silent bounded stale-age recommendation",
+    "ui": "five-level visual AND/OR rule builder with synchronized formula/JSON and simulation; structured source dossiers for endpoints, inputs, responses, metadata, technique, history and activation; RSS candidates, SPIP, mail, backups, dual timeline, confined folder exploration, operator action/data-job tracking and a non-silent bounded stale-age recommendation",
     "compatibility_fixes": "lookback, signal idempotence, aggregation readiness, V5 route/table preservation and linked migration of flat V5 rules"
   },
   "last_implementation_gate": {
-    "executed_at": "2026-08-24T14:16:42+02:00",
+    "executed_at": "2026-08-24T14:29:57+02:00",
     "result": "passed",
     "blocking_failures": [],
     "qualification_complete": false,
-    "python_tests": "256 passed, 21 skipped locally",
+    "python_tests": "258 passed, 21 skipped locally",
     "python_ast": "76 files parsed",
     "postgresql": "22 migrations and 204 statements parsed",
     "javascript": "3 inline scripts valid across index and passkey login",

@@ -30,6 +30,12 @@ l'arbre JSON utilisé pour la validation et la simulation. L'édition visuelle e
 bornée à cinq niveaux ; un arbre valide plus profond reste disponible dans le mode
 JSON avancé et demeure soumis à la limite serveur de douze niveaux.
 
+Le sous-menu de chaque source expose séparément l'inventaire des endpoints, les
+paramètres d'entrée, les champs de réponse, les métadonnées documentaires, le
+profil technique, l'historique et l'état d'activation. Les portails de référence
+sans connecteur stable disposent d'un dossier explicitement non exécutable ;
+aucun adaptateur ni secret n'est inventé pour compléter l'affichage.
+
 Trois distinctions restent essentielles : l'importeur exhaustif d'un contrat
 ne signifie pas que les inventaires officiels des dix sources sont déjà tous
 peuplés ; une planification enregistrée ne signifie pas encore que son adaptateur

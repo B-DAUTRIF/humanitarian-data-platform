@@ -1,5 +1,15 @@
 # Journal des versions
 
+## 6.0.0-dev - dossiers contractuels des sources - 24 août 2026
+
+- compteurs d'endpoints, paramètres d'entrée, champs de réponse et activations ;
+- vues structurées Endpoint, Entrées, Réponses, Métadonnées, Technique,
+  Historique et État d'activation à la place du bloc JSON indifférencié ;
+- valeurs sensibles toujours masquées et preuves techniques rendues en lecture ;
+- dossier en lecture ajouté aux portails de référence sans leur attribuer un
+  adaptateur ou une capacité d'exécution inexistante ;
+- deux contrats purs couvrent un portail de référence et une source inconnue.
+
 ## 6.0.0-dev - constructeur visuel de règles - 24 août 2026
 
 - composition visuelle de groupes ET/OU, conditions et quatre modes de
