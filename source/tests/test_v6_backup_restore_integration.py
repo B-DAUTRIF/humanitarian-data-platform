@@ -23,8 +23,10 @@ from app.v6_backup import (  # noqa: E402
     TEMPORARY_RESTORE_DATABASE_PREFIX,
     build_manifest,
     create_global_dump,
+    export_project_graph,
     publish_bundle,
     restore_global_backup_to_temporary_database,
+    restore_project_backup_to_temporary_database,
     restore_signals_backup_to_temporary_database,
 )
 
@@ -112,6 +114,14 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
                 """CREATE TABLE action_executions (
                        id UUID PRIMARY KEY,
                        request_id UUID NOT NULL REFERENCES action_requests(id)
+                )"""
+            )
+            connection.execute(
+                """CREATE TABLE data_artifacts (
+                       id UUID PRIMARY KEY,
+                       project_id UUID NOT NULL REFERENCES projects(id),
+                       path TEXT,
+                       sha256 CHAR(64)
                    )"""
             )
 
@@ -243,6 +253,62 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
         )
         return publish_bundle(root, "signals-integration", files, manifest)
 
+    def _project_bundle(self, root: Path, *, duplicate_project: bool = False) -> tuple[Path, int]:
+        project_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        event_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        rule_id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        action_id = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        artifact_id = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+        data_directory = root / "data"
+        asset = data_directory / "projects" / project_id / "evidence.json"
+        asset.parent.mkdir(parents=True)
+        asset.write_text('{"verified":true}\n', encoding="utf-8")
+        relative_asset = asset.relative_to(data_directory).as_posix()
+        with psycopg.connect(self.source_url, autocommit=True) as connection:
+            connection.execute("INSERT INTO projects VALUES (%s,%s)", (project_id, "Projet fixture"))
+            connection.execute(
+                "INSERT INTO signal_events VALUES (%s,%s,%s)",
+                (event_id, project_id, json.dumps({"source": "fixture"})),
+            )
+            connection.execute(
+                "INSERT INTO signal_rules VALUES (%s,%s,%s)",
+                (rule_id, project_id, "Règle fixture"),
+            )
+            connection.execute(
+                "INSERT INTO signal_actions VALUES (%s,%s,%s)",
+                (action_id, event_id, rule_id),
+            )
+            connection.execute(
+                "INSERT INTO data_artifacts VALUES (%s,%s,%s,%s)",
+                (artifact_id, project_id, relative_asset, None),
+            )
+        with psycopg.connect(self.source_url, autocommit=False) as connection:
+            connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            files, row_counts, assets = export_project_graph(
+                connection,
+                root,
+                project_id,
+                data_directory,
+            )
+            connection.commit()
+        if duplicate_project:
+            project_file = root / "projects.jsonl"
+            first_line = project_file.read_text(encoding="utf-8")
+            project_file.write_text(first_line + first_line, encoding="utf-8")
+            row_counts["projects"] = 2
+        manifest = build_manifest(
+            backup_id="project-integration",
+            application_version="6.0.0-dev",
+            schema_versions=SCHEMA_VERSIONS,
+            scope="project",
+            selector={"project_id": project_id, "signal_ids": []},
+            files=files,
+            row_counts=row_counts,
+        )
+        manifest["project_assets"] = assets
+        bundle = publish_bundle(root, "project-integration", files, manifest)
+        return bundle, asset.stat().st_size
+
     def test_global_dump_is_restored_verified_and_temporary_database_is_dropped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             token = secrets.token_hex(8)
@@ -326,6 +392,52 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
                 self.assertRaisesRegex(BackupError, "collision d'identifiant"),
             ):
                 restore_signals_backup_to_temporary_database(
+                    bundle,
+                    self.source_url,
+                    expected_application_version="6.0.0-dev",
+                    expected_schema_versions=SCHEMA_VERSIONS,
+                    timeout_seconds=120,
+                )
+            with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as connection:
+                exists = connection.execute(
+                    "SELECT 1 FROM pg_database WHERE datname=%s", (temporary_database,)
+                ).fetchone()
+            self.assertIsNone(exists)
+
+    def test_project_graph_and_asset_are_restored_then_database_is_dropped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            token = secrets.token_hex(8)
+            temporary_database = f"{TEMPORARY_RESTORE_DATABASE_PREFIX}{token}"
+            bundle, asset_size = self._project_bundle(Path(directory))
+            with patch("app.v6_backup.secrets.token_hex", return_value=token):
+                report = restore_project_backup_to_temporary_database(
+                    bundle,
+                    self.source_url,
+                    expected_application_version="6.0.0-dev",
+                    expected_schema_versions=SCHEMA_VERSIONS,
+                    timeout_seconds=120,
+                )
+            self.assertEqual(report["scope"], "project")
+            self.assertEqual(report["restored_table_count"], 5)
+            self.assertEqual(report["restored_row_count"], 5)
+            self.assertEqual(report["verified_asset_count"], 1)
+            self.assertEqual(report["verified_asset_size_bytes"], asset_size)
+            with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as connection:
+                exists = connection.execute(
+                    "SELECT 1 FROM pg_database WHERE datname=%s", (temporary_database,)
+                ).fetchone()
+            self.assertIsNone(exists)
+
+    def test_duplicate_project_identifier_rolls_back_and_drops_database(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            token = secrets.token_hex(8)
+            temporary_database = f"{TEMPORARY_RESTORE_DATABASE_PREFIX}{token}"
+            bundle, _ = self._project_bundle(Path(directory), duplicate_project=True)
+            with (
+                patch("app.v6_backup.secrets.token_hex", return_value=token),
+                self.assertRaisesRegex(BackupError, "collision d'identifiant"),
+            ):
+                restore_project_backup_to_temporary_database(
                     bundle,
                     self.source_url,
                     expected_application_version="6.0.0-dev",

@@ -5,6 +5,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import tempfile
 import zipfile
@@ -47,6 +48,21 @@ SENSITIVE_FIELD_MARKERS = (
     "secret",
     "token",
 )
+PROJECT_BACKUP_EXCLUDED_TABLES = {
+    "database_backups",
+    "operator_auth_challenges",
+    "operator_sessions",
+    "operator_webauthn_credentials",
+    "schema_migrations",
+}
+PROJECT_FILE_COLUMNS = {
+    "acquisitions": "raw_path",
+    "cache_entries": "storage_path",
+    "data_artifacts": "path",
+    "local_resources": "local_path",
+    "mail_attachments": "storage_path",
+    "script_executions": "report_path",
+}
 
 
 def backup_root(data_directory: Path) -> Path:
@@ -144,6 +160,243 @@ def export_query_as_jsonl(
     finally:
         temporary.unlink(missing_ok=True)
     return count
+
+
+def _foreign_key_graph(
+    connection: Any,
+) -> list[tuple[str, str, list[str], list[str]]]:
+    rows = connection.execute(
+        """SELECT child.relname,parent.relname,
+                  array_agg(child_attribute.attname ORDER BY keys.ordinality),
+                  array_agg(parent_attribute.attname ORDER BY keys.ordinality)
+           FROM pg_constraint constraint_definition
+           JOIN pg_class child ON child.oid=constraint_definition.conrelid
+           JOIN pg_namespace child_namespace ON child_namespace.oid=child.relnamespace
+           JOIN pg_class parent ON parent.oid=constraint_definition.confrelid
+           JOIN pg_namespace parent_namespace ON parent_namespace.oid=parent.relnamespace
+           JOIN LATERAL unnest(constraint_definition.conkey,constraint_definition.confkey)
+                WITH ORDINALITY AS keys(child_number,parent_number,ordinality) ON TRUE
+           JOIN pg_attribute child_attribute
+                ON child_attribute.attrelid=child.oid AND child_attribute.attnum=keys.child_number
+           JOIN pg_attribute parent_attribute
+                ON parent_attribute.attrelid=parent.oid AND parent_attribute.attnum=keys.parent_number
+           WHERE constraint_definition.contype='f'
+             AND child_namespace.nspname='public' AND parent_namespace.nspname='public'
+           GROUP BY constraint_definition.oid,child.relname,parent.relname
+           ORDER BY child.relname,parent.relname"""
+    ).fetchall()
+    return [
+        (str(child), str(parent), [str(item) for item in child_columns], [str(item) for item in parent_columns])
+        for child, parent, child_columns, parent_columns in rows
+    ]
+
+
+def _selection_insert(
+    connection: Any,
+    query: Any,
+    parameters: tuple[Any, ...],
+) -> int:
+    cursor = connection.execute(query, parameters)
+    return max(cursor.rowcount, 0)
+
+
+def _confined_project_asset(data_directory: Path, reference: str) -> Path:
+    root = data_directory.resolve()
+    raw = Path(reference)
+    current = raw if raw.is_absolute() else root / raw
+    parts = current.parts
+    probe = Path(parts[0]) if current.is_absolute() else root
+    for part in parts[1:] if current.is_absolute() else parts:
+        probe = probe / part
+        if probe.is_symlink():
+            raise BackupError(f"lien symbolique interdit pour le fichier projet: {reference}")
+    candidate = current.resolve()
+    if candidate != root and root not in candidate.parents:
+        raise BackupError(f"fichier projet hors du répertoire de données: {reference}")
+    if not candidate.is_file():
+        raise BackupError(f"fichier projet absent ou non régulier: {reference}")
+    return candidate
+
+
+def export_project_graph(
+    connection: Any,
+    directory: Path,
+    project_id: Any,
+    data_directory: Path,
+) -> tuple[list[Path], dict[str, int], list[dict[str, Any]]]:
+    connection.execute(
+        """CREATE TEMP TABLE hdp_project_backup_selection (
+               table_name TEXT NOT NULL,
+               row_ctid TID NOT NULL,
+               owned BOOLEAN NOT NULL,
+               PRIMARY KEY (table_name,row_ctid)
+           ) ON COMMIT DROP"""
+    )
+    project_tables = {
+        str(row[0])
+        for row in connection.execute(
+            """SELECT columns.table_name
+               FROM information_schema.columns columns
+               JOIN information_schema.tables tables
+                 ON tables.table_schema=columns.table_schema AND tables.table_name=columns.table_name
+               WHERE columns.table_schema='public' AND columns.column_name='project_id'
+                 AND tables.table_type='BASE TABLE'"""
+        ).fetchall()
+    }
+    project_tables.difference_update(PROJECT_BACKUP_EXCLUDED_TABLES)
+    _selection_insert(
+        connection,
+        """INSERT INTO hdp_project_backup_selection(table_name,row_ctid,owned)
+           SELECT 'projects',ctid,TRUE FROM projects WHERE id=%s ON CONFLICT DO NOTHING""",
+        (project_id,),
+    )
+    for table in sorted(project_tables):
+        _selection_insert(
+            connection,
+            sql.SQL(
+                "INSERT INTO hdp_project_backup_selection(table_name,row_ctid,owned) "
+                "SELECT %s,ctid,TRUE FROM {} WHERE project_id=%s ON CONFLICT DO NOTHING"
+            ).format(sql.Identifier("public", table)),
+            (table, project_id),
+        )
+
+    graph = [
+        edge
+        for edge in _foreign_key_graph(connection)
+        if edge[0] not in PROJECT_BACKUP_EXCLUDED_TABLES
+        and edge[1] not in PROJECT_BACKUP_EXCLUDED_TABLES
+    ]
+    for _ in range(100):
+        changed = 0
+        for child, parent, child_columns, parent_columns in graph:
+            join = sql.SQL(" AND ").join(
+                sql.SQL("child.{}=parent.{}").format(
+                    sql.Identifier(child_column), sql.Identifier(parent_column)
+                )
+                for child_column, parent_column in zip(child_columns, parent_columns, strict=True)
+            )
+            changed += _selection_insert(
+                connection,
+                sql.SQL(
+                    "INSERT INTO hdp_project_backup_selection(table_name,row_ctid,owned) "
+                    "SELECT %s,parent.ctid,FALSE FROM {} parent JOIN {} child ON {} "
+                    "JOIN hdp_project_backup_selection selected "
+                    "ON selected.table_name=%s AND selected.row_ctid=child.ctid "
+                    "ON CONFLICT DO NOTHING"
+                ).format(
+                    sql.Identifier("public", parent),
+                    sql.Identifier("public", child),
+                    join,
+                ),
+                (parent, child),
+            )
+            if child not in project_tables:
+                changed += _selection_insert(
+                    connection,
+                    sql.SQL(
+                        "INSERT INTO hdp_project_backup_selection(table_name,row_ctid,owned) "
+                        "SELECT %s,child.ctid,TRUE FROM {} child JOIN {} parent ON {} "
+                        "JOIN hdp_project_backup_selection selected "
+                        "ON selected.table_name=%s AND selected.row_ctid=parent.ctid AND selected.owned "
+                        "ON CONFLICT (table_name,row_ctid) DO UPDATE SET owned=TRUE "
+                        "WHERE NOT hdp_project_backup_selection.owned"
+                    ).format(
+                        sql.Identifier("public", child),
+                        sql.Identifier("public", parent),
+                        join,
+                    ),
+                    (child, parent),
+                )
+        if changed == 0:
+            break
+    else:
+        raise BackupError("fermeture des dépendances projet non convergente")
+
+    for table in sorted(project_tables):
+        foreign_row = connection.execute(
+            sql.SQL(
+                "SELECT 1 FROM {} value JOIN hdp_project_backup_selection selected "
+                "ON selected.table_name=%s AND selected.row_ctid=value.ctid "
+                "WHERE value.project_id<>%s LIMIT 1"
+            ).format(sql.Identifier("public", table)),
+            (table, project_id),
+        ).fetchone()
+        if foreign_row:
+            raise BackupError(f"dépendance d'un autre projet détectée: {table}")
+
+    selected_tables = [
+        str(row[0])
+        for row in connection.execute(
+            """SELECT table_name FROM hdp_project_backup_selection
+               GROUP BY table_name ORDER BY table_name"""
+        ).fetchall()
+    ]
+    files: list[Path] = []
+    row_counts: dict[str, int] = {}
+    for table in selected_tables:
+        destination = directory / f"{table}.jsonl"
+        count = export_query_as_jsonl(
+            connection,
+            destination,
+            sql.SQL(
+                "SELECT value.* FROM {} value JOIN hdp_project_backup_selection selected "
+                "ON selected.table_name=%s AND selected.row_ctid=value.ctid"
+            ).format(sql.Identifier("public", table)),
+            (table,),
+        )
+        files.append(destination)
+        row_counts[table] = count
+
+    assets_by_digest: dict[str, dict[str, Any]] = {}
+    for table, column in PROJECT_FILE_COLUMNS.items():
+        if table not in selected_tables:
+            continue
+        references = connection.execute(
+            sql.SQL(
+                "SELECT DISTINCT value.{} FROM {} value "
+                "JOIN hdp_project_backup_selection selected "
+                "ON selected.table_name=%s AND selected.row_ctid=value.ctid "
+                "WHERE value.{} IS NOT NULL AND value.{}<>''"
+            ).format(
+                sql.Identifier(column),
+                sql.Identifier("public", table),
+                sql.Identifier(column),
+                sql.Identifier(column),
+            ),
+            (table,),
+        ).fetchall()
+        for (reference_value,) in references:
+            reference = str(reference_value)
+            source = _confined_project_asset(data_directory, reference)
+            digest = file_sha256(source)
+            asset = assets_by_digest.setdefault(
+                digest,
+                {
+                    "archive_name": f"asset-{digest}",
+                    "sha256": digest,
+                    "size_bytes": source.stat().st_size,
+                    "source": source,
+                    "references": [],
+                },
+            )
+            asset["references"].append(
+                {"table": table, "column": column, "stored_path": reference}
+            )
+    project_assets: list[dict[str, Any]] = []
+    for digest, asset in sorted(assets_by_digest.items()):
+        destination = directory / asset["archive_name"]
+        with asset["source"].open("rb") as source, destination.open("xb") as target:
+            shutil.copyfileobj(source, target, length=1024 * 1024)
+            target.flush()
+            os.fsync(target.fileno())
+        os.chmod(destination, 0o600)
+        if file_sha256(destination) != digest:
+            raise BackupError("copie d'un fichier projet incohérente")
+        files.append(destination)
+        project_assets.append(
+            {key: value for key, value in asset.items() if key != "source"}
+        )
+    return files, row_counts, project_assets
 
 
 def build_manifest(
@@ -565,7 +818,10 @@ def restore_global_backup_to_temporary_database(
 def _contains_sensitive_field(value: Any) -> bool:
     if isinstance(value, dict):
         return any(
-            any(marker in str(key).casefold() for marker in SENSITIVE_FIELD_MARKERS)
+            (
+                any(marker in str(key).casefold() for marker in SENSITIVE_FIELD_MARKERS)
+                and not str(key).casefold().endswith("_sha256")
+            )
             or _contains_sensitive_field(item)
             for key, item in value.items()
         )
@@ -574,15 +830,19 @@ def _contains_sensitive_field(value: Any) -> bool:
     return False
 
 
-def _scoped_restore_inventory(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _jsonl_restore_inventory(
+    manifest: dict[str, Any],
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
     inventory = _manifest_inventory(manifest)
     row_counts = manifest.get("row_counts")
     if not isinstance(row_counts, dict):
         raise BackupError("comptages de lignes absents du manifeste")
     tables: dict[str, dict[str, Any]] = {}
+    other_files: dict[str, dict[str, Any]] = {}
     for name, item in inventory.items():
         if not name.endswith(".jsonl"):
-            raise BackupError(f"fichier non JSONL interdit pour ce périmètre: {name}")
+            other_files[name] = item
+            continue
         stem = name.removesuffix(".jsonl")
         table = stem.removeprefix("related-")
         if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table):
@@ -597,6 +857,13 @@ def _scoped_restore_inventory(manifest: dict[str, Any]) -> dict[str, dict[str, A
             "declared_rows": declared_rows,
             "inventory": item,
         }
+    return tables, other_files
+
+
+def _scoped_restore_inventory(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    tables, other_files = _jsonl_restore_inventory(manifest)
+    if other_files:
+        raise BackupError(f"fichiers inattendus dans le bundle signaux: {sorted(other_files)}")
     if set(tables) != SIGNALS_RESTORE_TABLES:
         missing = sorted(SIGNALS_RESTORE_TABLES - set(tables))
         unexpected = sorted(set(tables) - SIGNALS_RESTORE_TABLES)
@@ -604,6 +871,101 @@ def _scoped_restore_inventory(manifest: dict[str, Any]) -> dict[str, dict[str, A
             f"inventaire signaux incomplet: absentes={missing}, inattendues={unexpected}"
         )
     return tables
+
+
+def _project_restore_inventory(
+    manifest: dict[str, Any],
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    tables, other_files = _jsonl_restore_inventory(manifest)
+    if "projects" not in tables or tables["projects"]["declared_rows"] != 1:
+        raise BackupError("le bundle projet doit contenir exactement un projet")
+    assets = manifest.get("project_assets")
+    if not isinstance(assets, list):
+        raise BackupError("inventaire des fichiers projet absent")
+    validated_assets: list[dict[str, Any]] = []
+    expected_asset_names: set[str] = set()
+    for asset in assets:
+        if not isinstance(asset, dict):
+            raise BackupError("entrée de fichier projet invalide")
+        archive_name = asset.get("archive_name")
+        digest = asset.get("sha256")
+        size = asset.get("size_bytes")
+        references = asset.get("references")
+        if (
+            not isinstance(archive_name, str)
+            or not re.fullmatch(r"asset-[0-9a-f]{64}", archive_name)
+            or not isinstance(digest, str)
+            or archive_name != f"asset-{digest}"
+            or not isinstance(size, int)
+            or isinstance(size, bool)
+            or size < 0
+            or not isinstance(references, list)
+            or not references
+        ):
+            raise BackupError("métadonnées de fichier projet invalides")
+        inventory_item = other_files.get(archive_name)
+        if (
+            inventory_item is None
+            or inventory_item["sha256"] != digest
+            or inventory_item["size_bytes"] != size
+            or archive_name in expected_asset_names
+        ):
+            raise BackupError("inventaire de fichier projet incohérent")
+        for reference in references:
+            if (
+                not isinstance(reference, dict)
+                or set(reference) != {"table", "column", "stored_path"}
+                or reference.get("table") not in tables
+                or PROJECT_FILE_COLUMNS.get(str(reference.get("table"))) != reference.get("column")
+                or not isinstance(reference.get("stored_path"), str)
+                or not reference["stored_path"]
+            ):
+                raise BackupError("référence de fichier projet invalide")
+        expected_asset_names.add(archive_name)
+        validated_assets.append(asset)
+    if set(other_files) != expected_asset_names:
+        raise BackupError("fichiers projet inattendus ou absents")
+    return tables, validated_assets
+
+
+def _validate_project_asset_references(
+    bundle: Path,
+    tables: dict[str, dict[str, Any]],
+    assets: list[dict[str, Any]],
+) -> None:
+    declared = {
+        (str(reference["table"]), str(reference["column"]), str(reference["stored_path"]))
+        for asset in assets
+        for reference in asset["references"]
+    }
+    observed: set[tuple[str, str, str]] = set()
+    try:
+        with zipfile.ZipFile(bundle, "r") as archive:
+            for table, column in PROJECT_FILE_COLUMNS.items():
+                if table not in tables:
+                    continue
+                with archive.open(tables[table]["member"], "r") as stream:
+                    while True:
+                        raw_line = stream.readline(MAX_BACKUP_JSONL_LINE_BYTES + 1)
+                        if not raw_line:
+                            break
+                        if len(raw_line) > MAX_BACKUP_JSONL_LINE_BYTES:
+                            raise BackupError(f"ligne JSONL trop volumineuse: {table}")
+                        try:
+                            document = json.loads(raw_line.decode("utf-8"))
+                        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                            raise BackupError(f"ligne JSONL invalide: {table}") from exc
+                        reference = document.get(column) if isinstance(document, dict) else None
+                        if reference is not None and str(reference):
+                            observed.add((table, column, str(reference)))
+    except (KeyError, OSError, zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
+        raise BackupError("vérification des références de fichiers projet impossible") from exc
+    if observed != declared:
+        missing = sorted(observed - declared)
+        unexpected = sorted(declared - observed)
+        raise BackupError(
+            f"références de fichiers projet incohérentes: absentes={missing[:10]}, inattendues={unexpected[:10]}"
+        )
 
 
 def _temporary_database_url(parsed: Any, database: str) -> str:
@@ -836,6 +1198,117 @@ def restore_signals_backup_to_temporary_database(
         "schema_version_count": len(expected_schema_versions),
         "restored_table_count": len(restored_counts),
         "restored_row_count": restored_rows,
+        "restore_executed": True,
+        "temporary_database_dropped": True,
+        "collision_policy": "reject_without_overwrite",
+        "restore_automatically_authorized": False,
+    }
+
+
+def restore_project_backup_to_temporary_database(
+    bundle: Path,
+    database_url: str,
+    *,
+    expected_application_version: str,
+    expected_schema_versions: list[str],
+    timeout_seconds: int = 1800,
+) -> dict[str, Any]:
+    if timeout_seconds < 30 or timeout_seconds > 7200:
+        raise BackupError("délai de restauration temporaire invalide")
+    validation = prevalidate_backup_bundle(bundle)
+    manifest = validation["manifest"]
+    if manifest.get("scope") != "project":
+        raise BackupError("ce chemin exige une sauvegarde de projet")
+    if manifest.get("application_version") != expected_application_version:
+        raise BackupError("version applicative de la sauvegarde incompatible")
+    if manifest.get("schema_versions") != expected_schema_versions:
+        raise BackupError("versions de schéma de la sauvegarde incompatibles")
+    tables, assets = _project_restore_inventory(manifest)
+    _validate_project_asset_references(bundle, tables, assets)
+    parsed, options, environment = _postgres_client_options(database_url)
+    source_database = unquote(parsed.path.strip("/"))
+    temporary_database = f"{TEMPORARY_RESTORE_DATABASE_PREFIX}{secrets.token_hex(8)}"
+    created = False
+    operation_error: BackupError | None = None
+    drop_error: BackupError | None = None
+    restored_rows = 0
+    restored_counts: dict[str, int] = {}
+
+    with tempfile.TemporaryDirectory(prefix=".hdp-project-restore-", dir=bundle.parent) as temporary_name:
+        schema_dump = Path(temporary_name) / "postgresql-schema.dump"
+        _schema_dump(database_url, schema_dump, timeout_seconds=min(timeout_seconds, 600))
+        if file_sha256(bundle) != validation["bundle_sha256"]:
+            raise BackupError("le bundle a changé après prévalidation")
+        try:
+            _run_postgres_client(
+                [
+                    "createdb",
+                    *options,
+                    "--maintenance-db", source_database,
+                    temporary_database,
+                ],
+                environment,
+                operation="création de la base temporaire (collision ou droits insuffisants)",
+                timeout_seconds=60,
+            )
+            created = True
+            _run_postgres_client(
+                [
+                    "pg_restore",
+                    *options,
+                    "--dbname", temporary_database,
+                    "--exit-on-error",
+                    "--single-transaction",
+                    "--no-owner",
+                    "--no-privileges",
+                    str(schema_dump),
+                ],
+                environment,
+                operation="restauration transactionnelle du schéma temporaire",
+                timeout_seconds=timeout_seconds,
+            )
+            restored_rows, restored_counts = _import_jsonl_tables(
+                bundle,
+                _temporary_database_url(parsed, temporary_database),
+                tables,
+            )
+        except BackupError as exc:
+            operation_error = exc
+        finally:
+            if created:
+                try:
+                    _run_postgres_client(
+                        [
+                            "dropdb",
+                            *options,
+                            "--maintenance-db", source_database,
+                            "--if-exists",
+                            "--force",
+                            temporary_database,
+                        ],
+                        environment,
+                        operation="suppression de la base temporaire",
+                        timeout_seconds=60,
+                    )
+                except BackupError as exc:
+                    drop_error = exc
+
+    if operation_error is not None:
+        if drop_error is not None:
+            raise BackupError(f"{operation_error}; {drop_error}") from operation_error
+        raise operation_error
+    if drop_error is not None:
+        raise drop_error
+    return {
+        "status": "temporary_restore_verified",
+        "bundle_sha256": validation["bundle_sha256"],
+        "scope": "project",
+        "application_version": expected_application_version,
+        "schema_version_count": len(expected_schema_versions),
+        "restored_table_count": len(restored_counts),
+        "restored_row_count": restored_rows,
+        "verified_asset_count": len(assets),
+        "verified_asset_size_bytes": sum(int(asset["size_bytes"]) for asset in assets),
         "restore_executed": True,
         "temporary_database_dropped": True,
         "collision_policy": "reject_without_overwrite",

@@ -179,8 +179,11 @@ PostgreSQL réelle est automatisée dans la CI et demeure une preuve distincte d
 jalon local. Le périmètre signaux transporte aussi son projet parent et ses
 règles référencées ; neuf tables sont importées dans l'ordre de leurs clés
 étrangères, au sein d'une transaction, avec refus des champs sensibles et des
-collisions. Le périmètre projet reste volontairement bloqué tant que son graphe
-de dépendances transitives n'est pas exporté et prouvé complet.
+collisions. Pour le périmètre projet, une sélection temporaire ferme les
+dépendances de clés étrangères sans suivre vers les autres projets les objets
+globaux partagés. Les fichiers physiques référencés sont confinés, refusent les
+liens symboliques, sont dédupliqués par SHA-256 et reliés à leurs chemins stockés.
+Cette fermeture projet reste candidate jusqu'à la recette PostgreSQL distante.
 
 Le connecteur réseau de réception de mails reste à arbitrer entre IMAP, OAuth et
 passerelle entrante. Le premier socle implémenté importe manuellement un fichier

@@ -213,21 +213,24 @@ class V6StaticContractTest(unittest.TestCase):
         for marker in (
             "create_global_dump",
             "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY",
-            "information_schema.columns",
             "signal_ids",
             "restore_automatically_authorized",
             "prevalidate_backup_bundle",
             "restore_global_backup_to_temporary_database",
+            "restore_project_backup_to_temporary_database",
             "restore_signals_backup_to_temporary_database",
+            "export_project_graph",
             "Sauvegarde non restaurable",
             "Restauration temporaire refusée",
-            "la restauration projet reste bloquée",
+            "verified_asset_count",
             '"projects"',
             '"signal_rules"',
             "L'empreinte de la sauvegarde est incohérente",
         ):
             self.assertIn(marker, self.features)
         self.assertIn("subprocess.run", self.backup)
+        self.assertIn("information_schema.columns", self.backup)
+        self.assertIn("hdp_project_backup_selection", self.backup)
         self.assertIn("PGPASSWORD", self.backup)
         self.assertIn('"restore_executed": False', self.backup)
         self.assertIn('"restore_automatically_authorized": False', self.backup)

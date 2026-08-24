@@ -14,13 +14,12 @@ Une case n'est cochée que si le code, les migrations, les tests et la preuve de
 non-régression correspondants existent.
 
 **Dernier jalon distant validé au 24 août 2026** : le commit parent
-`f863a303ede3…` a réussi 241 tests Python, dont la restauration globale et la
-collision sur PostgreSQL 16, ainsi que la validation Linux et la construction
-Windows. **Lot local courant** : 244 tests découverts, 240 réussis et quatre tests
+`6a0b2593e613…` a réussi 244 tests Python, dont les restaurations globale et
+signaux sur PostgreSQL 16, ainsi que la validation Linux et la construction
+Windows. **Lot local courant** : 247 tests découverts, 241 réussis et six tests
 d'intégration PostgreSQL ignorés faute de serveur local. Le schéma OpenAPI compte
-165 routes dont 51 chemins `/api/v6`. La restauration temporaire des signaux ne
-sera déclarée vérifiée qu'après ses deux tests distants. Ce jalon ne vaut pas
-qualification Windows installée, PHP/SPIP, connecteurs réels ou livraison.
+165 routes dont 51 chemins `/api/v6`. La fermeture transitive du projet et de ses
+fichiers ne sera déclarée vérifiée qu'après deux tests distants supplémentaires.
 
 ### HDP6-001 — Gouvernance et compatibilité
 
@@ -255,6 +254,9 @@ qualification Windows installée, PHP/SPIP, connecteurs réels ou livraison.
 - [x] fermer le bundle des signaux sur le projet et les règles référencées, puis
   restaurer ses neuf tables dans l'ordre des clés étrangères, en transaction et
   avec refus des champs sensibles ou identifiants dupliqués ;
+- [ ] prouver à distance la fermeture transitive du bundle projet : séparation
+  propriété/dépendance, fichiers confinés adressés par SHA-256, import ordonné,
+  collision annulée et base temporaire supprimée ;
 - [ ] tester restauration globale, projet isolé, signaux isolés, archive altérée,
   version incompatible et collision d'identifiants.
 
@@ -275,11 +277,10 @@ qualification Windows installée, PHP/SPIP, connecteurs réels ou livraison.
 
 ### HDP6-130 — Méthode de développement guidée
 
-Dernier passage du jalon : **réussi localement le 24 août 2026** après ajout de
-la restauration temporaire des signaux. Les 240 tests locaux passent ; quatre
-tests PostgreSQL réels sont explicitement ignorés en l'absence de serveur. Les
-deux tests globaux sont déjà verts à distance et les deux tests signaux doivent
-encore passer dans la CI dédiée. Les autres recettes restent distinctes.
+Dernier passage du jalon : **réussi localement le 24 août 2026** après fermeture
+transitive du bundle projet. Les 241 tests locaux passent ; six tests PostgreSQL
+réels sont ignorés en l'absence de serveur. Les quatre tests global/signaux sont
+déjà verts à distance et les deux tests projet doivent encore passer dans la CI.
 
 - [x] traiter les descriptions fonctionnelles comme source du besoin et traduire
   chaque lot en options techniques, effets, risques et critères d'acceptation ;

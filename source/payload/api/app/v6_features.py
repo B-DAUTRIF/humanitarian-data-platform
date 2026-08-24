@@ -53,11 +53,13 @@ from .v6_backup import (
     backup_root,
     build_manifest,
     create_global_dump,
+    export_project_graph,
     export_query_as_jsonl,
     file_sha256,
     prevalidate_backup_bundle,
     publish_bundle,
     restore_global_backup_to_temporary_database,
+    restore_project_backup_to_temporary_database,
     restore_signals_backup_to_temporary_database,
 )
 from .v6_rules import (
@@ -2532,6 +2534,7 @@ def create_database_backup(payload: DatabaseBackupCreate) -> dict[str, Any]:
             directory = Path(temporary_name)
             files: list[Path] = []
             row_counts: dict[str, int] = {}
+            project_assets: list[dict[str, Any]] = []
             with db() as connection:
                 schema_versions = [str(row[0]) for row in connection.execute(
                     "SELECT version FROM schema_migrations ORDER BY version"
@@ -2544,45 +2547,13 @@ def create_database_backup(payload: DatabaseBackupCreate) -> dict[str, Any]:
             elif payload.scope == "project":
                 assert payload.project_id is not None
                 with db(autocommit=False) as connection:
-                    connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
-                    _export_backup_query(
-                        connection, directory, "projects", "SELECT * FROM projects WHERE id=%s",
-                        (payload.project_id,), files, row_counts,
+                    connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+                    files, row_counts, project_assets = export_project_graph(
+                        connection,
+                        directory,
+                        payload.project_id,
+                        Path(os.environ.get("DATA_DIR", "/app/data")),
                     )
-                    tables = connection.execute(
-                        """SELECT DISTINCT table_name FROM information_schema.columns
-                           WHERE table_schema='public' AND column_name='project_id'
-                             AND table_name NOT IN ('projects','database_backups')
-                           ORDER BY table_name"""
-                    ).fetchall()
-                    for table_row in tables:
-                        table = str(table_row[0])
-                        query = psycopg.sql.SQL("SELECT * FROM {} WHERE project_id=%s").format(
-                            psycopg.sql.Identifier(table)
-                        )
-                        _export_backup_query(
-                            connection, directory, table, query, (payload.project_id,), files, row_counts
-                        )
-                    related_queries = {
-                        "rss_items": """SELECT i.* FROM rss_items i JOIN rss_subscriptions s ON s.id=i.subscription_id WHERE s.project_id=%s""",
-                        "schedule_runs": """SELECT r.* FROM schedule_runs r JOIN schedules s ON s.id=r.schedule_id WHERE s.project_id=%s""",
-                        "rule_versions": """SELECT DISTINCT v.* FROM rule_versions v JOIN rule_definitions d ON d.id=v.definition_id LEFT JOIN rule_inheritance i ON i.global_definition_id=d.id WHERE d.project_id=%s OR i.project_id=%s""",
-                        "action_executions": """SELECT x.* FROM action_executions x JOIN action_requests r ON r.id=x.request_id WHERE r.project_id=%s""",
-                        "endpoint_activation_history": """SELECT DISTINCT h.* FROM endpoint_activation_history h JOIN project_endpoint_activations p ON p.endpoint_id=h.endpoint_id WHERE p.project_id=%s""",
-                        "source_endpoints": """SELECT DISTINCT e.* FROM source_endpoints e JOIN project_endpoint_activations p ON p.endpoint_id=e.id WHERE p.project_id=%s""",
-                        "source_api_versions": """SELECT DISTINCT v.* FROM source_api_versions v JOIN source_endpoints e ON e.api_version_id=v.id JOIN project_endpoint_activations p ON p.endpoint_id=e.id WHERE p.project_id=%s""",
-                        "endpoint_parameters": """SELECT DISTINCT x.* FROM endpoint_parameters x JOIN project_endpoint_activations p ON p.endpoint_id=x.endpoint_id WHERE p.project_id=%s""",
-                        "response_fields": """SELECT DISTINCT x.* FROM response_fields x JOIN project_endpoint_activations p ON p.endpoint_id=x.endpoint_id WHERE p.project_id=%s""",
-                        "catalog_records": """SELECT DISTINCT c.* FROM catalog_records c JOIN project_catalog_references p ON p.catalog_record_id=c.id WHERE p.project_id=%s""",
-                        "raw_metadata_snapshots": """SELECT DISTINCT s.* FROM raw_metadata_snapshots s JOIN catalog_records c ON c.raw_snapshot_id=s.id JOIN project_catalog_references p ON p.catalog_record_id=c.id WHERE p.project_id=%s""",
-                        "catalog_field_lineage": """SELECT DISTINCT l.* FROM catalog_field_lineage l JOIN project_catalog_references p ON p.catalog_record_id=l.catalog_record_id WHERE p.project_id=%s""",
-                        "cache_entries": """SELECT DISTINCT c.* FROM cache_entries c JOIN project_cache_references p ON p.cache_entry_id=c.id WHERE p.project_id=%s""",
-                    }
-                    for name, query in related_queries.items():
-                        parameters = (payload.project_id, payload.project_id) if name == "rule_versions" else (payload.project_id,)
-                        _export_backup_query(
-                            connection, directory, f"related-{name}", query, parameters, files, row_counts
-                        )
                     connection.commit()
             else:
                 assert payload.project_id is not None
@@ -2628,6 +2599,8 @@ def create_database_backup(payload: DatabaseBackupCreate) -> dict[str, Any]:
                 row_counts=row_counts,
                 created_at=started,
             )
+            if payload.scope == "project":
+                manifest["project_assets"] = project_assets
             bundle = publish_bundle(root, backup_id, files, manifest)
         finished = datetime.now(UTC)
         bundle_sha256 = file_sha256(bundle)
@@ -2764,8 +2737,11 @@ def restore_database_backup_temporarily(
                 expected_schema_versions=schema_versions,
             )
         else:
-            raise BackupError(
-                "la restauration projet reste bloquée jusqu'à preuve de fermeture des dépendances"
+            report = restore_project_backup_to_temporary_database(
+                path,
+                DATABASE_URL,
+                expected_application_version="6.0.0-dev",
+                expected_schema_versions=schema_versions,
             )
     except BackupError as exc:
         raise HTTPException(status_code=409, detail=f"Restauration temporaire refusée: {exc}") from exc
@@ -2785,6 +2761,7 @@ def restore_database_backup_temporarily(
                         "bundle_sha256": report["bundle_sha256"],
                         "schema_version_count": report["schema_version_count"],
                         "restored_table_count": report["restored_table_count"],
+                        "verified_asset_count": report.get("verified_asset_count", 0),
                         "temporary_database_dropped": True,
                         "collision_policy": "reject_without_overwrite",
                     }

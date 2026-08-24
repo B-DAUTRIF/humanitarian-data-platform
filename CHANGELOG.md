@@ -1,5 +1,23 @@
 # Journal des versions
 
+## 6.0.0-dev - fermeture transitive des projets - 24 août 2026
+
+- remplacement de l'inventaire manuel du projet par une fermeture transitive
+  des clés étrangères dans une transaction répétable ;
+- distinction entre lignes possédées par le projet et dépendances globales
+  partagées : les enfants sans `project_id` sont suivis depuis les objets
+  possédés, mais les références d'autres projets ne sont jamais aspirées ;
+- exclusion explicite des sauvegardes et des tables d'authentification opérateur ;
+- collecte confinée, sans lien symbolique, des fichiers d'acquisition, ressources,
+  artefacts, rapports de scripts, caches et pièces jointes ; déduplication par
+  SHA-256 et inventaire de toutes les références d'origine ;
+- restauration des tables dans l'ordre des dépendances, vérification exacte des
+  références de fichiers et suppression obligatoire de la base temporaire ;
+- ajout de deux recettes PostgreSQL réelles couvrant cinq tables transitives,
+  un fichier physique et le rollback d'une collision projet ;
+- 247 tests découverts localement, 241 réussis et six tests PostgreSQL réservés
+  à la CI ; les deux nouveaux tests projet restent à exécuter à distance.
+
 ## 6.0.0-dev - restauration isolée des signaux - 24 août 2026
 
 - ajout du projet parent et des règles de signaux référencées au bundle signaux,
@@ -13,8 +31,8 @@
   l'ordre des dépendances et rollback non destructif d'un identifiant dupliqué ;
 - 244 tests découverts localement, 240 réussis et quatre tests PostgreSQL
   explicitement réservés à la CI ;
-- restauration projet maintenue bloquée tant que l'export de toutes ses
-  dépendances transitives n'est pas prouvé complet.
+- restauration projet maintenue bloquée à ce jalon historique, avant le lot de
+  fermeture transitive suivant.
 
 ## 6.0.0-dev - restauration PostgreSQL temporaire - 24 août 2026
 

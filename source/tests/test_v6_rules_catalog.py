@@ -51,6 +51,7 @@ from app.v6_backup import (  # noqa: E402
     prevalidate_backup_bundle,
     publish_bundle,
     restore_global_backup_to_temporary_database,
+    restore_project_backup_to_temporary_database,
     restore_signals_backup_to_temporary_database,
 )
 
@@ -588,6 +589,30 @@ class CatalogAndCacheTest(unittest.TestCase):
             bundle = publish_bundle(root, "signals-incomplete", [data], manifest)
             with self.assertRaisesRegex(BackupError, "inventaire signaux incomplet"):
                 restore_signals_backup_to_temporary_database(
+                    bundle,
+                    "postgresql://operator:secret@127.0.0.1/hdp",
+                    expected_application_version="6.0.0-dev",
+                    expected_schema_versions=["fixture-001"],
+                )
+
+    def test_project_restore_requires_an_explicit_asset_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / "projects.jsonl"
+            data.write_text('{"id":"one"}\n', encoding="utf-8")
+            manifest = build_manifest(
+                backup_id="project-no-assets",
+                application_version="6.0.0-dev",
+                schema_versions=["fixture-001"],
+                scope="project",
+                selector={"project_id": "one"},
+                files=[data],
+                row_counts={"projects": 1},
+                created_at=NOW,
+            )
+            bundle = publish_bundle(root, "project-no-assets", [data], manifest)
+            with self.assertRaisesRegex(BackupError, "inventaire des fichiers projet absent"):
+                restore_project_backup_to_temporary_database(
                     bundle,
                     "postgresql://operator:secret@127.0.0.1/hdp",
                     expected_application_version="6.0.0-dev",
