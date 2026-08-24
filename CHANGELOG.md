@@ -8,7 +8,8 @@
 - valeurs sensibles toujours masquées et preuves techniques rendues en lecture ;
 - dossier en lecture ajouté aux portails de référence sans leur attribuer un
   adaptateur ou une capacité d'exécution inexistante ;
-- deux contrats purs couvrent un portail de référence et une source inconnue.
+- 279/279 tests réussis à distance sur PostgreSQL 16 ; deux contrats purs
+  couvrent un portail de référence et une source inconnue, Linux et Windows verts.
 
 ## 6.0.0-dev - constructeur visuel de règles - 24 août 2026
 
