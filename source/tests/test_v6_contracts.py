@@ -23,6 +23,7 @@ class V6StaticContractTest(unittest.TestCase):
         cls.action_observability = (API_APP / "v6_action_observability.py").read_text(encoding="utf-8")
         cls.data_jobs = (API_APP / "v6_data_jobs.py").read_text(encoding="utf-8")
         cls.legacy_rules = (API_APP / "v6_legacy_rules.py").read_text(encoding="utf-8")
+        cls.timeline = (API_APP / "v6_timeline.py").read_text(encoding="utf-8")
         cls.storage = (API_APP / "v6_storage.py").read_text(encoding="utf-8")
         cls.openapi = (API_APP / "v6_openapi.py").read_text(encoding="utf-8")
         cls.backup = (API_APP / "v6_backup.py").read_text(encoding="utf-8")
@@ -40,6 +41,7 @@ class V6StaticContractTest(unittest.TestCase):
             ("v6_action_observability.py", self.action_observability),
             ("v6_data_jobs.py", self.data_jobs),
             ("v6_legacy_rules.py", self.legacy_rules),
+            ("v6_timeline.py", self.timeline),
             ("v6_storage.py", self.storage),
             ("v6_openapi.py", self.openapi),
             ("v6_backup.py", self.backup),
@@ -103,6 +105,26 @@ class V6StaticContractTest(unittest.TestCase):
         ):
             self.assertIn(route, self.features)
         self.assertIn('/api/v6/data-worker/run-once', self.main)
+        for marker in (
+            "schema_migrations",
+            "connector.contract_imported",
+            "connector.endpoint_state",
+            "search.federated",
+            "acquisition.completed",
+            "script.execution",
+            "resource.refresh",
+            "signal.ingested",
+            "NOT EXISTS",
+        ):
+            self.assertIn(marker, self.timeline)
+        for element_id in (
+            "timeline-event-count",
+            "timeline-category-count",
+            "timeline-failure-count",
+            "timeline-scope-label",
+        ):
+            self.assertIn(f'id="{element_id}"', self.html)
+        self.assertIn("function timelineCategory", self.html)
 
     def test_global_rule_inheritance_is_explicit_and_version_pinned(self) -> None:
         for marker in (

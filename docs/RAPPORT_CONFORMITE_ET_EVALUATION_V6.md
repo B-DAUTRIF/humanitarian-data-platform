@@ -43,7 +43,7 @@ Les statuts employés sont :
 | Champs de recherche propres aux sources | Partiel | paramètres contractuels, types et valeurs contraintes exposables | générateur uniforme de formulaires pour tous les contrats peuplés |
 | Configuration et paramètres API visibles par source | Réalisé pour l'affichage / exhaustivité contractuelle partielle | dossier structuré Endpoints, Entrées, Réponses, Métadonnées, Technique, Historique et Activation ; portails de référence lisibles sans faux adaptateur | exhaustive seulement après inventaires officiels complets |
 | Paramétrages sous chaque source, global/projet | Réalisé | bouton par encart et deux portées conservées | recette ergonomique complète |
-| Chronologie globale et projet | Partiel | vues séparées et plusieurs événements V6 audités | couvrir migrations, contrats, tables globales et chaque exécution projet |
+| Chronologie globale et projet | Réalisé pour l'unification des tables | vue globale issue des migrations, contrats, activations et audit ; vue projet dédupliquant recherches, acquisitions, cache, scripts, règles, signaux et mises à jour | recette de volumétrie et validation ergonomique sur historique représentatif |
 | Ouvrir le dossier contenant | Partiel | exploration confinée distante sans divulgation du chemin | action native locale, liens symboliques, droits et fichiers supprimés |
 | Lecture/réception de mails | Partiel | import manuel EML public, redaction, stockage confiné, rattachement et règle | choisir IMAP OAuth2, mot de passe d'application ou passerelle ; antimalware et polling |
 | Runners Python/R avec réseau réellement coupé | Réalisé comme contrainte | `network_mode:none` et état d'indisponibilité explicite | proxy d'egress dédié si des accès sortants doivent être autorisés |

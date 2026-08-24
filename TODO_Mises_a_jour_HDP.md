@@ -175,9 +175,9 @@ Windows/Docker, SPIP/HTTPS, mails réseau ou connecteurs réels.
 
 ### HDP6-060 — Chronologie, sécurité et exploitation
 
-- [ ] enrichir la chronologie globale avec migrations, contrats, activations,
+- [x] enrichir la chronologie globale avec migrations, contrats, activations,
   suspensions et opérations sur les tables globales ;
-- [ ] enrichir la chronologie projet avec recherches, acquisitions, cache,
+- [x] enrichir la chronologie projet avec recherches, acquisitions, cache,
   scripts, règles, alertes, validations et mises à jour ;
 - [ ] désactiver par défaut les endpoints d'écriture ou d'administration ;
 - [x] contrôler SSRF, redirections, hôtes, quotas, tailles, pagination et temps

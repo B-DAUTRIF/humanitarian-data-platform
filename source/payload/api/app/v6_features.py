@@ -48,6 +48,7 @@ from .v6_storage import (
     serialize_public_content,
     validation_delay_seconds,
 )
+from .v6_timeline import list_timeline
 from .v6_openapi import OpenApiInventoryError, document_sha256, inventory_openapi_document
 from .rss_registry import (
     MAX_RSS_BYTES,
@@ -1074,29 +1075,7 @@ def dispatch_event_to_v6_rules(project_id: uuid.UUID, event_id: uuid.UUID) -> di
 
 def _timeline(scope: str, project_id: uuid.UUID | None, event_type: str | None, limit: int) -> list[dict[str, Any]]:
     with db() as connection:
-        rows = connection.execute(
-            """SELECT id,project_id,scope,event_type,object_type,object_id,status,
-                      summary,details,actor,occurred_at
-               FROM application_timeline
-               WHERE scope=%s AND project_id IS NOT DISTINCT FROM %s
-                 AND (%s IS NULL OR event_type=%s)
-               ORDER BY occurred_at DESC,id DESC LIMIT %s""",
-            (scope, project_id, event_type, event_type, limit),
-        ).fetchall()
-    keys = (
-        "id",
-        "project_id",
-        "scope",
-        "event_type",
-        "object_type",
-        "object_id",
-        "status",
-        "summary",
-        "details",
-        "actor",
-        "occurred_at",
-    )
-    return [dict(zip(keys, row, strict=True)) for row in rows]
+        return list_timeline(connection, scope, project_id, event_type, limit)
 
 
 @router.get("/timeline")

@@ -1,5 +1,17 @@
 # Journal des versions
 
+## 6.0.0-dev - chronologies globales et projet unifiées - 24 août 2026
+
+- migrations appliquées, versions de contrats et transitions d'activation
+  ajoutées à la chronologie globale depuis leurs tables de preuve ;
+- recherches fédérées, acquisitions, scripts, actualisations et signaux
+  historiques ajoutés à la chronologie projet ;
+- événements déjà écrits dans `application_timeline` dédupliqués par objet ;
+- catégories, compteurs d'échecs et séparation explicite entre Gantt projet et
+  audit global dans l'interface ;
+- deux recettes PostgreSQL réelles prévues pour vérifier les unions et la
+  déduplication dans une base jetable.
+
 ## 6.0.0-dev - dossiers contractuels des sources - 24 août 2026
 
 - compteurs d'endpoints, paramètres d'entrée, champs de réponse et activations ;
