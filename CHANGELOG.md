@@ -8,8 +8,8 @@
 - mode JSON avancé rechargeable explicitement dans le constructeur ;
 - édition visuelle bornée à cinq niveaux sans réduire la limite serveur de douze
   niveaux ni empêcher l'enregistrement d'un arbre profond valide ;
-- contrat statique de non-régression ajouté ; recette ergonomique réelle encore
-  distincte de la validation automatisée.
+- 277/277 tests réussis à distance sur PostgreSQL 16, JavaScript et Windows
+  verts ; recette ergonomique réelle encore distincte de cette preuve automatisée.
 
 ## 6.0.0-dev - migration transactionnelle des règles V5 - 24 août 2026
 
