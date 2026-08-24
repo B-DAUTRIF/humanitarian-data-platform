@@ -183,7 +183,9 @@ collisions. Pour le périmètre projet, une sélection temporaire ferme les
 dépendances de clés étrangères sans suivre vers les autres projets les objets
 globaux partagés. Les fichiers physiques référencés sont confinés, refusent les
 liens symboliques, sont dédupliqués par SHA-256 et reliés à leurs chemins stockés.
-Cette fermeture projet reste candidate jusqu'à la recette PostgreSQL distante.
+Cette fermeture projet a réussi sa recette PostgreSQL 16 distante, y compris le
+fichier physique et le rollback d'une collision enfant ; la qualification du
+déploiement Windows/Docker reste une porte distincte.
 
 Le connecteur réseau de réception de mails reste à arbitrer entre IMAP, OAuth et
 passerelle entrante. Le premier socle implémenté importe manuellement un fichier

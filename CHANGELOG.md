@@ -16,7 +16,8 @@
 - ajout de deux recettes PostgreSQL réelles couvrant cinq tables transitives,
   un fichier physique et le rollback d'une collision projet ;
 - 247 tests découverts localement, 241 réussis et six tests PostgreSQL réservés
-  à la CI ; les deux nouveaux tests projet restent à exécuter à distance.
+  à la CI ; 247/247 tests ensuite réussis à distance après correction de la
+  recette de collision pour conserver la règle d'un projet unique par bundle.
 
 ## 6.0.0-dev - restauration isolée des signaux - 24 août 2026
 

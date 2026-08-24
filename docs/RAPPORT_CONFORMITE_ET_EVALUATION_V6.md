@@ -37,7 +37,7 @@ Les statuts employés sont :
 | Module d'ajout de flux RSS | Réalisé | validation sûre, aperçu, approbation, suspension et rattachement projet | tests réseau réels et planificateur générique d'exploitation |
 | Raccourci Bureau en fin d'installation | Réalisé dans le code / non qualifié | Shell Link COM natif vers le lanceur | recette Windows avec chemins Unicode/espaces et future désinstallation |
 | Sauvegarde globale SQL | Réalisé en base temporaire / cible non qualifiée | `pg_dump`, prévalidation, confirmation, transaction, collision refusée et suppression ; 241/241 tests PostgreSQL 16 | requalifier sur le déploiement cible |
-| Sauvegarde par projet | Partiel / recette distante requise | fermeture transitive propriété/dépendance, fichiers confinés et adressés par contenu, import topologique et rollback des collisions | exécuter les deux tests PostgreSQL 16 puis requalifier sur un projet représentatif complet |
+| Sauvegarde par projet | Réalisé en base temporaire / cible non qualifiée | fermeture transitive propriété/dépendance, fichier confiné adressé par contenu, import topologique, collision refusée ; 247/247 tests PostgreSQL 16 | requalifier sur un projet représentatif complet dans le déploiement cible |
 | Sauvegarde des signaux | Réalisé en base temporaire / portée à étendre | projet et règles inclus, neuf tables, tri des dépendances, transaction et collision refusée ; 244/244 tests PostgreSQL 16 | ajouter période et portée globale |
 | Champs de recherche propres aux sources | Partiel | paramètres contractuels, types et valeurs contraintes exposables | générateur uniforme de formulaires pour tous les contrats peuplés |
 | Configuration et paramètres API visibles par source | Partiel | liens Portail/Documentation/API/configuration et détail contractuel | exhaustive seulement après inventaires officiels complets |
@@ -73,8 +73,8 @@ mise en production Internet ni à une veille sanitaire déclarée exhaustive.
    sans garantir que tous les paramètres et champs des sources sont disponibles.
 2. Les demandes d'action existent avant leurs travailleurs d'exécution ; il faut
    éviter tout contournement par un effet synchrone non audité.
-3. Les chemins global et signaux sont prouvés en base temporaire ; la fermeture
-   projet attend sa preuve distante et une recette sur données représentatives
+3. Les chemins global, signaux et projet sont prouvés en base temporaire ; une
+   recette sur données représentatives dans le déploiement cible reste nécessaire
    avant tout usage critique.
 4. Le plugin SPIP et WebAuthn doivent être testés derrière le reverse proxy HTTPS
    réel, avec les comptes nominatifs et la révocation.
@@ -85,8 +85,8 @@ mise en production Internet ni à une veille sanitaire déclarée exhaustive.
 
 1. Qualifier l'EXE sur Windows 10/11 avec Docker Desktop et une mise à niveau
    depuis 5.0.2, puis vérifier le raccourci et les journaux.
-2. Exécuter la recette projet en PostgreSQL temporaire puis la requalifier avec
-   un projet représentatif contenant ressources, cache, mails et cartographie.
+2. Requalifier les sauvegardes avec un projet représentatif contenant ressources,
+   cache, mails et cartographie dans le déploiement Windows/Docker cible.
 3. Peupler source par source les inventaires officiels, avec preuves datées et
    tests de contrat, avant d'annoncer une exhaustivité.
 4. Livrer la file d'actions et ses exécuteurs idempotents.

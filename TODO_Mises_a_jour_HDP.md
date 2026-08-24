@@ -14,12 +14,11 @@ Une case n'est cochée que si le code, les migrations, les tests et la preuve de
 non-régression correspondants existent.
 
 **Dernier jalon distant validé au 24 août 2026** : le commit parent
-`6a0b2593e613…` a réussi 244 tests Python, dont les restaurations globale et
-signaux sur PostgreSQL 16, ainsi que la validation Linux et la construction
-Windows. **Lot local courant** : 247 tests découverts, 241 réussis et six tests
-d'intégration PostgreSQL ignorés faute de serveur local. Le schéma OpenAPI compte
-165 routes dont 51 chemins `/api/v6`. La fermeture transitive du projet et de ses
-fichiers ne sera déclarée vérifiée qu'après deux tests distants supplémentaires.
+`a8cb303bf677…` a réussi 247 tests Python, dont les restaurations globale,
+signaux et projet sur PostgreSQL 16, ainsi que la validation Linux et la
+construction Windows. Le schéma OpenAPI compte 165 routes dont 51 chemins
+`/api/v6`. Le lot sauvegardes est fermé en base temporaire ; cette preuve ne
+remplace pas la recette Windows/Docker du déploiement cible.
 
 ### HDP6-001 — Gouvernance et compatibilité
 
@@ -254,7 +253,7 @@ fichiers ne sera déclarée vérifiée qu'après deux tests distants supplément
 - [x] fermer le bundle des signaux sur le projet et les règles référencées, puis
   restaurer ses neuf tables dans l'ordre des clés étrangères, en transaction et
   avec refus des champs sensibles ou identifiants dupliqués ;
-- [ ] prouver à distance la fermeture transitive du bundle projet : séparation
+- [x] prouver à distance la fermeture transitive du bundle projet : séparation
   propriété/dépendance, fichiers confinés adressés par SHA-256, import ordonné,
   collision annulée et base temporaire supprimée ;
 - [ ] tester restauration globale, projet isolé, signaux isolés, archive altérée,
@@ -277,10 +276,10 @@ fichiers ne sera déclarée vérifiée qu'après deux tests distants supplément
 
 ### HDP6-130 — Méthode de développement guidée
 
-Dernier passage du jalon : **réussi localement le 24 août 2026** après fermeture
-transitive du bundle projet. Les 241 tests locaux passent ; six tests PostgreSQL
-réels sont ignorés en l'absence de serveur. Les quatre tests global/signaux sont
-déjà verts à distance et les deux tests projet doivent encore passer dans la CI.
+Dernier passage du jalon : **réussi localement et à distance le 24 août 2026**
+après fermeture transitive du bundle projet. Les 247 tests distants passent sur
+PostgreSQL 16 ; les six tests d'intégration sont seulement ignorés sur l'hôte
+local dépourvu de serveur. La recette du déploiement cible reste distincte.
 
 - [x] traiter les descriptions fonctionnelles comme source du besoin et traduire
   chaque lot en options techniques, effets, risques et critères d'acceptation ;
