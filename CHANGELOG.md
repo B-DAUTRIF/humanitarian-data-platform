@@ -12,7 +12,8 @@
 - scripts Python/R, webhooks et tout effet réseau maintenus hors des exécuteurs
   automatiques ;
 - 257 tests recensés localement, dont sept nouvelles recettes PostgreSQL
-  réservées à la CI distante.
+  réservées à la CI distante, puis 257/257 réussis sur PostgreSQL 16 ;
+- validation Linux et construction Windows réussies au commit `bda9f2d0f537…`.
 
 ## 6.0.0-dev - fermeture transitive des projets - 24 août 2026
 

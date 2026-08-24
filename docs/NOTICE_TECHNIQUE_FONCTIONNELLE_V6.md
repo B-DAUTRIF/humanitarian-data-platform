@@ -20,8 +20,9 @@ Le code repris depuis l'archive 5.0.2 contient désormais le moteur de règles,
 les migrations du catalogue et du cache, l'import OpenAPI/Swagger, le registre
 RSS extensible, les sauvegardes par périmètre, l'authentification passkey, la
 passerelle `hdp-spip/1.0`, un plugin SPIP 4.2–4.4 et l'import borné de messages
-EML publics. Ces éléments sont des composants de développement qualifiés par le
-jalon local ; ils ne constituent pas encore une livraison installable.
+EML publics, ainsi qu'un travailleur PostgreSQL pour les actions internes. Les
+sept recettes de ce travailleur passent sur PostgreSQL 16 distant ; ces éléments
+ne constituent pas encore une livraison installable.
 
 Trois distinctions restent essentielles : l'importeur exhaustif d'un contrat
 ne signifie pas que les inventaires officiels des dix sources sont déjà tous

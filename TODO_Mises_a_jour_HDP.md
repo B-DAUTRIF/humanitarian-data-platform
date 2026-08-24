@@ -13,12 +13,13 @@ La notice de référence est conservée dans
 Une case n'est cochée que si le code, les migrations, les tests et la preuve de
 non-régression correspondants existent.
 
-**Dernier jalon distant validé au 24 août 2026** : le commit parent
-`a8cb303bf677…` a réussi 247 tests Python, dont les restaurations globale,
-signaux et projet sur PostgreSQL 16, ainsi que la validation Linux et la
-construction Windows. Le schéma OpenAPI compte 165 routes dont 51 chemins
-`/api/v6`. Le lot sauvegardes est fermé en base temporaire ; cette preuve ne
-remplace pas la recette Windows/Docker du déploiement cible.
+**Dernier jalon distant validé au 24 août 2026** : le commit
+`bda9f2d0f537…` a réussi 257 tests Python sans test ignoré, dont les
+restaurations globale, signaux et projet et les sept recettes du travailleur
+d'actions sur PostgreSQL 16. La validation Linux et la construction Windows
+sont vertes. Le schéma OpenAPI compte 169 routes dont 55 chemins `/api/v6`.
+Les lots sauvegardes et travailleur interne sont fermés dans ce périmètre ; ces
+preuves ne remplacent pas la recette Windows/Docker du déploiement cible.
 
 ### HDP6-001 — Gouvernance et compatibilité
 
@@ -60,9 +61,9 @@ remplace pas la recette Windows/Docker du déploiement cible.
 
 - [x] séparer évaluation, demande d'action et exécution asynchrone ;
 - [x] réserver une clé d'idempotence avant tout effet externe ;
-- [ ] automatiser seulement notifications internes, classements, tâches HDP et
+- [x] automatiser seulement notifications internes, classements, tâches HDP et
   recherches/actualisations dans les limites configurées ;
-- [ ] produire les mails et publications SPIP sous forme de brouillons soumis à
+- [x] produire les mails et publications SPIP sous forme de brouillons soumis à
   validation ;
 - [x] maintenir scripts Python/R et webhooks en validation
   manuelle avec version et empreinte exactes ;
@@ -287,9 +288,10 @@ remplace pas la recette Windows/Docker du déploiement cible.
 ### HDP6-130 — Méthode de développement guidée
 
 Dernier passage du jalon : **réussi localement et à distance le 24 août 2026**
-après fermeture transitive du bundle projet. Les 247 tests distants passent sur
-PostgreSQL 16 ; les six tests d'intégration sont seulement ignorés sur l'hôte
-local dépourvu de serveur. La recette du déploiement cible reste distincte.
+après qualification du travailleur d'actions interne. Les 257 tests distants
+passent sur PostgreSQL 16 sans test ignoré ; les treize tests d'intégration
+PostgreSQL sont seulement ignorés sur l'hôte local dépourvu de serveur. La
+recette du déploiement cible reste distincte.
 
 - [x] traiter les descriptions fonctionnelles comme source du besoin et traduire
   chaque lot en options techniques, effets, risques et critères d'acceptation ;
