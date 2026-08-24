@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+import warnings
+import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -42,7 +44,13 @@ from app.v6_openapi import (  # noqa: E402
     document_sha256,
     inventory_openapi_document,
 )
-from app.v6_backup import build_manifest, pg_dump_command, publish_bundle  # noqa: E402
+from app.v6_backup import (  # noqa: E402
+    BackupError,
+    build_manifest,
+    pg_dump_command,
+    prevalidate_backup_bundle,
+    publish_bundle,
+)
 
 
 NOW = datetime(2026, 8, 21, 10, 0, tzinfo=UTC)
@@ -435,6 +443,82 @@ class CatalogAndCacheTest(unittest.TestCase):
             self.assertFalse(manifest["restore_automatically_authorized"])
             bundle = publish_bundle(root, "signals-test", [data], manifest)
             self.assertTrue(bundle.is_file())
+            validation = prevalidate_backup_bundle(bundle)
+            self.assertEqual(validation["status"], "prevalidated")
+            self.assertEqual(validation["file_count"], 1)
+            self.assertFalse(validation["restore_automatically_authorized"])
+            self.assertFalse(validation["restore_executed"])
+
+    def test_backup_prevalidation_rejects_a_tampered_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / "signals.jsonl"
+            data.write_text('{"id":"one"}\n', encoding="utf-8")
+            manifest = build_manifest(
+                backup_id="tampered-test",
+                application_version="6.0.0-dev",
+                schema_versions=["6.0.0-007-database-backups"],
+                scope="signals",
+                selector={"signal_ids": ["one"]},
+                files=[data],
+                row_counts={"signals": 1},
+                created_at=NOW,
+            )
+            manifest["files"][0]["sha256"] = "0" * 64
+            bundle = publish_bundle(root, "tampered-test", [data], manifest)
+            with self.assertRaisesRegex(BackupError, "empreinte incohérente"):
+                prevalidate_backup_bundle(bundle)
+
+    def test_backup_prevalidation_rejects_path_traversal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory) / "traversal.zip"
+            with zipfile.ZipFile(bundle, "w") as archive:
+                archive.writestr("manifest.json", "{}")
+                archive.writestr("../escape.txt", "forbidden")
+            with self.assertRaisesRegex(BackupError, "entrée de sauvegarde invalide"):
+                prevalidate_backup_bundle(bundle)
+
+    def test_backup_prevalidation_rejects_duplicate_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory) / "duplicate.zip"
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                with zipfile.ZipFile(bundle, "w") as archive:
+                    archive.writestr("manifest.json", "{}")
+                    archive.writestr("manifest.json", "{}")
+            with self.assertRaisesRegex(BackupError, "entrées dupliquées"):
+                prevalidate_backup_bundle(bundle)
+
+    def test_backup_prevalidation_rejects_symbolic_links(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory) / "symlink.zip"
+            link = zipfile.ZipInfo("data/link")
+            link.create_system = 3
+            link.external_attr = 0o120777 << 16
+            with zipfile.ZipFile(bundle, "w") as archive:
+                archive.writestr("manifest.json", "{}")
+                archive.writestr(link, "target")
+            with self.assertRaisesRegex(BackupError, "lien symbolique interdit"):
+                prevalidate_backup_bundle(bundle)
+
+    def test_backup_prevalidation_enforces_uncompressed_size_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / "signals.jsonl"
+            data.write_text('{"id":"one"}\n', encoding="utf-8")
+            manifest = build_manifest(
+                backup_id="limit-test",
+                application_version="6.0.0-dev",
+                schema_versions=["6.0.0-007-database-backups"],
+                scope="signals",
+                selector={"signal_ids": ["one"]},
+                files=[data],
+                row_counts={"signals": 1},
+                created_at=NOW,
+            )
+            bundle = publish_bundle(root, "limit-test", [data], manifest)
+            with self.assertRaisesRegex(BackupError, "taille décompressée autorisée"):
+                prevalidate_backup_bundle(bundle, max_uncompressed_bytes=1)
 
 
 class ActionPolicyTest(unittest.TestCase):

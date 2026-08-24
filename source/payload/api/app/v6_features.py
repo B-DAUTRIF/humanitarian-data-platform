@@ -55,6 +55,7 @@ from .v6_backup import (
     create_global_dump,
     export_query_as_jsonl,
     file_sha256,
+    prevalidate_backup_bundle,
     publish_bundle,
 )
 from .v6_rules import (
@@ -2685,8 +2686,7 @@ def list_database_backups(
     return [dict(zip(keys, row, strict=True)) for row in rows]
 
 
-@router.get("/backups/{backup_id}/download", response_class=FileResponse)
-def download_database_backup(backup_id: uuid.UUID) -> FileResponse:
+def _completed_backup_file(backup_id: uuid.UUID) -> Path:
     with db() as connection:
         row = connection.execute(
             """SELECT storage_path,bundle_sha256,status FROM database_backups WHERE id=%s""",
@@ -2700,6 +2700,26 @@ def download_database_backup(backup_id: uuid.UUID) -> FileResponse:
         raise HTTPException(status_code=409, detail="Chemin de sauvegarde invalide")
     if file_sha256(path) != row[1]:
         raise HTTPException(status_code=409, detail="L'empreinte de la sauvegarde est incohérente")
+    return path
+
+
+@router.post("/backups/{backup_id}/prevalidate")
+def prevalidate_database_backup(backup_id: uuid.UUID) -> dict[str, Any]:
+    path = _completed_backup_file(backup_id)
+    try:
+        report = prevalidate_backup_bundle(path)
+    except BackupError as exc:
+        raise HTTPException(status_code=409, detail=f"Sauvegarde non restaurable: {exc}") from exc
+    return {
+        "id": str(backup_id),
+        **report,
+        "message": "Prévalidation réussie; aucune restauration n'a été exécutée ni autorisée",
+    }
+
+
+@router.get("/backups/{backup_id}/download", response_class=FileResponse)
+def download_database_backup(backup_id: uuid.UUID) -> FileResponse:
+    path = _completed_backup_file(backup_id)
     return FileResponse(path, media_type="application/zip", filename=path.name)
 
 

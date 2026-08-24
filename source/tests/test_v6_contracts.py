@@ -77,6 +77,7 @@ class V6StaticContractTest(unittest.TestCase):
             '/rss/candidates/{feed_source_id}/decision',
             '/projects/{project_id}/rss/sources/{feed_source_id}/subscriptions',
             '/backups',
+            '/backups/{backup_id}/prevalidate',
             '/backups/{backup_id}/download',
             '/projects/{project_id}/data-policy',
             '/catalog',
@@ -214,11 +215,14 @@ class V6StaticContractTest(unittest.TestCase):
             "information_schema.columns",
             "signal_ids",
             "restore_automatically_authorized",
+            "prevalidate_backup_bundle",
+            "Sauvegarde non restaurable",
             "L'empreinte de la sauvegarde est incohérente",
         ):
             self.assertIn(marker, self.features)
         self.assertIn("subprocess.run", self.backup)
         self.assertIn("PGPASSWORD", self.backup)
+        self.assertIn('"restore_executed": False', self.backup)
         dockerfile = (API_APP.parent / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn("postgresql-client", dockerfile)
 

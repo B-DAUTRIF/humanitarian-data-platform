@@ -1,5 +1,34 @@
 # Journal des versions
 
+## 6.0.0-dev - prévalidation des sauvegardes - 24 août 2026
+
+- ajout d'une prévalidation ZIP bornée avant toute restauration : chemins,
+  doublons, liens symboliques, chiffrement, inventaire, tailles et empreintes ;
+- ajout de `POST /api/v6/backups/{backup_id}/prevalidate`, qui ne restaure rien
+  et ne transforme jamais une validation réussie en autorisation automatique ;
+- mutualisation du contrôle du chemin confiné et de l'empreinte du bundle
+  enregistré entre téléchargement et prévalidation ;
+- tests d'une archive valide, d'un fichier altéré, d'une traversée de chemin,
+  d'entrées dupliquées, d'un lien symbolique et d'un dépassement de taille
+  décompressée ;
+- restauration PostgreSQL temporaire, collisions et compatibilité de schéma
+  toujours non qualifiées et explicitement reportées au prochain sous-lot P0.
+
+## 6.0.0-dev - reprise et cohérence des preuves - 24 août 2026
+
+- vérification de l'artefact GitHub Actions V6 et de ses empreintes avant toute
+  reprise du développement ;
+- nouvelle exécution locale du jalon V6 avec 232 tests Python, 67 fichiers
+  Python analysés, 19 migrations et 161 instructions SQL validées ;
+- distinction explicite entre le jalon CI distant de 231 tests et le jalon local
+  augmenté par le nouveau contrôle de traçabilité ;
+- mise à jour de `HDP_STATE.json` avec la branche, le commit, la PR, les
+  workflows et les empreintes réellement vérifiés ;
+- ajout d'un contrat automatisé empêchant que le nombre de tests ou
+  l'inventaire Python versionnés divergent à nouveau du dépôt ;
+- aucune publication, fusion, reconstruction d'artefact ou qualification
+  Windows, Docker, PHP/SPIP et connecteurs réels.
+
 ## 6.0.0-dev - règles et catalogue central - 21 août 2026
 
 - passage officiel de la ligne de travail 5.2 à HDP 6.0.0 en développement ;

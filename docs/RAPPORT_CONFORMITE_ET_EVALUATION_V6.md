@@ -36,9 +36,9 @@ Les statuts employés sont :
 | Liste exhaustive de veille sanitaire mondiale | Partiel | registre de 15 flux officiels et cycle candidat/aperçu/approbation/abonnement | recherche officielle mondiale exhaustive, vérification en direct, flux morts/doublons |
 | Module d'ajout de flux RSS | Réalisé | validation sûre, aperçu, approbation, suspension et rattachement projet | tests réseau réels et planificateur générique d'exploitation |
 | Raccourci Bureau en fin d'installation | Réalisé dans le code / non qualifié | Shell Link COM natif vers le lanceur | recette Windows avec chemins Unicode/espaces et future désinstallation |
-| Sauvegarde globale SQL | Partiel / non qualifié | appel `pg_dump`, manifeste et archive atomique | restauration temporaire et recette sur base réelle |
-| Sauvegarde par projet | Partiel / non qualifié | export cohérent des tables et dépendances du projet | restauration isolée, collisions et fichiers/cache complets |
-| Sauvegarde des signaux | Partiel / non qualifié | export filtrable de signaux et dépendances | restauration globale/projet/période et tests d'archive altérée |
+| Sauvegarde globale SQL | Partiel / non qualifié | appel `pg_dump`, manifeste, archive atomique et prévalidation bornée | restauration temporaire et recette sur base réelle |
+| Sauvegarde par projet | Partiel / non qualifié | export cohérent, prévalidation des chemins, inventaire, tailles et empreintes | restauration isolée, collisions et fichiers/cache complets |
+| Sauvegarde des signaux | Partiel / non qualifié | export filtrable et refus des bundles altérés ou dangereux avant extraction | restauration globale/projet/période et compatibilité de schéma |
 | Champs de recherche propres aux sources | Partiel | paramètres contractuels, types et valeurs contraintes exposables | générateur uniforme de formulaires pour tous les contrats peuplés |
 | Configuration et paramètres API visibles par source | Partiel | liens Portail/Documentation/API/configuration et détail contractuel | exhaustive seulement après inventaires officiels complets |
 | Paramétrages sous chaque source, global/projet | Réalisé | bouton par encart et deux portées conservées | recette ergonomique complète |

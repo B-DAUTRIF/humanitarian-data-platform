@@ -13,12 +13,14 @@ La notice de référence est conservée dans
 Une case n'est cochée que si le code, les migrations, les tests et la preuve de
 non-régression correspondants existent.
 
-**Dernier jalon local 6.0.0-dev — reprise complète de l'archive au 21 août
-2026** : 227 tests Python réussis, 19 migrations
+**Dernier jalon local 6.0.0-dev — reprise vérifiée de l'archive au 24 août
+2026** : 237 tests Python réussis, 19 migrations
 et 161 instructions analysées par `pglast`, trois scripts JavaScript inline
-valides, import FastAPI réussi et schéma OpenAPI généré avec 163 routes, dont 49
-chemins `/api/v6`. Ce jalon n'a pas été publié et ne vaut pas qualification
-Docker, Windows, PHP/SPIP ou connecteurs réels.
+valides, import FastAPI réussi et schéma OpenAPI généré avec 164 routes, dont 50
+chemins `/api/v6`. Le contrôle de reprise vérifie désormais que le nombre de
+tests et l'inventaire Python de `HDP_STATE.json` correspondent au dépôt. Ce lot
+local n'a pas été publié et ne vaut pas qualification Docker, Windows, PHP/SPIP
+ou connecteurs réels.
 
 ### HDP6-001 — Gouvernance et compatibilité
 
@@ -27,6 +29,8 @@ Docker, Windows, PHP/SPIP ou connecteurs réels.
   artefacts 5.0.2 ;
 - [x] conserver les tables, routes et paramètres 5.x pendant les migrations ;
 - [x] maintenir `HDP_STATE.json` pour le lot local 1 ;
+- [x] réconcilier les preuves locales et distantes du jalon V6 et empêcher une
+  nouvelle divergence du nombre de tests et de fichiers Python ;
 - [ ] réconcilier README, référence API, architecture et wiki ;
 - [ ] n'effectuer aucune publication, fusion ou livraison sans validation
   explicite et preuve de qualification.
@@ -241,6 +245,9 @@ Docker, Windows, PHP/SPIP ou connecteurs réels.
   période, avec règles, évaluations et actions associées ;
 - [x] produire manifeste, version de schéma, périmètre, empreintes, inventaire des
   exclusions et contrôle de compatibilité avant restauration ;
+- [x] prévalider le bundle sans l'extraire ni restaurer : refuser altération,
+  traversée de chemin, lien symbolique, doublon, chiffrement, entrée inattendue
+  et dépassement des limites ;
 - [ ] garantir transaction cohérente, restauration dans une base temporaire,
   absence de secrets et absence d'écrasement silencieux ;
 - [ ] tester restauration globale, projet isolé, signaux isolés, archive altérée,
@@ -263,10 +270,10 @@ Docker, Windows, PHP/SPIP ou connecteurs réels.
 
 ### HDP6-130 — Méthode de développement guidée
 
-Dernier passage du jalon : **réussi localement le 21 août 2026** après correction
-de deux défauts détectés par son premier passage. Les recettes Docker, Windows et
-connecteurs réels restent non exécutées et ne sont pas assimilées à une
-qualification.
+Dernier passage du jalon : **réussi localement le 24 août 2026** après ajout de
+la prévalidation bornée des sauvegardes. Les restaurations PostgreSQL réelles et
+les recettes Docker, Windows, PHP/SPIP et connecteurs réels restent non exécutées
+et ne sont pas assimilées à une qualification.
 
 - [x] traiter les descriptions fonctionnelles comme source du besoin et traduire
   chaque lot en options techniques, effets, risques et critères d'acceptation ;

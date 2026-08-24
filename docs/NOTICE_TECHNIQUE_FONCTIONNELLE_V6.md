@@ -168,7 +168,11 @@ serveur confinée.
 Les sauvegardes sont des ensembles cohérents et manifestés. Le périmètre projet
 inclut ses dépendances et le périmètre signaux inclut événements, règles,
 évaluations et demandes d'action correspondantes. Une restauration est d'abord
-prévalidée et ne remplace aucune donnée silencieusement.
+prévalidée et ne remplace aucune donnée silencieusement. La prévalidation
+vérifie sans extraction le confinement des chemins, les doublons, liens,
+chiffrement, limites, inventaire, tailles et empreintes. Elle ne restaure rien
+et ne constitue jamais une autorisation automatique. La restauration dans une
+base PostgreSQL temporaire reste une porte de qualification distincte.
 
 Le connecteur réseau de réception de mails reste à arbitrer entre IMAP, OAuth et
 passerelle entrante. Le premier socle implémenté importe manuellement un fichier

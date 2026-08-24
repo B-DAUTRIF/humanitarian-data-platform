@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import unittest
 from pathlib import Path
 
@@ -63,6 +64,35 @@ class V6ReleaseContractTest(unittest.TestCase):
         self.assertNotIn("source/HumanitarianDataPlatform_Setup_Native_GUI_v3.0.0.exe", files)
         self.assertNotIn("source/HumanitarianDataPlatform_Setup_Native_GUI_v3.0.0.exe.sha256", files)
         self.assertFalse(any("__pycache__" in path for path in files))
+
+    def test_versioned_state_matches_the_discovered_test_and_python_inventory(self) -> None:
+        state = json.loads((ROOT / "HDP_STATE.json").read_text(encoding="utf-8"))
+        discovered = unittest.defaultTestLoader.discover(
+            str(SOURCE / "tests"),
+            pattern="test_*.py",
+        )
+        python_files = sorted(SOURCE.rglob("*.py")) + sorted((ROOT / "tools").rglob("*.py"))
+
+        self.assertEqual(
+            state["baseline_tests"]["executed"],
+            discovered.countTestCases(),
+        )
+        self.assertEqual(
+            state["baseline_tests"]["passed"],
+            discovered.countTestCases(),
+        )
+        self.assertEqual(
+            state["baseline_tests"]["python_ast_files_parsed"],
+            len(python_files),
+        )
+        self.assertEqual(
+            state["last_implementation_gate"]["python_tests"],
+            f"{discovered.countTestCases()} passed",
+        )
+        self.assertEqual(
+            state["last_implementation_gate"]["python_ast"],
+            f"{len(python_files)} files parsed",
+        )
 
 
 if __name__ == "__main__":
