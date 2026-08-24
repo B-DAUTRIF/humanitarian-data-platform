@@ -20,6 +20,7 @@ class V6StaticContractTest(unittest.TestCase):
         cls.catalog = (API_APP / "v6_catalog.py").read_text(encoding="utf-8")
         cls.actions = (API_APP / "v6_actions.py").read_text(encoding="utf-8")
         cls.action_queue = (API_APP / "v6_action_queue.py").read_text(encoding="utf-8")
+        cls.data_jobs = (API_APP / "v6_data_jobs.py").read_text(encoding="utf-8")
         cls.storage = (API_APP / "v6_storage.py").read_text(encoding="utf-8")
         cls.openapi = (API_APP / "v6_openapi.py").read_text(encoding="utf-8")
         cls.backup = (API_APP / "v6_backup.py").read_text(encoding="utf-8")
@@ -34,6 +35,7 @@ class V6StaticContractTest(unittest.TestCase):
             ("v6_catalog.py", self.catalog),
             ("v6_actions.py", self.actions),
             ("v6_action_queue.py", self.action_queue),
+            ("v6_data_jobs.py", self.data_jobs),
             ("v6_storage.py", self.storage),
             ("v6_openapi.py", self.openapi),
             ("v6_backup.py", self.backup),
@@ -91,8 +93,11 @@ class V6StaticContractTest(unittest.TestCase):
             '/actions/{request_id}/decision',
             '/actions/{request_id}/cancel',
             '/action-worker/run-once',
+            '/projects/{project_id}/data-jobs',
+            '/data-jobs/{job_id}/cancel',
         ):
             self.assertIn(route, self.features)
+        self.assertIn('/api/v6/data-worker/run-once', self.main)
 
     def test_global_rule_inheritance_is_explicit_and_version_pinned(self) -> None:
         for marker in (
@@ -160,6 +165,7 @@ class V6StaticContractTest(unittest.TestCase):
             "signal_classifications",
             "action_drafts",
             "automated_data_jobs",
+            "automated_data_job_results",
         ):
             self.assertIn(f"CREATE TABLE IF NOT EXISTS {table}", self.migrations)
         self.assertIn('version="6.0.0-003-connector-activation"', self.migrations)
@@ -171,6 +177,7 @@ class V6StaticContractTest(unittest.TestCase):
         self.assertIn('version="6.0.0-009-spip-publication-bridge"', self.migrations)
         self.assertIn('version="6.0.0-010-public-mail-ingestion"', self.migrations)
         self.assertIn('version="6.0.0-011-action-workers"', self.migrations)
+        self.assertIn('version="6.0.0-012-data-job-workers"', self.migrations)
 
     def test_action_worker_is_transactional_idempotent_and_network_closed(self) -> None:
         for marker in (
@@ -188,6 +195,20 @@ class V6StaticContractTest(unittest.TestCase):
         self.assertNotIn('"webhook"}', self.action_queue)
         self.assertNotIn("download_public_file", self.action_queue)
         self.assertNotIn("subprocess", self.action_queue)
+
+    def test_data_job_worker_is_leased_per_source_and_uses_existing_connectors(self) -> None:
+        for marker in (
+            "FOR UPDATE SKIP LOCKED",
+            "recover_stale_data_jobs",
+            "automated_data_job_results",
+            "worker_lease_expired_after_acquisition",
+            "data_job.retry_scheduled",
+            "data_job.finished",
+        ):
+            self.assertIn(marker, self.data_jobs)
+        self.assertIn("await execute_acquisition(", self.main)
+        self.assertIn("automated_data_job_source=source", self.main)
+        self.assertNotIn("download_public_file", self.data_jobs)
 
     def test_cache_materialization_is_content_addressed_and_versioned(self) -> None:
         for marker in (

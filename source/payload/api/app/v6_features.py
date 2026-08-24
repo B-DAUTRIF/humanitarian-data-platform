@@ -27,6 +27,7 @@ from .v6_action_queue import (
     execute_claimed_action_request,
     mark_action_request_failed,
 )
+from .v6_data_jobs import DataJobError, cancel_data_job
 from .v6_catalog import (
     CAPABILITIES,
     ENDPOINT_STATES,
@@ -405,6 +406,11 @@ def _action_queue_http_error(exc: ActionQueueError) -> HTTPException:
     return HTTPException(status_code=status_code, detail=str(exc))
 
 
+def _data_job_http_error(exc: DataJobError) -> HTTPException:
+    status_code = 404 if "introuvable" in str(exc).casefold() else 409
+    return HTTPException(status_code=status_code, detail=str(exc))
+
+
 def process_next_action_request(
     worker_id: str = "hdp-scheduler-action-worker",
     lease_seconds: int = 120,
@@ -493,6 +499,50 @@ def cancel_queued_action(request_id: uuid.UUID, payload: ActionCancelRequest) ->
 def run_action_worker_once(payload: ActionWorkerRunRequest) -> dict[str, Any]:
     result = process_next_action_request(payload.worker_id, payload.lease_seconds)
     return result or {"status": "idle"}
+
+
+@router.get("/projects/{project_id}/data-jobs")
+def project_automated_data_jobs(
+    project_id: uuid.UUID,
+    status: str | None = Query(default=None, pattern="^(queued|running|completed|partial|failed|cancelled)$"),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[dict[str, Any]]:
+    ensure_project(project_id)
+    with db() as connection:
+        rows = connection.execute(
+            """SELECT j.id,j.request_id,j.job_type,j.parameters,j.status,j.result,j.error,
+                      j.attempt_count,j.max_attempts,j.next_attempt_at,j.lease_owner,
+                      j.lease_expires_at,j.cancel_requested_at,j.cancelled_at,
+                      j.created_at,j.updated_at,j.started_at,j.finished_at,
+                      COALESCE((
+                        SELECT jsonb_agg(jsonb_build_object(
+                            'source_id',r.source_id,'status',r.status,
+                            'attempt_count',r.attempt_count,'acquisition_id',r.acquisition_id,
+                            'result',r.result,'error',r.error,'started_at',r.started_at,
+                            'finished_at',r.finished_at) ORDER BY r.source_id)
+                        FROM automated_data_job_results r WHERE r.job_id=j.id
+                      ),'[]'::jsonb)
+               FROM automated_data_jobs j
+               WHERE j.project_id=%s AND (%s IS NULL OR j.status=%s)
+               ORDER BY j.created_at DESC,j.id LIMIT %s""",
+            (project_id, status, status, limit),
+        ).fetchall()
+    keys = (
+        "id", "request_id", "job_type", "parameters", "status", "result", "error",
+        "attempt_count", "max_attempts", "next_attempt_at", "lease_owner",
+        "lease_expires_at", "cancel_requested_at", "cancelled_at", "created_at",
+        "updated_at", "started_at", "finished_at", "source_results",
+    )
+    return [dict(zip(keys, row, strict=True)) for row in rows]
+
+
+@router.post("/data-jobs/{job_id}/cancel")
+def cancel_automated_data_job(job_id: uuid.UUID, payload: ActionCancelRequest) -> dict[str, Any]:
+    try:
+        with db(autocommit=False) as connection:
+            return cancel_data_job(connection, job_id, payload.actor, payload.reason)
+    except DataJobError as exc:
+        raise _data_job_http_error(exc) from exc
 
 
 @router.get("/rule-schema")

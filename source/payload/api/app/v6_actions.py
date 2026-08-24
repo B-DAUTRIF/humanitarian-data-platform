@@ -4,6 +4,8 @@ import re
 import uuid
 from typing import Any, Mapping
 
+from .v6_data_jobs import DataJobError, validate_data_job_parameters
+
 
 ACTION_POLICY: dict[str, dict[str, str]] = {
     "notification": {"risk": "safe", "control": "automatic_within_limits"},
@@ -84,6 +86,26 @@ def validate_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if action_type == "webhook":
             _require_uuid(parameters, "webhook_version_id", f"{path}.parameters")
             _require_sha256(parameters, "configuration_sha256", f"{path}.parameters")
+        if action_type in {"data_search", "data_refresh"}:
+            try:
+                data_job = validate_data_job_parameters(parameters)
+            except DataJobError as exc:
+                raise ActionValidationError(f"{path}.parameters: {exc}") from exc
+            estimated_requests = max(
+                _estimate(parameters, "estimated_requests", f"{path}.parameters"),
+                _estimate(limits, "estimated_requests", f"{path}.limits"),
+            )
+            if estimated_requests < len(data_job["sources"]):
+                raise ActionValidationError(
+                    f"{path}: estimated_requests doit couvrir chaque source sélectionnée"
+                )
+            if action_type == "data_refresh" and max(
+                _estimate(parameters, "estimated_bytes", f"{path}.parameters"),
+                _estimate(limits, "estimated_bytes", f"{path}.limits"),
+            ) == 0:
+                raise ActionValidationError(
+                    f"{path}: estimated_bytes doit être positif pour une actualisation"
+                )
         normalized.append({"type": action_type, "parameters": dict(parameters), "limits": dict(limits)})
     return normalized
 

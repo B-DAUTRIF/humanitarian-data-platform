@@ -132,6 +132,17 @@ from .v6_features import (
     process_next_action_request,
     router as v6_router,
 )
+from .v6_data_jobs import (
+    DataJobError,
+    begin_data_job_source,
+    claim_next_data_job,
+    complete_data_job_attempt,
+    data_job_cancel_requested,
+    finish_data_job_source,
+    initialize_data_job_sources,
+    mark_data_job_failed,
+    validate_data_job_parameters,
+)
 from .script_runtime import (
     TERMINAL_STATUSES,
     ensure_spool_layout,
@@ -465,6 +476,11 @@ class SearchResponse(BaseModel):
     items: list[dict[str, Any]]
     downloads: dict[str, int]
     parameters: dict[str, Any]
+
+
+class AutomatedDataWorkerRunRequest(BaseModel):
+    worker_id: str = Field(default="manual-data-worker", min_length=2, max_length=120)
+    lease_seconds: int = Field(default=900, ge=30, le=1800)
 
 
 def database_connection(*, autocommit: bool = True) -> psycopg.Connection[Any]:
@@ -1107,7 +1123,11 @@ def persist_raw(
     item_count: int,
     schedule_id: uuid.UUID | None,
     parameters: dict[str, Any] | None = None,
+    automated_data_job_id: uuid.UUID | None = None,
+    automated_data_job_source: str | None = None,
 ) -> dict[str, Any]:
+    if (automated_data_job_id is None) != (automated_data_job_source is None):
+        raise ValueError("Le travail automatisé et sa source doivent être fournis ensemble")
     retrieved_at = datetime.now(UTC)
     acquisition_id = uuid.uuid4()
     raw_bytes = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
@@ -1127,8 +1147,8 @@ def persist_raw(
             """
             INSERT INTO acquisitions
                 (id, project_id, schedule_id, source, query, retrieved_at, sha256,
-                 item_count, raw_path, parameters)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 item_count, raw_path, parameters,automated_data_job_id,automated_data_job_source)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 acquisition_id,
@@ -1141,6 +1161,8 @@ def persist_raw(
                 item_count,
                 str(relative),
                 Jsonb(parameters or {}),
+                automated_data_job_id,
+                automated_data_job_source,
             ),
         )
         connection.execute(
@@ -1682,6 +1704,8 @@ async def execute_acquisition(
     auto_download: bool,
     schedule_id: uuid.UUID | None = None,
     parameters: dict[str, Any] | None = None,
+    automated_data_job_id: uuid.UUID | None = None,
+    automated_data_job_source: str | None = None,
 ) -> SearchResponse:
     ensure_project(project_id)
     project_settings = get_project_source_settings(project_id, source)
@@ -1710,7 +1734,15 @@ async def execute_acquisition(
         raise HTTPException(status_code=502, detail=f"Source distante indisponible: {exc}") from exc
 
     provenance = persist_raw(
-        project_id, source, validated["query"], payload, len(items), schedule_id, validated
+        project_id,
+        source,
+        validated["query"],
+        payload,
+        len(items),
+        schedule_id,
+        validated,
+        automated_data_job_id,
+        automated_data_job_source,
     )
     downloads = {"queued": 0, "completed": 0, "skipped": 0, "failed": 0, "deferred": 0}
     if auto_download:
@@ -2672,6 +2704,121 @@ async def execute_claimed_resource_refresh(schedule: dict[str, Any]) -> None:
         )
 
 
+def claim_automated_data_job(
+    worker_id: str = "hdp-scheduler-data-worker",
+    lease_seconds: int = 900,
+) -> dict[str, Any] | None:
+    with database_connection(autocommit=False) as connection:
+        return claim_next_data_job(
+            connection,
+            worker_id,
+            lease_seconds=lease_seconds,
+        )
+
+
+async def execute_claimed_automated_data_job(job: dict[str, Any]) -> dict[str, Any]:
+    try:
+        parameters = validate_data_job_parameters(job["parameters"])
+        unknown_sources = sorted(set(parameters["sources"]) - set(CONNECTORS))
+        if unknown_sources:
+            raise DataJobError(f"Sources non interrogeables: {unknown_sources}")
+    except DataJobError as exc:
+        with database_connection(autocommit=False) as connection:
+            return mark_data_job_failed(connection, job, str(exc), permanent=True)
+
+    with database_connection(autocommit=False) as connection:
+        initialize_data_job_sources(connection, job, parameters["sources"])
+
+    for source in parameters["sources"]:
+        with database_connection(autocommit=False) as connection:
+            if data_job_cancel_requested(connection, job["id"]):
+                finish_data_job_source(
+                    connection,
+                    job,
+                    source,
+                    "cancelled",
+                    error="cancel_requested_before_source",
+                )
+                continue
+            source_state = begin_data_job_source(connection, job, source)
+        if not source_state["execute"]:
+            if source_state["status"] == "cancelled":
+                with database_connection(autocommit=False) as connection:
+                    finish_data_job_source(
+                        connection,
+                        job,
+                        source,
+                        "cancelled",
+                        error="cancel_requested_before_source",
+                    )
+            continue
+        try:
+            acquisition = await execute_acquisition(
+                job["project_id"],
+                source,
+                parameters["query"],
+                parameters["result_limit"],
+                job["job_type"] == "data_refresh",
+                parameters=parameters["source_parameters"].get(source, {}),
+                automated_data_job_id=job["id"],
+                automated_data_job_source=source,
+            )
+            result = {
+                "acquisition_id": acquisition.acquisition_id,
+                "source": source,
+                "query": acquisition.query,
+                "retrieved_at": acquisition.retrieved_at.isoformat(),
+                "sha256": acquisition.sha256,
+                "item_count": acquisition.item_count,
+                "raw_path": acquisition.raw_path,
+                "downloads": acquisition.downloads,
+            }
+            with database_connection(autocommit=False) as connection:
+                finish_data_job_source(
+                    connection,
+                    job,
+                    source,
+                    "completed",
+                    result,
+                    acquisition_id=uuid.UUID(acquisition.acquisition_id),
+                )
+        except Exception as exc:  # Chaque source conserve son résultat et n'arrête pas les suivantes.
+            detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
+            with database_connection(autocommit=False) as connection:
+                finish_data_job_source(
+                    connection,
+                    job,
+                    source,
+                    "failed",
+                    error=str(detail)[:2000],
+                )
+
+    with database_connection(autocommit=False) as connection:
+        return complete_data_job_attempt(connection, job)
+
+
+async def process_next_automated_data_job(
+    worker_id: str = "hdp-scheduler-data-worker",
+    lease_seconds: int = 900,
+) -> dict[str, Any] | None:
+    job = await asyncio.to_thread(claim_automated_data_job, worker_id, lease_seconds)
+    if job is None:
+        return None
+    try:
+        return await execute_claimed_automated_data_job(job)
+    except Exception as exc:
+        with database_connection(autocommit=False) as connection:
+            return mark_data_job_failed(connection, job, str(exc))
+
+
+@app.post("/api/v6/data-worker/run-once")
+async def run_automated_data_worker_once(
+    payload: AutomatedDataWorkerRunRequest,
+) -> dict[str, Any]:
+    result = await process_next_automated_data_job(payload.worker_id, payload.lease_seconds)
+    return result or {"status": "idle", "worker_id": payload.worker_id}
+
+
 async def scheduler_loop() -> None:
     while True:
         try:
@@ -2697,6 +2844,9 @@ async def scheduler_loop() -> None:
                 continue
             action_result = await asyncio.to_thread(process_next_action_request)
             if action_result:
+                continue
+            data_job_result = await process_next_automated_data_job()
+            if data_job_result:
                 continue
         except asyncio.CancelledError:
             raise

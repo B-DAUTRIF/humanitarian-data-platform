@@ -237,7 +237,8 @@ class ActionQueuePostgresIntegrationTest(unittest.TestCase):
     def test_policy_is_rechecked_after_claim_before_effect(self) -> None:
         request_id = self._request(
             "data_refresh",
-            limits={"estimated_requests": 5, "estimated_bytes": 0, "estimated_duration_seconds": 0},
+            {"source": "hdx", "query": "cholera", "result_limit": 10},
+            limits={"estimated_requests": 5, "estimated_bytes": 100000, "estimated_duration_seconds": 0},
         )
         request = self._claim()
         self.assertIsNotNone(request)
@@ -256,6 +257,7 @@ class ActionQueuePostgresIntegrationTest(unittest.TestCase):
     def test_explicit_approval_can_override_the_recorded_project_limit(self) -> None:
         request_id = self._request(
             "data_search",
+            {"source": "reliefweb", "query": "cholera", "result_limit": 10},
             limits={"estimated_requests": 20, "estimated_bytes": 0, "estimated_duration_seconds": 0},
             status="pending_approval",
         )

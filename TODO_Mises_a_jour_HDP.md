@@ -77,8 +77,12 @@ preuves ne remplacent pas la recette Windows/Docker du déploiement cible.
   les limites projet dans la transaction qui précède l'effet ;
 - [x] produire idempotemment les notifications, classements, tâches et brouillons
   internes, puis mettre en file les recherches et actualisations ;
+- [x] réclamer les travaux de données avec bail et `SKIP LOCKED`, conserver un
+  résultat par source, reprendre seulement les sources échouées et refuser une
+  seconde acquisition persistée pour le même couple travail/source ;
 - [ ] exécuter les travaux `automated_data_jobs` avec les connecteurs réels,
-  quotas de source, reprise, annulation et résultat partiel par source ;
+  puis qualifier les appels Internet, quotas de source et annulations pendant
+  un transfert en cours ;
 - [ ] exposer dans l'interface le suivi des tentatives, décisions, brouillons et
   travaux de données associés.
 
@@ -292,6 +296,10 @@ après qualification du travailleur d'actions interne. Les 257 tests distants
 passent sur PostgreSQL 16 sans test ignoré ; les treize tests d'intégration
 PostgreSQL sont seulement ignorés sur l'hôte local dépourvu de serveur. La
 recette du déploiement cible reste distincte.
+
+Le candidat suivant recense **265 tests** : 248 passent localement et dix-sept
+recettes PostgreSQL sont ignorées, dont quatre nouvelles pour les travaux de
+données. Il ne sera déclaré vérifié qu'après la CI PostgreSQL complète.
 
 - [x] traiter les descriptions fonctionnelles comme source du besoin et traduire
   chaque lot en options techniques, effets, risques et critères d'acceptation ;

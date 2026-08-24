@@ -624,7 +624,7 @@ class ActionPolicyTest(unittest.TestCase):
     def test_safe_action_is_queued_only_within_project_limits(self) -> None:
         action = {
             "type": "data_refresh",
-            "parameters": {},
+            "parameters": {"source": "hdx", "query": "cholera", "result_limit": 10},
             "limits": {"estimated_requests": 2, "estimated_bytes": 1024, "estimated_duration_seconds": 5},
         }
         self.assertEqual(action_status(action, 10, 2048, 30), ("queued", "automatic_within_limits"))

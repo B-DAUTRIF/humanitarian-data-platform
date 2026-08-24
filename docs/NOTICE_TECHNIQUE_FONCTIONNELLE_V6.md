@@ -120,11 +120,17 @@ disproportionnée et créerait deux moteurs techniques difficiles à qualifier.
   unique sur `request_id`.
 - Les notifications, classifications et tâches sont des objets HDP internes. Les
   courriels et publications ne deviennent que des brouillons. Les recherches et
-  actualisations sont mises dans `automated_data_jobs` ; leur connecteur réseau
-  reste un travail distinct non activé par ce lot.
+  actualisations sont mises dans `automated_data_jobs`. Un second travailleur les
+  réclame avec bail, exécute uniquement les sources explicitement nommées via les
+  adaptateurs HDP existants et conserve un résultat par source. Les recettes
+  PostgreSQL et les appels Internet réels restent deux preuves distinctes.
 - Une annulation observée avant l'effet termine la tentative sans créer d'objet.
   Les quotas du projet sont relus sous verrou juste avant l'effet et peuvent
   replacer la demande en `pending_approval`.
+- Un travail de données conserve les sources déjà réussies pendant ses reprises.
+  Une acquisition est unique pour le couple travail/source ; une annulation est
+  observée avant chaque source, mais ne prétend pas interrompre un transfert HTTP
+  déjà engagé tant que la recette réseau correspondante n'est pas qualifiée.
 
 Une règle est un arbre composé de groupes logiques et de feuilles `condition` ou
 `correlation`. Le schéma est versionné, strict, borné et validé côté serveur.

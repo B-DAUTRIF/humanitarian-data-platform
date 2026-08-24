@@ -1429,6 +1429,40 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX IF NOT EXISTS automated_data_jobs_worker_idx ON automated_data_jobs(status,created_at)",
         ),
     ),
+    Migration(
+        version="6.0.0-012-data-job-workers",
+        description="Baux, reprises et résultats par source des travaux de données automatisés",
+        statements=(
+            "ALTER TABLE automated_data_jobs ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE automated_data_jobs ADD COLUMN IF NOT EXISTS max_attempts INTEGER NOT NULL DEFAULT 3",
+            "ALTER TABLE automated_data_jobs ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ",
+            "ALTER TABLE automated_data_jobs ADD COLUMN IF NOT EXISTS lease_owner TEXT",
+            "ALTER TABLE automated_data_jobs ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ",
+            "ALTER TABLE automated_data_jobs ADD COLUMN IF NOT EXISTS cancel_requested_at TIMESTAMPTZ",
+            "ALTER TABLE automated_data_jobs ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ",
+            "ALTER TABLE acquisitions ADD COLUMN IF NOT EXISTS automated_data_job_id UUID REFERENCES automated_data_jobs(id) ON DELETE SET NULL",
+            "ALTER TABLE acquisitions ADD COLUMN IF NOT EXISTS automated_data_job_source TEXT",
+            """
+            CREATE TABLE IF NOT EXISTS automated_data_job_results (
+                job_id UUID NOT NULL REFERENCES automated_data_jobs(id) ON DELETE CASCADE,
+                source_id TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('queued','running','completed','failed','cancelled')),
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                acquisition_id UUID UNIQUE REFERENCES acquisitions(id) ON DELETE SET NULL,
+                result JSONB NOT NULL DEFAULT '{}'::jsonb,
+                error TEXT,
+                started_at TIMESTAMPTZ,
+                finished_at TIMESTAMPTZ,
+                updated_at TIMESTAMPTZ NOT NULL,
+                PRIMARY KEY (job_id, source_id)
+            )
+            """,
+            "CREATE UNIQUE INDEX IF NOT EXISTS acquisitions_automated_job_source_uidx ON acquisitions(automated_data_job_id,automated_data_job_source) WHERE automated_data_job_id IS NOT NULL",
+            "CREATE INDEX IF NOT EXISTS automated_data_jobs_due_idx ON automated_data_jobs(status,next_attempt_at,created_at)",
+            "CREATE INDEX IF NOT EXISTS automated_data_jobs_lease_idx ON automated_data_jobs(lease_expires_at) WHERE status='running'",
+            "CREATE INDEX IF NOT EXISTS automated_data_job_results_status_idx ON automated_data_job_results(job_id,status,source_id)",
+        ),
+    ),
 )
 
 

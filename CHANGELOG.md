@@ -1,5 +1,20 @@
 # Journal des versions
 
+## 6.0.0-dev - exécution contrôlée des travaux de données - 24 août 2026
+
+- sources et requête désormais obligatoires avant toute action réseau ; secrets,
+  sources implicites et estimation insuffisante refusés avant mise en file ;
+- travailleur `automated_data_jobs` avec réclamation concurrente, bail, reprise,
+  annulation entre sources, trois tentatives et temporisation progressive ;
+- résultats séparés par source, conservation des succès pendant les reprises et
+  statut final `completed`, `partial`, `failed` ou `cancelled` ;
+- liaison unique entre travail, source et acquisition empêchant une seconde
+  acquisition persistée après interruption ;
+- réutilisation des adaptateurs HDP existants ; aucun script, webhook ou egress
+  générique n'est ouvert par ce travailleur ;
+- 265 tests recensés localement, dont quatre nouvelles recettes PostgreSQL
+  réservées à la CI ; appels réels aux sources toujours non qualifiés.
+
 ## 6.0.0-dev - file d'actions interne - 24 août 2026
 
 - séparation effective entre évaluation, demande et travailleur asynchrone ;
