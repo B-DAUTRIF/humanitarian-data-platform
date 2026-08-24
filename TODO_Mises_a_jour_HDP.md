@@ -14,12 +14,12 @@ Une case n'est cochée que si le code, les migrations, les tests et la preuve de
 non-régression correspondants existent.
 
 **Dernier jalon distant validé au 24 août 2026** : le commit parent
-`1d099647e5ab…` a réussi 237 tests Python, la validation Linux et la construction
-Windows. **Lot local courant** : 241 tests découverts, 239 réussis et deux tests
-d'intégration PostgreSQL ignorés faute de serveur local ; 19 migrations et 161
-instructions SQL sont analysées, et le schéma OpenAPI compte 165 routes dont 51
-chemins `/api/v6`. La restauration globale temporaire ne sera déclarée vérifiée
-qu'après exécution distante des deux tests réels. Ce jalon ne vaut pas
+`f863a303ede3…` a réussi 241 tests Python, dont la restauration globale et la
+collision sur PostgreSQL 16, ainsi que la validation Linux et la construction
+Windows. **Lot local courant** : 244 tests découverts, 240 réussis et quatre tests
+d'intégration PostgreSQL ignorés faute de serveur local. Le schéma OpenAPI compte
+165 routes dont 51 chemins `/api/v6`. La restauration temporaire des signaux ne
+sera déclarée vérifiée qu'après ses deux tests distants. Ce jalon ne vaut pas
 qualification Windows installée, PHP/SPIP, connecteurs réels ou livraison.
 
 ### HDP6-001 — Gouvernance et compatibilité
@@ -237,8 +237,9 @@ qualification Windows installée, PHP/SPIP, connecteurs réels ou livraison.
 
 ### HDP6-110 — Sauvegardes SQL par périmètre
 
-- [ ] conserver la sauvegarde/restauration globale existante et la requalifier
-  après les migrations 6.0.0 ;
+- [x] conserver la sauvegarde/restauration globale et réussir sa recette dans une
+  base temporaire PostgreSQL 16 après les migrations 6.0.0, sans qualifier pour
+  autant le déploiement cible ;
 - [x] ajouter une sauvegarde cohérente d'un projet incluant ses dépendances,
   fichiers, lignées, règles, cache référencé et chronologie ;
 - [ ] ajouter une sauvegarde des signaux, globale ou limitée à un projet et à une
@@ -251,6 +252,9 @@ qualification Windows installée, PHP/SPIP, connecteurs réels ou livraison.
 - [x] pour la sauvegarde globale, garantir transaction unique, restauration
   dans une base temporaire, absence de secret dans les commandes et traces,
   refus des collisions sans écrasement, puis suppression obligatoire ;
+- [x] fermer le bundle des signaux sur le projet et les règles référencées, puis
+  restaurer ses neuf tables dans l'ordre des clés étrangères, en transaction et
+  avec refus des champs sensibles ou identifiants dupliqués ;
 - [ ] tester restauration globale, projet isolé, signaux isolés, archive altérée,
   version incompatible et collision d'identifiants.
 
@@ -271,11 +275,11 @@ qualification Windows installée, PHP/SPIP, connecteurs réels ou livraison.
 
 ### HDP6-130 — Méthode de développement guidée
 
-Dernier passage du jalon : **réussi localement le 24 août 2026** après ajout du
-chemin de restauration globale temporaire. Les 239 tests locaux passent ; les
-deux tests PostgreSQL réels sont explicitement ignorés en l'absence de serveur
-et doivent passer dans la CI dédiée. Les recettes Windows installée, PHP/SPIP et
-connecteurs réels restent distinctes et ne sont pas assimilées à une qualification.
+Dernier passage du jalon : **réussi localement le 24 août 2026** après ajout de
+la restauration temporaire des signaux. Les 240 tests locaux passent ; quatre
+tests PostgreSQL réels sont explicitement ignorés en l'absence de serveur. Les
+deux tests globaux sont déjà verts à distance et les deux tests signaux doivent
+encore passer dans la CI dédiée. Les autres recettes restent distinctes.
 
 - [x] traiter les descriptions fonctionnelles comme source du besoin et traduire
   chaque lot en options techniques, effets, risques et critères d'acceptation ;

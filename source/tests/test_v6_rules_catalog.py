@@ -51,6 +51,7 @@ from app.v6_backup import (  # noqa: E402
     prevalidate_backup_bundle,
     publish_bundle,
     restore_global_backup_to_temporary_database,
+    restore_signals_backup_to_temporary_database,
 )
 
 
@@ -563,6 +564,30 @@ class CatalogAndCacheTest(unittest.TestCase):
             bundle = publish_bundle(root, "global-incompatible", [dump], manifest)
             with self.assertRaisesRegex(BackupError, "version applicative"):
                 restore_global_backup_to_temporary_database(
+                    bundle,
+                    "postgresql://operator:secret@127.0.0.1/hdp",
+                    expected_application_version="6.0.0-dev",
+                    expected_schema_versions=["fixture-001"],
+                )
+
+    def test_signal_restore_rejects_incomplete_dependency_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / "signal_events.jsonl"
+            data.write_text('{"id":"one"}\n', encoding="utf-8")
+            manifest = build_manifest(
+                backup_id="signals-incomplete",
+                application_version="6.0.0-dev",
+                schema_versions=["fixture-001"],
+                scope="signals",
+                selector={"signal_ids": ["one"]},
+                files=[data],
+                row_counts={"signal_events": 1},
+                created_at=NOW,
+            )
+            bundle = publish_bundle(root, "signals-incomplete", [data], manifest)
+            with self.assertRaisesRegex(BackupError, "inventaire signaux incomplet"):
+                restore_signals_backup_to_temporary_database(
                     bundle,
                     "postgresql://operator:secret@127.0.0.1/hdp",
                     expected_application_version="6.0.0-dev",

@@ -58,6 +58,7 @@ from .v6_backup import (
     prevalidate_backup_bundle,
     publish_bundle,
     restore_global_backup_to_temporary_database,
+    restore_signals_backup_to_temporary_database,
 )
 from .v6_rules import (
     CONDITION_OPERATORS,
@@ -2594,9 +2595,19 @@ def create_database_backup(payload: DatabaseBackupCreate) -> dict[str, Any]:
                     ).fetchall()
                     if {row[0] for row in owned} != set(signal_ids):
                         raise HTTPException(status_code=422, detail="Un signal n'appartient pas au projet")
+                    _export_backup_query(
+                        connection,
+                        directory,
+                        "projects",
+                        "SELECT * FROM projects WHERE id=%s",
+                        (payload.project_id,),
+                        files,
+                        row_counts,
+                    )
                     signal_queries = {
                         "signal_events": "SELECT * FROM signal_events WHERE project_id=%s AND id=ANY(%s)",
                         "signal_actions": "SELECT * FROM signal_actions WHERE event_id=ANY(%s)",
+                        "signal_rules": """SELECT DISTINCT r.* FROM signal_rules r JOIN signal_actions a ON a.rule_id=r.id JOIN signal_events e ON e.id=a.event_id WHERE e.project_id=%s AND e.id=ANY(%s)""",
                         "rule_evaluations": "SELECT * FROM rule_evaluations WHERE project_id=%s AND triggering_event_id=ANY(%s)",
                         "action_requests": """SELECT r.* FROM action_requests r JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
                         "action_executions": """SELECT x.* FROM action_executions x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
@@ -2737,12 +2748,25 @@ def restore_database_backup_temporarily(
             ).fetchall()
         ]
     try:
-        report = restore_global_backup_to_temporary_database(
-            path,
-            DATABASE_URL,
-            expected_application_version="6.0.0-dev",
-            expected_schema_versions=schema_versions,
-        )
+        scope = prevalidate_backup_bundle(path)["manifest"]["scope"]
+        if scope == "global":
+            report = restore_global_backup_to_temporary_database(
+                path,
+                DATABASE_URL,
+                expected_application_version="6.0.0-dev",
+                expected_schema_versions=schema_versions,
+            )
+        elif scope == "signals":
+            report = restore_signals_backup_to_temporary_database(
+                path,
+                DATABASE_URL,
+                expected_application_version="6.0.0-dev",
+                expected_schema_versions=schema_versions,
+            )
+        else:
+            raise BackupError(
+                "la restauration projet reste bloquée jusqu'à preuve de fermeture des dépendances"
+            )
     except BackupError as exc:
         raise HTTPException(status_code=409, detail=f"Restauration temporaire refusée: {exc}") from exc
     now = datetime.now(UTC)
@@ -2755,7 +2779,7 @@ def restore_database_backup_temporarily(
             (
                 uuid.uuid4(),
                 str(backup_id),
-                "Restauration globale vérifiée dans une base temporaire supprimée",
+                f"Restauration {report['scope']} vérifiée dans une base temporaire supprimée",
                 Jsonb(
                     {
                         "bundle_sha256": report["bundle_sha256"],

@@ -176,7 +176,11 @@ une action séparée exige une confirmation littérale, crée une nouvelle base 
 nom aléatoire, refuse toute collision, restaure en transaction unique, vérifie
 migrations et tables puis supprime obligatoirement la base temporaire. La recette
 PostgreSQL réelle est automatisée dans la CI et demeure une preuve distincte du
-jalon local ; les restaurations projet et signaux restent à développer.
+jalon local. Le périmètre signaux transporte aussi son projet parent et ses
+règles référencées ; neuf tables sont importées dans l'ordre de leurs clés
+étrangères, au sein d'une transaction, avec refus des champs sensibles et des
+collisions. Le périmètre projet reste volontairement bloqué tant que son graphe
+de dépendances transitives n'est pas exporté et prouvé complet.
 
 Le connecteur réseau de réception de mails reste à arbitrer entre IMAP, OAuth et
 passerelle entrante. Le premier socle implémenté importe manuellement un fichier

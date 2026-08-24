@@ -218,8 +218,12 @@ class V6StaticContractTest(unittest.TestCase):
             "restore_automatically_authorized",
             "prevalidate_backup_bundle",
             "restore_global_backup_to_temporary_database",
+            "restore_signals_backup_to_temporary_database",
             "Sauvegarde non restaurable",
             "Restauration temporaire refusée",
+            "la restauration projet reste bloquée",
+            '"projects"',
+            '"signal_rules"',
             "L'empreinte de la sauvegarde est incohérente",
         ):
             self.assertIn(marker, self.features)

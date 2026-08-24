@@ -1,5 +1,21 @@
 # Journal des versions
 
+## 6.0.0-dev - restauration isolée des signaux - 24 août 2026
+
+- ajout du projet parent et des règles de signaux référencées au bundle signaux,
+  afin que son inventaire de neuf tables soit fermé sur ses clés étrangères ;
+- clonage du schéma courant sans données dans une base PostgreSQL neuve, calcul
+  de l'ordre topologique des tables et import JSONL intégral dans une transaction ;
+- refus des fichiers inattendus, colonnes divergentes, lignes trop volumineuses,
+  champs sensibles, comptages incohérents et collisions d'identifiants ;
+- suppression obligatoire de la base temporaire après succès comme après échec ;
+- ajout de deux recettes PostgreSQL réelles : restauration des neuf tables dans
+  l'ordre des dépendances et rollback non destructif d'un identifiant dupliqué ;
+- 244 tests découverts localement, 240 réussis et quatre tests PostgreSQL
+  explicitement réservés à la CI ;
+- restauration projet maintenue bloquée tant que l'export de toutes ses
+  dépendances transitives n'est pas prouvé complet.
+
 ## 6.0.0-dev - restauration PostgreSQL temporaire - 24 août 2026
 
 - ajout d'un chemin de restauration globale exigeant la confirmation littérale
@@ -17,7 +33,8 @@
 - jalon local : 241 tests découverts, 239 réussis et deux recettes PostgreSQL
   explicitement ignorées faute de serveur local ; leur exécution distante reste
   requise avant de déclarer cette porte qualifiée ;
-- restauration des bundles projet et signaux toujours non implémentée.
+- restauration globale ensuite prouvée par 241/241 tests sur PostgreSQL 16 ;
+  restaurations projet et signaux encore distinctes à ce jalon historique.
 
 ## 6.0.0-dev - prévalidation des sauvegardes - 24 août 2026
 

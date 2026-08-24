@@ -36,9 +36,9 @@ Les statuts employés sont :
 | Liste exhaustive de veille sanitaire mondiale | Partiel | registre de 15 flux officiels et cycle candidat/aperçu/approbation/abonnement | recherche officielle mondiale exhaustive, vérification en direct, flux morts/doublons |
 | Module d'ajout de flux RSS | Réalisé | validation sûre, aperçu, approbation, suspension et rattachement projet | tests réseau réels et planificateur générique d'exploitation |
 | Raccourci Bureau en fin d'installation | Réalisé dans le code / non qualifié | Shell Link COM natif vers le lanceur | recette Windows avec chemins Unicode/espaces et future désinstallation |
-| Sauvegarde globale SQL | Partiel / recette distante requise | `pg_dump`, manifeste, prévalidation bornée, confirmation explicite, restauration transactionnelle dans une base neuve, refus des collisions et suppression | exécuter les deux tests PostgreSQL 16 réels et requalifier sur le déploiement cible |
-| Sauvegarde par projet | Partiel / non qualifié | export cohérent, prévalidation des chemins, inventaire, tailles et empreintes | restauration isolée, collisions et fichiers/cache complets |
-| Sauvegarde des signaux | Partiel / non qualifié | export filtrable et refus des bundles altérés ou dangereux avant extraction | restauration globale/projet/période et compatibilité de schéma |
+| Sauvegarde globale SQL | Réalisé en base temporaire / cible non qualifiée | `pg_dump`, prévalidation, confirmation, transaction, collision refusée et suppression ; 241/241 tests PostgreSQL 16 | requalifier sur le déploiement cible |
+| Sauvegarde par projet | Partiel / restauration bloquée | export cohérent, prévalidation des chemins, inventaire, tailles et empreintes | prouver et exporter la fermeture transitive fichiers/cache/mails/cartographie avant import |
+| Sauvegarde des signaux | Partiel / recette distante requise | projet et règles inclus, inventaire exact de neuf tables, tri des dépendances, transaction et refus des collisions | exécuter les deux tests PostgreSQL 16 puis ajouter période et portée globale |
 | Champs de recherche propres aux sources | Partiel | paramètres contractuels, types et valeurs contraintes exposables | générateur uniforme de formulaires pour tous les contrats peuplés |
 | Configuration et paramètres API visibles par source | Partiel | liens Portail/Documentation/API/configuration et détail contractuel | exhaustive seulement après inventaires officiels complets |
 | Paramétrages sous chaque source, global/projet | Réalisé | bouton par encart et deux portées conservées | recette ergonomique complète |
@@ -73,9 +73,9 @@ mise en production Internet ni à une veille sanitaire déclarée exhaustive.
    sans garantir que tous les paramètres et champs des sources sont disponibles.
 2. Les demandes d'action existent avant leurs travailleurs d'exécution ; il faut
    éviter tout contournement par un effet synchrone non audité.
-3. Le chemin global possède une recette de restauration temporaire automatisée,
-   mais les bundles projet/signaux et la recette du déploiement cible restent à
-   prouver avant usage critique.
+3. Le chemin global est prouvé en base temporaire ; les signaux attendent leur
+   preuve distante et le bundle projet reste bloqué sur la fermeture transitive
+   de ses dépendances avant tout usage critique.
 4. Le plugin SPIP et WebAuthn doivent être testés derrière le reverse proxy HTTPS
    réel, avec les comptes nominatifs et la révocation.
 5. Les mails et pièces jointes ne doivent pas être automatisés sans choix du
@@ -85,8 +85,8 @@ mise en production Internet ni à une veille sanitaire déclarée exhaustive.
 
 1. Qualifier l'EXE sur Windows 10/11 avec Docker Desktop et une mise à niveau
    depuis 5.0.2, puis vérifier le raccourci et les journaux.
-2. Exécuter la recette PostgreSQL temporaire en CI puis étendre la restauration
-   isolée aux bundles projet et signaux.
+2. Exécuter la recette signaux en PostgreSQL temporaire puis fermer et tester le
+   graphe de dépendances du bundle projet.
 3. Peupler source par source les inventaires officiels, avec preuves datées et
    tests de contrat, avant d'annoncer une exhaustivité.
 4. Livrer la file d'actions et ses exécuteurs idempotents.

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import secrets
 import subprocess
 import tempfile
@@ -10,7 +11,10 @@ import zipfile
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urlparse, urlunparse
+
+import psycopg
+from psycopg import sql
 
 
 class BackupError(ValueError):
@@ -23,6 +27,26 @@ MAX_BACKUP_MANIFEST_BYTES = 4 * 1024 * 1024
 BACKUP_SCOPES = {"global", "project", "signals"}
 GLOBAL_DUMP_NAME = "postgresql-global.dump"
 TEMPORARY_RESTORE_DATABASE_PREFIX = "hdp_restore_"
+MAX_BACKUP_JSONL_LINE_BYTES = 16 * 1024 * 1024
+SIGNALS_RESTORE_TABLES = {
+    "projects",
+    "signal_events",
+    "signal_rules",
+    "signal_actions",
+    "rule_definitions",
+    "rule_versions",
+    "rule_evaluations",
+    "action_requests",
+    "action_executions",
+}
+SENSITIVE_FIELD_MARKERS = (
+    "authorization",
+    "cookie",
+    "credential",
+    "password",
+    "secret",
+    "token",
+)
 
 
 def backup_root(data_directory: Path) -> Path:
@@ -531,6 +555,287 @@ def restore_global_backup_to_temporary_database(
         "application_version": expected_application_version,
         "schema_version_count": len(restored_versions),
         "restored_table_count": table_count,
+        "restore_executed": True,
+        "temporary_database_dropped": True,
+        "collision_policy": "reject_without_overwrite",
+        "restore_automatically_authorized": False,
+    }
+
+
+def _contains_sensitive_field(value: Any) -> bool:
+    if isinstance(value, dict):
+        return any(
+            any(marker in str(key).casefold() for marker in SENSITIVE_FIELD_MARKERS)
+            or _contains_sensitive_field(item)
+            for key, item in value.items()
+        )
+    if isinstance(value, list):
+        return any(_contains_sensitive_field(item) for item in value)
+    return False
+
+
+def _scoped_restore_inventory(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    inventory = _manifest_inventory(manifest)
+    row_counts = manifest.get("row_counts")
+    if not isinstance(row_counts, dict):
+        raise BackupError("comptages de lignes absents du manifeste")
+    tables: dict[str, dict[str, Any]] = {}
+    for name, item in inventory.items():
+        if not name.endswith(".jsonl"):
+            raise BackupError(f"fichier non JSONL interdit pour ce périmètre: {name}")
+        stem = name.removesuffix(".jsonl")
+        table = stem.removeprefix("related-")
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table):
+            raise BackupError(f"nom de table de restauration invalide: {table}")
+        if table in tables:
+            raise BackupError(f"table de restauration dupliquée: {table}")
+        declared_rows = row_counts.get(stem)
+        if not isinstance(declared_rows, int) or isinstance(declared_rows, bool) or declared_rows < 0:
+            raise BackupError(f"comptage de lignes invalide: {stem}")
+        tables[table] = {
+            "member": f"data/{name}",
+            "declared_rows": declared_rows,
+            "inventory": item,
+        }
+    if set(tables) != SIGNALS_RESTORE_TABLES:
+        missing = sorted(SIGNALS_RESTORE_TABLES - set(tables))
+        unexpected = sorted(set(tables) - SIGNALS_RESTORE_TABLES)
+        raise BackupError(
+            f"inventaire signaux incomplet: absentes={missing}, inattendues={unexpected}"
+        )
+    return tables
+
+
+def _temporary_database_url(parsed: Any, database: str) -> str:
+    return urlunparse(parsed._replace(path=f"/{database}"))
+
+
+def _schema_dump(
+    database_url: str,
+    destination: Path,
+    *,
+    timeout_seconds: int,
+) -> None:
+    parsed, options, environment = _postgres_client_options(database_url)
+    source_database = unquote(parsed.path.strip("/"))
+    _run_postgres_client(
+        [
+            "pg_dump",
+            *options,
+            "--dbname", source_database,
+            "--format=custom",
+            "--schema-only",
+            "--no-owner",
+            "--no-privileges",
+            "--file", str(destination),
+        ],
+        environment,
+        operation="export du schéma PostgreSQL courant",
+        timeout_seconds=timeout_seconds,
+    )
+    if not destination.is_file() or destination.stat().st_size == 0:
+        raise BackupError("l'export du schéma PostgreSQL est vide")
+    os.chmod(destination, 0o600)
+
+
+def _dependency_order(
+    connection: psycopg.Connection[Any],
+    tables: set[str],
+) -> list[str]:
+    rows = connection.execute(
+        """SELECT child.relname,parent.relname
+           FROM pg_constraint constraint_definition
+           JOIN pg_class child ON child.oid=constraint_definition.conrelid
+           JOIN pg_namespace child_namespace ON child_namespace.oid=child.relnamespace
+           JOIN pg_class parent ON parent.oid=constraint_definition.confrelid
+           JOIN pg_namespace parent_namespace ON parent_namespace.oid=parent.relnamespace
+           WHERE constraint_definition.contype='f'
+             AND child_namespace.nspname='public' AND parent_namespace.nspname='public'"""
+    ).fetchall()
+    parents: dict[str, set[str]] = {table: set() for table in tables}
+    for child, parent in rows:
+        if str(child) in tables and str(parent) in tables:
+            parents[str(child)].add(str(parent))
+    pending = set(tables)
+    ordered: list[str] = []
+    while pending:
+        ready = sorted(table for table in pending if not (parents[table] & pending))
+        if not ready:
+            raise BackupError("cycle de dépendances entre tables du bundle")
+        ordered.extend(ready)
+        pending.difference_update(ready)
+    return ordered
+
+
+def _import_jsonl_tables(
+    bundle: Path,
+    database_url: str,
+    tables: dict[str, dict[str, Any]],
+) -> tuple[int, dict[str, int]]:
+    restored_counts: dict[str, int] = {}
+    try:
+        with zipfile.ZipFile(bundle, "r") as archive, psycopg.connect(
+            database_url, autocommit=False
+        ) as connection:
+            ordered = _dependency_order(connection, set(tables))
+            for table in ordered:
+                columns = [
+                    str(row[0])
+                    for row in connection.execute(
+                        """SELECT column_name FROM information_schema.columns
+                           WHERE table_schema='public' AND table_name=%s
+                           ORDER BY ordinal_position""",
+                        (table,),
+                    ).fetchall()
+                ]
+                if not columns:
+                    raise BackupError(f"table absente du schéma courant: {table}")
+                expected_columns = set(columns)
+                restored = 0
+                with archive.open(tables[table]["member"], "r") as stream:
+                    while True:
+                        raw_line = stream.readline(MAX_BACKUP_JSONL_LINE_BYTES + 1)
+                        if not raw_line:
+                            break
+                        if len(raw_line) > MAX_BACKUP_JSONL_LINE_BYTES:
+                            raise BackupError(f"ligne JSONL trop volumineuse: {table}")
+                        try:
+                            document = json.loads(raw_line.decode("utf-8"))
+                        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                            raise BackupError(f"ligne JSONL invalide: {table}") from exc
+                        if not isinstance(document, dict) or set(document) != expected_columns:
+                            raise BackupError(f"colonnes JSONL incompatibles: {table}")
+                        if _contains_sensitive_field(document):
+                            raise BackupError(f"champ sensible interdit dans le bundle: {table}")
+                        connection.execute(
+                            sql.SQL(
+                                "INSERT INTO {} SELECT * FROM json_populate_record(NULL::{}, %s::json)"
+                            ).format(
+                                sql.Identifier("public", table),
+                                sql.Identifier("public", table),
+                            ),
+                            (json.dumps(document, ensure_ascii=False, separators=(",", ":")),),
+                        )
+                        restored += 1
+                if restored != tables[table]["declared_rows"]:
+                    raise BackupError(f"comptage restauré incohérent: {table}")
+                observed = connection.execute(
+                    sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier("public", table))
+                ).fetchone()
+                if observed is None or int(observed[0]) != restored:
+                    raise BackupError(f"collision ou lignes inattendues dans la table: {table}")
+                restored_counts[table] = restored
+            connection.commit()
+    except BackupError:
+        raise
+    except psycopg.errors.UniqueViolation as exc:
+        raise BackupError("collision d'identifiant refusée sans écrasement") from exc
+    except (KeyError, OSError, zipfile.BadZipFile, zipfile.LargeZipFile, psycopg.Error) as exc:
+        raise BackupError("import transactionnel du bundle signaux impossible") from exc
+    return sum(restored_counts.values()), restored_counts
+
+
+def restore_signals_backup_to_temporary_database(
+    bundle: Path,
+    database_url: str,
+    *,
+    expected_application_version: str,
+    expected_schema_versions: list[str],
+    timeout_seconds: int = 1800,
+) -> dict[str, Any]:
+    if timeout_seconds < 30 or timeout_seconds > 7200:
+        raise BackupError("délai de restauration temporaire invalide")
+    validation = prevalidate_backup_bundle(bundle)
+    manifest = validation["manifest"]
+    if manifest.get("scope") != "signals":
+        raise BackupError("ce chemin exige une sauvegarde de signaux")
+    if manifest.get("application_version") != expected_application_version:
+        raise BackupError("version applicative de la sauvegarde incompatible")
+    if manifest.get("schema_versions") != expected_schema_versions:
+        raise BackupError("versions de schéma de la sauvegarde incompatibles")
+    tables = _scoped_restore_inventory(manifest)
+    parsed, options, environment = _postgres_client_options(database_url)
+    source_database = unquote(parsed.path.strip("/"))
+    temporary_database = f"{TEMPORARY_RESTORE_DATABASE_PREFIX}{secrets.token_hex(8)}"
+    created = False
+    operation_error: BackupError | None = None
+    drop_error: BackupError | None = None
+    restored_rows = 0
+    restored_counts: dict[str, int] = {}
+
+    with tempfile.TemporaryDirectory(prefix=".hdp-signals-restore-", dir=bundle.parent) as temporary_name:
+        schema_dump = Path(temporary_name) / "postgresql-schema.dump"
+        _schema_dump(database_url, schema_dump, timeout_seconds=min(timeout_seconds, 600))
+        if file_sha256(bundle) != validation["bundle_sha256"]:
+            raise BackupError("le bundle a changé après prévalidation")
+        try:
+            _run_postgres_client(
+                [
+                    "createdb",
+                    *options,
+                    "--maintenance-db", source_database,
+                    temporary_database,
+                ],
+                environment,
+                operation="création de la base temporaire (collision ou droits insuffisants)",
+                timeout_seconds=60,
+            )
+            created = True
+            _run_postgres_client(
+                [
+                    "pg_restore",
+                    *options,
+                    "--dbname", temporary_database,
+                    "--exit-on-error",
+                    "--single-transaction",
+                    "--no-owner",
+                    "--no-privileges",
+                    str(schema_dump),
+                ],
+                environment,
+                operation="restauration transactionnelle du schéma temporaire",
+                timeout_seconds=timeout_seconds,
+            )
+            restored_rows, restored_counts = _import_jsonl_tables(
+                bundle,
+                _temporary_database_url(parsed, temporary_database),
+                tables,
+            )
+        except BackupError as exc:
+            operation_error = exc
+        finally:
+            if created:
+                try:
+                    _run_postgres_client(
+                        [
+                            "dropdb",
+                            *options,
+                            "--maintenance-db", source_database,
+                            "--if-exists",
+                            "--force",
+                            temporary_database,
+                        ],
+                        environment,
+                        operation="suppression de la base temporaire",
+                        timeout_seconds=60,
+                    )
+                except BackupError as exc:
+                    drop_error = exc
+
+    if operation_error is not None:
+        if drop_error is not None:
+            raise BackupError(f"{operation_error}; {drop_error}") from operation_error
+        raise operation_error
+    if drop_error is not None:
+        raise drop_error
+    return {
+        "status": "temporary_restore_verified",
+        "bundle_sha256": validation["bundle_sha256"],
+        "scope": "signals",
+        "application_version": expected_application_version,
+        "schema_version_count": len(expected_schema_versions),
+        "restored_table_count": len(restored_counts),
+        "restored_row_count": restored_rows,
         "restore_executed": True,
         "temporary_database_dropped": True,
         "collision_policy": "reject_without_overwrite",

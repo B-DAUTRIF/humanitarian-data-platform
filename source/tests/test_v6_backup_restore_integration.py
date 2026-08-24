@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import sys
@@ -24,6 +25,7 @@ from app.v6_backup import (  # noqa: E402
     create_global_dump,
     publish_bundle,
     restore_global_backup_to_temporary_database,
+    restore_signals_backup_to_temporary_database,
 )
 
 
@@ -54,6 +56,64 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
             )
             connection.execute("CREATE TABLE restore_probe (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
             connection.execute("INSERT INTO restore_probe VALUES (1,'verified')")
+            connection.execute("CREATE TABLE projects (id UUID PRIMARY KEY, name TEXT NOT NULL)")
+            connection.execute(
+                """CREATE TABLE signal_events (
+                       id UUID PRIMARY KEY,
+                       project_id UUID NOT NULL REFERENCES projects(id),
+                       payload JSONB NOT NULL
+                   )"""
+            )
+            connection.execute(
+                """CREATE TABLE signal_rules (
+                       id UUID PRIMARY KEY,
+                       project_id UUID NOT NULL REFERENCES projects(id),
+                       name TEXT NOT NULL
+                   )"""
+            )
+            connection.execute(
+                """CREATE TABLE signal_actions (
+                       id UUID PRIMARY KEY,
+                       event_id UUID NOT NULL REFERENCES signal_events(id),
+                       rule_id UUID NOT NULL REFERENCES signal_rules(id)
+                   )"""
+            )
+            connection.execute(
+                """CREATE TABLE rule_definitions (
+                       id UUID PRIMARY KEY,
+                       project_id UUID NOT NULL REFERENCES projects(id),
+                       name TEXT NOT NULL
+                   )"""
+            )
+            connection.execute(
+                """CREATE TABLE rule_versions (
+                       id UUID PRIMARY KEY,
+                       definition_id UUID NOT NULL REFERENCES rule_definitions(id),
+                       version_number INTEGER NOT NULL
+                   )"""
+            )
+            connection.execute(
+                """CREATE TABLE rule_evaluations (
+                       id UUID PRIMARY KEY,
+                       project_id UUID NOT NULL REFERENCES projects(id),
+                       definition_id UUID NOT NULL REFERENCES rule_definitions(id),
+                       rule_version_id UUID NOT NULL REFERENCES rule_versions(id),
+                       triggering_event_id UUID NOT NULL REFERENCES signal_events(id)
+                   )"""
+            )
+            connection.execute(
+                """CREATE TABLE action_requests (
+                       id UUID PRIMARY KEY,
+                       project_id UUID NOT NULL REFERENCES projects(id),
+                       evaluation_id UUID NOT NULL REFERENCES rule_evaluations(id)
+                   )"""
+            )
+            connection.execute(
+                """CREATE TABLE action_executions (
+                       id UUID PRIMARY KEY,
+                       request_id UUID NOT NULL REFERENCES action_requests(id)
+                   )"""
+            )
 
     def tearDown(self) -> None:
         self._drop_database(self.source_database)
@@ -87,6 +147,101 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
             row_counts={"postgresql-global": -1},
         )
         return publish_bundle(root, "global-integration", [dump], manifest)
+
+    def _signals_bundle(self, root: Path, *, duplicate_project: bool = False) -> Path:
+        identifiers = {
+            "project": "11111111-1111-4111-8111-111111111111",
+            "event": "22222222-2222-4222-8222-222222222222",
+            "signal_rule": "33333333-3333-4333-8333-333333333333",
+            "signal_action": "44444444-4444-4444-8444-444444444444",
+            "definition": "55555555-5555-4555-8555-555555555555",
+            "version": "66666666-6666-4666-8666-666666666666",
+            "evaluation": "77777777-7777-4777-8777-777777777777",
+            "request": "88888888-8888-4888-8888-888888888888",
+            "execution": "99999999-9999-4999-8999-999999999999",
+        }
+        rows = {
+            "projects": [{"id": identifiers["project"], "name": "Projet restauré"}],
+            "signal_events": [
+                {
+                    "id": identifiers["event"],
+                    "project_id": identifiers["project"],
+                    "payload": {"source": "fixture"},
+                }
+            ],
+            "signal_rules": [
+                {
+                    "id": identifiers["signal_rule"],
+                    "project_id": identifiers["project"],
+                    "name": "Règle fixture",
+                }
+            ],
+            "signal_actions": [
+                {
+                    "id": identifiers["signal_action"],
+                    "event_id": identifiers["event"],
+                    "rule_id": identifiers["signal_rule"],
+                }
+            ],
+            "rule_definitions": [
+                {
+                    "id": identifiers["definition"],
+                    "project_id": identifiers["project"],
+                    "name": "Définition fixture",
+                }
+            ],
+            "rule_versions": [
+                {
+                    "id": identifiers["version"],
+                    "definition_id": identifiers["definition"],
+                    "version_number": 1,
+                }
+            ],
+            "rule_evaluations": [
+                {
+                    "id": identifiers["evaluation"],
+                    "project_id": identifiers["project"],
+                    "definition_id": identifiers["definition"],
+                    "rule_version_id": identifiers["version"],
+                    "triggering_event_id": identifiers["event"],
+                }
+            ],
+            "action_requests": [
+                {
+                    "id": identifiers["request"],
+                    "project_id": identifiers["project"],
+                    "evaluation_id": identifiers["evaluation"],
+                }
+            ],
+            "action_executions": [
+                {"id": identifiers["execution"], "request_id": identifiers["request"]}
+            ],
+        }
+        if duplicate_project:
+            rows["projects"].append(dict(rows["projects"][0]))
+        files: list[Path] = []
+        row_counts: dict[str, int] = {}
+        for table, documents in rows.items():
+            path = root / f"{table}.jsonl"
+            path.write_text(
+                "".join(json.dumps(document, ensure_ascii=False) + "\n" for document in documents),
+                encoding="utf-8",
+            )
+            files.append(path)
+            row_counts[table] = len(documents)
+        manifest = build_manifest(
+            backup_id="signals-integration",
+            application_version="6.0.0-dev",
+            schema_versions=SCHEMA_VERSIONS,
+            scope="signals",
+            selector={
+                "project_id": identifiers["project"],
+                "signal_ids": [identifiers["event"]],
+            },
+            files=files,
+            row_counts=row_counts,
+        )
+        return publish_bundle(root, "signals-integration", files, manifest)
 
     def test_global_dump_is_restored_verified_and_temporary_database_is_dropped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -137,6 +292,51 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
                 self.assertIsNotNone(exists)
             finally:
                 self._drop_database(colliding_database)
+
+    def test_signal_bundle_is_restored_in_dependency_order_and_database_is_dropped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            token = secrets.token_hex(8)
+            temporary_database = f"{TEMPORARY_RESTORE_DATABASE_PREFIX}{token}"
+            bundle = self._signals_bundle(Path(directory))
+            with patch("app.v6_backup.secrets.token_hex", return_value=token):
+                report = restore_signals_backup_to_temporary_database(
+                    bundle,
+                    self.source_url,
+                    expected_application_version="6.0.0-dev",
+                    expected_schema_versions=SCHEMA_VERSIONS,
+                    timeout_seconds=120,
+                )
+            self.assertEqual(report["scope"], "signals")
+            self.assertEqual(report["restored_table_count"], 9)
+            self.assertEqual(report["restored_row_count"], 9)
+            self.assertTrue(report["temporary_database_dropped"])
+            with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as connection:
+                exists = connection.execute(
+                    "SELECT 1 FROM pg_database WHERE datname=%s", (temporary_database,)
+                ).fetchone()
+            self.assertIsNone(exists)
+
+    def test_duplicate_signal_bundle_identifier_is_rejected_and_database_is_dropped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            token = secrets.token_hex(8)
+            temporary_database = f"{TEMPORARY_RESTORE_DATABASE_PREFIX}{token}"
+            bundle = self._signals_bundle(Path(directory), duplicate_project=True)
+            with (
+                patch("app.v6_backup.secrets.token_hex", return_value=token),
+                self.assertRaisesRegex(BackupError, "collision d'identifiant"),
+            ):
+                restore_signals_backup_to_temporary_database(
+                    bundle,
+                    self.source_url,
+                    expected_application_version="6.0.0-dev",
+                    expected_schema_versions=SCHEMA_VERSIONS,
+                    timeout_seconds=120,
+                )
+            with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as connection:
+                exists = connection.execute(
+                    "SELECT 1 FROM pg_database WHERE datname=%s", (temporary_database,)
+                ).fetchone()
+            self.assertIsNone(exists)
 
 
 if __name__ == "__main__":
