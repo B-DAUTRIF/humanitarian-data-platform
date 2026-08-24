@@ -70,6 +70,51 @@ class V6InstallerReliabilityTest(unittest.TestCase):
         self.assertIn("ole32.lib", build)
         self.assertIn("uuid.lib", build)
 
+    def test_uninstall_requires_an_installer_marker_and_exact_payload_paths(self) -> None:
+        for marker in (
+            "INSTALLATION_MARKER_NAME",
+            "INSTALLATION_MARKER_CONTENT",
+            "write_installation_marker",
+            "installation_marker_is_valid",
+            "installation_path_is_safe",
+            "payload_relative_path_is_safe",
+            "remove_managed_payload",
+            "g_payload_file_count",
+        ):
+            self.assertIn(marker, self.source)
+        self.assertNotIn("RemoveDirectoryW", self.source)
+        self.assertLess(
+            self.source.index("remove_managed_payload(options->install_dir"),
+            self.source.index("DeleteFileW(marker_path)"),
+        )
+
+    def test_uninstall_stops_compose_without_removing_data_or_third_party_tools(self) -> None:
+        for marker in (
+            "ID_UNINSTALL",
+            "uninstall_thread",
+            "begin_uninstall",
+            "down --remove-orphans",
+            ".env, data, sauvegardes, journaux et volumes PostgreSQL sont conservés",
+            "Docker Desktop, Git et Visual Studio Code restent installés",
+        ):
+            self.assertIn(marker, self.source)
+        lowered = self.source.casefold()
+        self.assertNotIn("down -v", lowered)
+        self.assertNotIn("volume rm", lowered)
+        self.assertNotIn("winget uninstall", lowered)
+
+    def test_uninstall_removes_only_the_shortcut_targeting_this_installation(self) -> None:
+        for marker in (
+            "remove_managed_desktop_shortcut",
+            "IPersistFile_Load",
+            "IShellLinkW_GetPath",
+            "start-hdp.cmd",
+            "start-hdp-with-r.cmd",
+            "DeleteFileW(shortcut)",
+            "ne cible pas cette installation ; il est conservé",
+        ):
+            self.assertIn(marker, self.source)
+
     def test_installer_declares_the_v6_development_version(self) -> None:
         resources = (SOURCE_ROOT / "src" / "installer.rc").read_text(encoding="utf-8")
         manifest = (SOURCE_ROOT / "src" / "installer.manifest").read_text(encoding="utf-8")

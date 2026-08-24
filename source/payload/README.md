@@ -93,6 +93,19 @@ Le schéma est migré au démarrage par migrations idempotentes. Les acquisition
 
 Exécutez `stop-hdp.cmd`. Les volumes et fichiers locaux restent intacts.
 
+## Désinstallation Windows
+
+Relancez l'installateur V6, sélectionnez le dossier HDP puis utilisez
+**Désinstaller HDP**. Le bouton n'est disponible que si ce dossier possède le
+marqueur écrit par l'installateur ; une ancienne installation doit donc d'abord
+être mise à niveau.
+
+La procédure arrête Docker Compose sans supprimer les volumes, vérifie la cible
+du raccourci Bureau puis retire seulement les fichiers applicatifs exacts du
+payload. Elle conserve `.env`, `data`, les sauvegardes, les journaux et les
+volumes PostgreSQL. Docker Desktop, Git et Visual Studio Code ne sont pas
+désinstallés. Cette fonction reste à qualifier sur Windows 10/11 réel.
+
 ## Module géographique officiel
 
 HDP interroge les identifiants canoniques `cod-ab-*` et `cod-ps-*`, puis vérifie

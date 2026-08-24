@@ -41,7 +41,11 @@
 #define ID_R_MODULE 1013
 #define ID_GITHUB_TOKEN 1014
 #define ID_CANCEL 1015
+#define ID_UNINSTALL 1016
 #define ID_ACTIVITY_TIMER 2001
+
+#define INSTALLATION_MARKER_NAME L".hdp-managed-installation"
+#define INSTALLATION_MARKER_CONTENT "HDP_NATIVE_INSTALLER\nHumanitarian Data Platform\n"
 
 #define WINGET_TIMEOUT_MS (30UL * 60UL * 1000UL)
 #define COMPOSE_PULL_TIMEOUT_MS (30UL * 60UL * 1000UL)
@@ -77,6 +81,7 @@ static HWND g_vscode;
 static HWND g_r_module;
 static HWND g_analyze;
 static HWND g_install;
+static HWND g_uninstall;
 static HWND g_open_folder;
 static HWND g_open_log;
 static HWND g_cancel;
@@ -90,6 +95,7 @@ static BOOL g_docker_present;
 static BOOL g_git_present;
 static BOOL g_vscode_present;
 static BOOL g_installing;
+static BOOL g_uninstalling;
 static BOOL g_winsock_initialized;
 static ULONGLONG g_docker_disk_free_bytes;
 static wchar_t g_stage_status[512] = L"Prêt";
@@ -98,6 +104,7 @@ static ULONGLONG g_stage_started;
 static volatile LONG g_cancel_requested;
 
 static BOOL http_is_healthy(USHORT port);
+static void update_uninstall_control(void);
 
 static BOOL cancel_requested(void) {
     return InterlockedCompareExchange(&g_cancel_requested, 0, 0) != 0;
@@ -270,6 +277,7 @@ static void analyze_system(void) {
     if (!g_winget_present) {
         append_log_control(L"winget est absent. Les cases d'installation tierce restent désactivées ; utilisez Microsoft App Installer.\r\n");
     }
+    update_uninstall_control();
 }
 
 static int decode_and_post(const char *buffer, DWORD length) {
@@ -554,6 +562,99 @@ static char *read_file_bytes(const wchar_t *path, DWORD *size_out) {
     data[received] = 0;
     *size_out = received;
     return data;
+}
+
+static BOOL write_installation_marker(const wchar_t *install_dir) {
+    wchar_t marker_path[MAX_PATH * 4];
+    _snwprintf(marker_path, sizeof(marker_path) / sizeof(wchar_t),
+               L"%ls\\%ls", install_dir, INSTALLATION_MARKER_NAME);
+    const char marker[] = INSTALLATION_MARKER_CONTENT;
+    return write_binary_file(marker_path, (const unsigned char *)marker, sizeof(marker) - 1);
+}
+
+static BOOL installation_marker_is_valid(const wchar_t *install_dir) {
+    wchar_t marker_path[MAX_PATH * 4];
+    _snwprintf(marker_path, sizeof(marker_path) / sizeof(wchar_t),
+               L"%ls\\%ls", install_dir, INSTALLATION_MARKER_NAME);
+    DWORD size = 0;
+    char *data = read_file_bytes(marker_path, &size);
+    if (!data) return FALSE;
+    const char expected[] = INSTALLATION_MARKER_CONTENT;
+    BOOL valid = size == sizeof(expected) - 1 &&
+                 memcmp(data, expected, sizeof(expected) - 1) == 0;
+    HeapFree(GetProcessHeap(), 0, data);
+    return valid;
+}
+
+static BOOL installation_path_is_safe(const wchar_t *install_dir) {
+    size_t length = wcslen(install_dir);
+    if (length <= 3 || length >= MAX_PATH * 4 - 64) return FALSE;
+    wchar_t canonical[MAX_PATH * 4];
+    DWORD count = GetFullPathNameW(install_dir,
+                                   (DWORD)(sizeof(canonical) / sizeof(wchar_t)),
+                                   canonical, NULL);
+    if (!count || count >= sizeof(canonical) / sizeof(wchar_t) ||
+        _wcsicmp(canonical, install_dir) != 0) return FALSE;
+    wchar_t compose[MAX_PATH * 4];
+    wchar_t launcher[MAX_PATH * 4];
+    wchar_t env_path[MAX_PATH * 4];
+    _snwprintf(compose, sizeof(compose) / sizeof(wchar_t), L"%ls\\compose.yaml", install_dir);
+    _snwprintf(launcher, sizeof(launcher) / sizeof(wchar_t), L"%ls\\start-hdp.cmd", install_dir);
+    _snwprintf(env_path, sizeof(env_path) / sizeof(wchar_t), L"%ls\\.env", install_dir);
+    return file_exists(compose) && file_exists(launcher) && file_exists(env_path) &&
+           installation_marker_is_valid(install_dir);
+}
+
+static BOOL payload_relative_path_is_safe(const wchar_t *relative) {
+    if (!relative[0] || relative[0] == L'\\' || wcschr(relative, L':')) return FALSE;
+    const wchar_t *segment = relative;
+    for (const wchar_t *cursor = relative; ; cursor++) {
+        if (*cursor == L'\\' || *cursor == 0) {
+            size_t length = (size_t)(cursor - segment);
+            if (!length || (length == 1 && segment[0] == L'.') ||
+                (length == 2 && segment[0] == L'.' && segment[1] == L'.')) return FALSE;
+            if (!*cursor) break;
+            segment = cursor + 1;
+        }
+    }
+    return TRUE;
+}
+
+static BOOL remove_managed_payload(const wchar_t *install_dir,
+                                   size_t *removed_out, size_t *missing_out) {
+    size_t removed = 0;
+    size_t missing = 0;
+    BOOL success = TRUE;
+    for (size_t index = 0; index < g_payload_file_count; index++) {
+        wchar_t relative[MAX_PATH * 2];
+        wchar_t destination[MAX_PATH * 4];
+        if (!utf8_path_to_wide(g_payload_files[index].path, relative,
+                               (int)(sizeof(relative) / sizeof(wchar_t))) ||
+            !payload_relative_path_is_safe(relative)) {
+            post_log(L"Entrée du payload non sûre : désinstallation interrompue.\r\n");
+            success = FALSE;
+            continue;
+        }
+        _snwprintf(destination, sizeof(destination) / sizeof(wchar_t),
+                   L"%ls\\%ls", install_dir, relative);
+        if (DeleteFileW(destination)) {
+            removed++;
+            continue;
+        }
+        DWORD error = GetLastError();
+        if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
+            missing++;
+            continue;
+        }
+        wchar_t message[MAX_PATH * 4 + 160];
+        _snwprintf(message, sizeof(message) / sizeof(wchar_t),
+                   L"Fichier géré non supprimé (code %lu) : %ls\r\n", error, destination);
+        post_log(message);
+        success = FALSE;
+    }
+    if (removed_out) *removed_out = removed;
+    if (missing_out) *missing_out = missing;
+    return success;
 }
 
 static BOOL extract_env_value(const char *data, const char *key, char *value, size_t capacity) {
@@ -1014,6 +1115,58 @@ static BOOL create_desktop_shortcut(const wchar_t *install_dir, BOOL include_r) 
     return SUCCEEDED(result);
 }
 
+static BOOL remove_managed_desktop_shortcut(const wchar_t *install_dir,
+                                            BOOL *found_out, BOOL *removed_out) {
+    if (found_out) *found_out = FALSE;
+    if (removed_out) *removed_out = FALSE;
+    wchar_t desktop[MAX_PATH * 4];
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_DESKTOPDIRECTORY,
+                                NULL, SHGFP_TYPE_CURRENT, desktop))) return FALSE;
+    wchar_t shortcut[MAX_PATH * 4];
+    _snwprintf(shortcut, sizeof(shortcut) / sizeof(wchar_t),
+               L"%ls\\Humanitarian Data Platform.lnk", desktop);
+    if (!file_exists(shortcut)) return TRUE;
+    if (found_out) *found_out = TRUE;
+
+    HRESULT initialized = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    BOOL must_uninitialize = SUCCEEDED(initialized);
+    if (initialized == RPC_E_CHANGED_MODE) must_uninitialize = FALSE;
+    else if (FAILED(initialized)) return FALSE;
+
+    IShellLinkW *link = NULL;
+    IPersistFile *persist = NULL;
+    HRESULT result = CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER,
+                                      &IID_IShellLinkW, (void **)&link);
+    if (SUCCEEDED(result)) {
+        result = IShellLinkW_QueryInterface(link, &IID_IPersistFile, (void **)&persist);
+    }
+    if (SUCCEEDED(result)) result = IPersistFile_Load(persist, shortcut, STGM_READ);
+    wchar_t target[MAX_PATH * 4] = L"";
+    WIN32_FIND_DATAW target_data;
+    ZeroMemory(&target_data, sizeof(target_data));
+    if (SUCCEEDED(result)) {
+        result = IShellLinkW_GetPath(link, target,
+                                    (int)(sizeof(target) / sizeof(wchar_t)),
+                                    &target_data, SLGP_RAWPATH);
+    }
+    wchar_t standard[MAX_PATH * 4];
+    wchar_t analytics[MAX_PATH * 4];
+    _snwprintf(standard, sizeof(standard) / sizeof(wchar_t),
+               L"%ls\\start-hdp.cmd", install_dir);
+    _snwprintf(analytics, sizeof(analytics) / sizeof(wchar_t),
+               L"%ls\\start-hdp-with-r.cmd", install_dir);
+    BOOL owned = SUCCEEDED(result) &&
+                 (!_wcsicmp(target, standard) || !_wcsicmp(target, analytics));
+    if (persist) IPersistFile_Release(persist);
+    if (link) IShellLinkW_Release(link);
+    if (must_uninitialize) CoUninitialize();
+    if (!SUCCEEDED(result)) return FALSE;
+    if (!owned) return TRUE;
+    if (!DeleteFileW(shortcut)) return FALSE;
+    if (removed_out) *removed_out = TRUE;
+    return TRUE;
+}
+
 static DWORD WINAPI install_thread(LPVOID parameter) {
     InstallOptions *options = (InstallOptions *)parameter;
     BOOL success = FALSE;
@@ -1037,6 +1190,10 @@ static DWORD WINAPI install_thread(LPVOID parameter) {
     if (!write_environment(options->install_dir, options->reliefweb_appname,
                            options->github_token, options->host_port)) {
         post_log(L"Échec de la création du fichier de configuration .env.\r\n");
+        goto done;
+    }
+    if (!write_installation_marker(options->install_dir)) {
+        post_log(L"Échec de la création du marqueur de gestion HDP. La désinstallation sûre resterait indisponible.\r\n");
         goto done;
     }
     post_log(L"Fichiers installés et configuration locale créée.\r\n");
@@ -1164,6 +1321,85 @@ done:
     return 0;
 }
 
+static DWORD WINAPI uninstall_thread(LPVOID parameter) {
+    InstallOptions *options = (InstallOptions *)parameter;
+    BOOL success = FALSE;
+    post_status(L"Arrêt contrôlé des services HDP…", 20);
+    wchar_t docker[MAX_PATH * 4];
+    if (!get_docker_cli(docker, (DWORD)(sizeof(docker) / sizeof(wchar_t)))) {
+        post_log(L"Docker CLI est introuvable. Démarrez ou réparez Docker Desktop avant de désinstaller HDP.\r\n");
+        goto done;
+    }
+    wchar_t compose_args[MAX_PATH * 5];
+    _snwprintf(compose_args, sizeof(compose_args) / sizeof(wchar_t),
+               L"compose -f \"%ls\\compose.yaml\" --profile analytics down --remove-orphans",
+               options->install_dir);
+    DWORD compose_result = run_process_capture_timeout(
+        docker, compose_args, options->install_dir, COMPOSE_UP_TIMEOUT_MS);
+    if (compose_result != 0) {
+        wchar_t error[320];
+        _snwprintf(error, sizeof(error) / sizeof(wchar_t),
+                   L"L'arrêt Docker Compose a retourné le code %lu. Aucun fichier HDP n'a été supprimé.\r\n",
+                   compose_result);
+        post_log(error);
+        goto done;
+    }
+    post_log(L"Services HDP arrêtés sans supprimer les volumes Docker.\r\n");
+
+    post_status(L"Vérification et suppression du raccourci HDP…", 55);
+    BOOL shortcut_found = FALSE;
+    BOOL shortcut_removed = FALSE;
+    if (!remove_managed_desktop_shortcut(options->install_dir,
+                                         &shortcut_found, &shortcut_removed)) {
+        post_log(L"Le raccourci Bureau n'a pas pu être vérifié ou supprimé. Les fichiers HDP sont conservés.\r\n");
+        goto done;
+    }
+    if (shortcut_removed) {
+        post_log(L"Raccourci Bureau HDP vérifié puis supprimé.\r\n");
+    } else if (shortcut_found) {
+        post_log(L"Un raccourci de même nom ne cible pas cette installation ; il est conservé.\r\n");
+    } else {
+        post_log(L"Aucun raccourci Bureau HDP n'était présent.\r\n");
+    }
+
+    post_status(L"Suppression limitée aux fichiers gérés par HDP…", 75);
+    size_t removed = 0;
+    size_t missing = 0;
+    if (!remove_managed_payload(options->install_dir, &removed, &missing)) {
+        post_log(L"Certains fichiers gérés n'ont pas pu être supprimés. Le marqueur HDP est conservé pour reprendre la désinstallation.\r\n");
+        goto done;
+    }
+    wchar_t marker_path[MAX_PATH * 4];
+    _snwprintf(marker_path, sizeof(marker_path) / sizeof(wchar_t),
+               L"%ls\\%ls", options->install_dir, INSTALLATION_MARKER_NAME);
+    if (!DeleteFileW(marker_path)) {
+        post_log(L"Le marqueur HDP n'a pas pu être supprimé ; relancez la désinstallation.\r\n");
+        goto done;
+    }
+    wchar_t summary[512];
+    _snwprintf(summary, sizeof(summary) / sizeof(wchar_t),
+               L"Désinstallation applicative terminée : %llu fichier(s) supprimé(s), %llu déjà absent(s).\r\n",
+               (unsigned long long)removed, (unsigned long long)missing);
+    post_log(summary);
+    post_log(L".env, data, sauvegardes, journaux et volumes PostgreSQL sont conservés. Docker Desktop, Git et Visual Studio Code restent installés.\r\n");
+    post_status(L"Désinstallation terminée — données conservées", 100);
+    success = TRUE;
+
+done:
+    if (!success) post_status(L"Désinstallation interrompue — données conservées", 0);
+    HeapFree(GetProcessHeap(), 0, options);
+    PostMessageW(g_main, WM_HDP_FINISHED, success ? 1 : 0, 1);
+    return 0;
+}
+
+static void update_uninstall_control(void) {
+    if (!g_uninstall) return;
+    wchar_t install_dir[MAX_PATH * 4];
+    GetWindowTextW(g_path, install_dir,
+                   (int)(sizeof(install_dir) / sizeof(wchar_t)));
+    EnableWindow(g_uninstall, !g_installing && installation_path_is_safe(install_dir));
+}
+
 static void set_controls_installing(BOOL installing) {
     g_installing = installing;
     EnableWindow(g_path, !installing);
@@ -1171,12 +1407,14 @@ static void set_controls_installing(BOOL installing) {
     EnableWindow(g_github_token, !installing);
     EnableWindow(g_analyze, !installing);
     EnableWindow(g_install, !installing);
+    EnableWindow(g_uninstall, FALSE);
     EnableWindow(g_open_folder, !installing);
     EnableWindow(g_r_module, !installing);
-    EnableWindow(g_cancel, installing);
+    EnableWindow(g_cancel, installing && !g_uninstalling);
     set_dependency_control(g_docker, L"Docker Desktop (requis)", g_docker_present, g_winget_present);
     set_dependency_control(g_git, L"Git (optionnel)", g_git_present, g_winget_present);
     set_dependency_control(g_vscode, L"Visual Studio Code (optionnel)", g_vscode_present, g_winget_present);
+    if (!installing) update_uninstall_control();
 }
 
 static void begin_install(void) {
@@ -1285,6 +1523,59 @@ static void begin_install(void) {
     CloseHandle(thread);
 }
 
+static void begin_uninstall(void) {
+    if (g_installing) return;
+    InstallOptions *options = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(InstallOptions));
+    if (!options) return;
+    GetWindowTextW(g_path, options->install_dir,
+                   (int)(sizeof(options->install_dir) / sizeof(wchar_t)));
+    size_t length = wcslen(options->install_dir);
+    while (length > 3 && (options->install_dir[length - 1] == L'\\' ||
+                          options->install_dir[length - 1] == L'/')) {
+        options->install_dir[--length] = 0;
+    }
+    if (!installation_path_is_safe(options->install_dir)) {
+        MessageBoxW(g_main,
+            L"Désinstallation refusée : ce dossier ne contient pas un marqueur HDP valide et les fichiers attendus. Relancez d'abord cet installateur pour mettre à niveau une ancienne installation.",
+            APP_NAME, MB_OK | MB_ICONWARNING);
+        HeapFree(GetProcessHeap(), 0, options);
+        return;
+    }
+    int answer = MessageBoxW(
+        g_main,
+        L"Désinstaller les fichiers applicatifs HDP de ce dossier ?\n\n"
+        L"Les services seront arrêtés et le raccourci Bureau sera supprimé seulement s'il cible cette installation.\n\n"
+        L"Seront conservés : .env, data, sauvegardes, journaux et volumes PostgreSQL. Docker Desktop, Git et Visual Studio Code resteront installés.\n\n"
+        L"Aucun volume Docker ne sera supprimé. Continuer ?",
+        APP_NAME, MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+    if (answer != IDYES) {
+        HeapFree(GetProcessHeap(), 0, options);
+        return;
+    }
+    append_log_control(L"\r\n--- Désinstallation applicative non destructive ---\r\n");
+    g_uninstalling = TRUE;
+    InterlockedExchange(&g_cancel_requested, 0);
+    set_controls_installing(TRUE);
+    wcsncpy(g_stage_status, L"Démarrage de la désinstallation",
+            (sizeof(g_stage_status) / sizeof(wchar_t)) - 1);
+    g_stage_status[(sizeof(g_stage_status) / sizeof(wchar_t)) - 1] = 0;
+    g_stage_progress = 5;
+    g_stage_started = GetTickCount64();
+    SetTimer(g_main, ID_ACTIVITY_TIMER, 1000, NULL);
+    SendMessageW(g_progress, PBM_SETPOS, 5, 0);
+    HANDLE thread = CreateThread(NULL, 0, uninstall_thread, options, 0, NULL);
+    if (!thread) {
+        KillTimer(g_main, ID_ACTIVITY_TIMER);
+        g_uninstalling = FALSE;
+        set_controls_installing(FALSE);
+        HeapFree(GetProcessHeap(), 0, options);
+        MessageBoxW(g_main, L"Impossible de démarrer la tâche de désinstallation.",
+                    APP_NAME, MB_OK | MB_ICONERROR);
+        return;
+    }
+    CloseHandle(thread);
+}
+
 static void layout_controls(int width, int height) {
     int margin = 22;
     int content_width = width - margin * 2;
@@ -1297,18 +1588,17 @@ static void layout_controls(int width, int height) {
     MoveWindow(g_vscode, margin, 264, content_width, 24, TRUE);
     MoveWindow(g_r_module, margin, 290, content_width, 24, TRUE);
 
-    int button_width = 150;
-    int gap = 10;
-    MoveWindow(g_analyze, margin, 332, button_width, 30, TRUE);
-    MoveWindow(g_install, margin + button_width + gap, 332, 205, 30, TRUE);
-    MoveWindow(g_open_folder, margin + button_width + gap + 215, 332, 145, 30, TRUE);
-    MoveWindow(g_open_log, margin + button_width + gap + 370, 332, 120, 30, TRUE);
-    MoveWindow(g_cancel, margin + button_width + gap + 500, 332, 100, 30, TRUE);
-    MoveWindow(g_progress, margin, 380, content_width, 18, TRUE);
-    MoveWindow(g_status, margin, 405, content_width, 23, TRUE);
-    int log_height = height - 468;
+    MoveWindow(g_analyze, margin, 332, 150, 30, TRUE);
+    MoveWindow(g_install, margin + 160, 332, 205, 30, TRUE);
+    MoveWindow(g_uninstall, margin + 375, 332, 190, 30, TRUE);
+    MoveWindow(g_open_folder, margin, 370, 145, 30, TRUE);
+    MoveWindow(g_open_log, margin + 155, 370, 120, 30, TRUE);
+    MoveWindow(g_cancel, margin + 285, 370, 100, 30, TRUE);
+    MoveWindow(g_progress, margin, 414, content_width, 18, TRUE);
+    MoveWindow(g_status, margin, 439, content_width, 23, TRUE);
+    int log_height = height - 508;
     if (log_height < 120) log_height = 120;
-    MoveWindow(g_log, margin, 450, content_width, log_height, TRUE);
+    MoveWindow(g_log, margin, 487, content_width, log_height, TRUE);
 }
 
 static HWND create_control(const wchar_t *class_name, const wchar_t *text, DWORD style,
@@ -1336,7 +1626,7 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
             MoveWindow(relief_label, 22, 123, 145, 22, TRUE);
             MoveWindow(github_label, 22, 159, 145, 22, TRUE);
             MoveWindow(dep_label, 22, 187, 700, 22, TRUE);
-            MoveWindow(log_label, 22, 431, 500, 19, TRUE);
+            MoveWindow(log_label, 22, 466, 500, 19, TRUE);
 
             g_path = create_control(L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, ID_PATH, window);
             g_reliefweb = create_control(L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, ID_RELIEFWEB, window);
@@ -1350,6 +1640,8 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
             SendMessageW(g_r_module, BM_SETCHECK, BST_UNCHECKED, 0);
             g_analyze = create_control(L"BUTTON", L"Analyser à nouveau", BS_PUSHBUTTON | WS_TABSTOP, ID_ANALYZE, window);
             g_install = create_control(L"BUTTON", L"Installer / mettre à niveau", BS_DEFPUSHBUTTON | WS_TABSTOP, ID_INSTALL, window);
+            g_uninstall = create_control(L"BUTTON", L"Désinstaller HDP", BS_PUSHBUTTON | WS_TABSTOP, ID_UNINSTALL, window);
+            EnableWindow(g_uninstall, FALSE);
             g_open_folder = create_control(L"BUTTON", L"Ouvrir le dossier", BS_PUSHBUTTON | WS_TABSTOP, ID_OPEN_FOLDER, window);
             g_open_log = create_control(L"BUTTON", L"Ouvrir le journal", BS_PUSHBUTTON | WS_TABSTOP, ID_OPEN_LOG, window);
             g_cancel = create_control(L"BUTTON", L"Annuler", BS_PUSHBUTTON | WS_TABSTOP, ID_CANCEL, window);
@@ -1379,16 +1671,22 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
         case WM_GETMINMAXINFO: {
             MINMAXINFO *info = (MINMAXINFO *)lparam;
             info->ptMinTrackSize.x = 820;
-            info->ptMinTrackSize.y = 690;
+            info->ptMinTrackSize.y = 730;
             return 0;
         }
         case WM_COMMAND:
             switch (LOWORD(wparam)) {
+                case ID_PATH:
+                    if (HIWORD(wparam) == EN_CHANGE) update_uninstall_control();
+                    return 0;
                 case ID_ANALYZE:
                     analyze_system();
                     return 0;
                 case ID_INSTALL:
                     begin_install();
+                    return 0;
+                case ID_UNINSTALL:
+                    begin_uninstall();
                     return 0;
                 case ID_OPEN_FOLDER: {
                     wchar_t path[MAX_PATH * 4];
@@ -1465,20 +1763,32 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
             return 0;
         case WM_HDP_FINISHED:
             KillTimer(g_main, ID_ACTIVITY_TIMER);
+            {
+            BOOL was_uninstall = lparam == 1;
+            g_uninstalling = FALSE;
             set_controls_installing(FALSE);
             analyze_system();
             if (wparam) {
-                MessageBoxW(window,
-                    L"Installation terminée. L'interface a été ouverte dans votre navigateur.\n\nLe journal reste disponible dans cette fenêtre.",
+                MessageBoxW(window, was_uninstall
+                    ? L"Désinstallation applicative terminée. Les données, configurations, sauvegardes, journaux et volumes PostgreSQL ont été conservés."
+                    : L"Installation terminée. L'interface a été ouverte dans votre navigateur.\n\nLe journal reste disponible dans cette fenêtre.",
                     APP_NAME, MB_OK | MB_ICONINFORMATION);
             } else {
-                MessageBoxW(window,
-                    L"L'installation n'est pas terminée. Consultez le journal affiché et utilisez le bouton « Ouvrir le journal » pour transmettre le diagnostic.",
+                MessageBoxW(window, was_uninstall
+                    ? L"La désinstallation n'est pas terminée. Les données ont été conservées ; consultez le journal avant de réessayer."
+                    : L"L'installation n'est pas terminée. Consultez le journal affiché et utilisez le bouton « Ouvrir le journal » pour transmettre le diagnostic.",
                     APP_NAME, MB_OK | MB_ICONERROR);
+            }
             }
             return 0;
         case WM_CLOSE:
             if (g_installing) {
+                if (g_uninstalling) {
+                    MessageBoxW(window,
+                        L"La désinstallation contrôlée est en cours. Attendez sa fin afin de ne pas laisser un état partiel.",
+                        APP_NAME, MB_OK | MB_ICONWARNING);
+                    return 0;
+                }
                 int answer = MessageBoxW(
                     window,
                     L"Une installation est en cours. Voulez-vous demander son annulation contrôlée ?\n\nLes données et volumes existants seront conservés.",

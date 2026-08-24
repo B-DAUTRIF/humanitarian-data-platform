@@ -1,5 +1,17 @@
 # Journal des versions
 
+## 6.0.0-dev - désinstallation Windows non destructive - 24 août 2026
+
+- marqueur de gestion écrit par l'installateur et exigé avant toute suppression ;
+- arrêt des services par Docker Compose sans suppression de volumes ;
+- suppression limitée aux chemins exacts du payload embarqué ; `.env`, données,
+  sauvegardes, journaux et volumes PostgreSQL restent conservés ;
+- raccourci Bureau supprimé seulement après lecture du Shell Link et vérification
+  qu'il cible le dossier sélectionné ;
+- Docker Desktop, Git et Visual Studio Code ne sont jamais désinstallés ;
+- 270 tests recensés localement ; compilation MSVC et recette Windows réelle
+  encore distinctes.
+
 ## 6.0.0-dev - suivi opérateur des actions - 24 août 2026
 
 - vue projet dédiée aux demandes, décisions, tentatives et effets internes ;

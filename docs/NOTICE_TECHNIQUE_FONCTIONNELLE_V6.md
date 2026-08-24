@@ -210,6 +210,13 @@ Cette fermeture projet a réussi sa recette PostgreSQL 16 distante, y compris le
 fichier physique et le rollback d'une collision enfant ; la qualification du
 déploiement Windows/Docker reste une porte distincte.
 
+La désinstallation Windows candidate exige un marqueur créé par l'installateur.
+Elle arrête les services par Compose sans option de suppression de volumes,
+supprime uniquement les fichiers exacts du payload et ne retire le raccourci que
+si sa cible appartient au dossier sélectionné. `.env`, données, sauvegardes,
+journaux, volumes PostgreSQL et logiciels tiers sont conservés. Ce contrat de
+code ne remplace pas une recette réelle sur Windows 10/11 avec Docker Desktop.
+
 Le connecteur réseau de réception de mails reste à arbitrer entre IMAP, OAuth et
 passerelle entrante. Le premier socle implémenté importe manuellement un fichier
 EML dont le caractère public est confirmé et prouvé par une URL HTTPS. Il

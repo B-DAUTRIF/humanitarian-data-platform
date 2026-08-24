@@ -238,7 +238,11 @@ preuves ne remplacent pas la recette Windows/Docker du déploiement cible.
   l'activité et permettre une annulation contrôlée sans supprimer les volumes ;
 - [x] créer en fin d'installation Windows un raccourci Bureau natif vers le
   lanceur de l'instance installée ;
-- [ ] supprimer ce raccourci dans la future procédure de désinstallation ;
+- [x] supprimer le raccourci dans la procédure de désinstallation seulement
+  après lecture de sa cible ; le code reste à compiler et à essayer sur Windows ;
+- [x] borner la désinstallation aux fichiers exacts du payload après vérification
+  d'un marqueur HDP, arrêter Compose sans `-v` et conserver `.env`, données,
+  sauvegardes, journaux, volumes et logiciels tiers ;
 - [ ] définir séparément le comportement Linux poste et Linux serveur, où un
   raccourci graphique peut être inadapté ou inexistant ;
 - [ ] ajouter dans la bibliothèque l'action **Ouvrir le dossier contenant** pour
