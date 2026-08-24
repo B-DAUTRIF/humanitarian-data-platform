@@ -5,7 +5,7 @@
   "working_version": "6.0.0-dev",
   "latest_qualified_release": "5.0.2",
   "previous_working_line": "5.2",
-  "state_generated_at": "2026-08-24T08:56:31+02:00",
+  "state_generated_at": "2026-08-24T08:59:38+02:00",
   "status": "implementation_in_progress",
   "basis": {
     "archive": "HumanitarianDataPlatform_Archive_complete_v5.0.2.zip",
@@ -13,12 +13,12 @@
     "remote_reference_branch": "develop/5.2",
     "remote_reference_commit": "d0257a402a958439f6f28e6b3de2290112bfbbfc",
     "working_branch": "codex/v6-build-20260821",
-    "local_worktree_base_commit": "6a0b2593e6131df4e3f60a1eec707afa884cd0ba",
+    "local_worktree_base_commit": "89a24079da4bbcdc465e7a8262977a55588e664f",
     "pull_request": 8,
     "remote_published": true,
     "remote_publication_scope": "development branch and draft pull request only",
     "merged_to_main": false,
-    "local_project_restore_lot_published": false
+    "local_project_restore_fix_published": false
   },
   "baseline_tests": {
     "executed": 247,
@@ -59,7 +59,7 @@
     "compatibility_fixes": "lookback, signal idempotence, aggregation readiness and V5 route/table preservation"
   },
   "last_implementation_gate": {
-    "executed_at": "2026-08-24T08:56:31+02:00",
+    "executed_at": "2026-08-24T08:59:38+02:00",
     "result": "passed",
     "blocking_failures": [],
     "qualification_complete": false,
@@ -90,6 +90,13 @@
     "temporary_signals_restore_integration": "passed on PostgreSQL 16 with dependency-order and collision rollback proof",
     "temporary_project_restore_integration": "not present in this validated parent commit",
     "qualification_complete": false
+  },
+  "last_failed_candidate": {
+    "commit": "89a24079da4bbcdc465e7a8262977a55588e664f",
+    "validation_workflow_run": 32699450467,
+    "windows_workflow_run": 32699450506,
+    "cause": "the duplicate-project test was rejected earlier by the exactly-one-project manifest rule",
+    "correction": "keep the safer manifest rule and exercise transactional collision rollback with a duplicated child artifact instead"
   },
   "program": {
     "notice": "docs/NOTICE_TECHNIQUE_FONCTIONNELLE_V6.md",

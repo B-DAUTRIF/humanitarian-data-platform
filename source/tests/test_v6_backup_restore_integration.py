@@ -253,7 +253,7 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
         )
         return publish_bundle(root, "signals-integration", files, manifest)
 
-    def _project_bundle(self, root: Path, *, duplicate_project: bool = False) -> tuple[Path, int]:
+    def _project_bundle(self, root: Path, *, duplicate_artifact: bool = False) -> tuple[Path, int]:
         project_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
         event_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
         rule_id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
@@ -291,11 +291,11 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
                 data_directory,
             )
             connection.commit()
-        if duplicate_project:
-            project_file = root / "projects.jsonl"
-            first_line = project_file.read_text(encoding="utf-8")
-            project_file.write_text(first_line + first_line, encoding="utf-8")
-            row_counts["projects"] = 2
+        if duplicate_artifact:
+            artifact_file = root / "data_artifacts.jsonl"
+            first_line = artifact_file.read_text(encoding="utf-8")
+            artifact_file.write_text(first_line + first_line, encoding="utf-8")
+            row_counts["data_artifacts"] = 2
         manifest = build_manifest(
             backup_id="project-integration",
             application_version="6.0.0-dev",
@@ -428,11 +428,11 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
                 ).fetchone()
             self.assertIsNone(exists)
 
-    def test_duplicate_project_identifier_rolls_back_and_drops_database(self) -> None:
+    def test_duplicate_project_artifact_identifier_rolls_back_and_drops_database(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             token = secrets.token_hex(8)
             temporary_database = f"{TEMPORARY_RESTORE_DATABASE_PREFIX}{token}"
-            bundle, _ = self._project_bundle(Path(directory), duplicate_project=True)
+            bundle, _ = self._project_bundle(Path(directory), duplicate_artifact=True)
             with (
                 patch("app.v6_backup.secrets.token_hex", return_value=token),
                 self.assertRaisesRegex(BackupError, "collision d'identifiant"),
