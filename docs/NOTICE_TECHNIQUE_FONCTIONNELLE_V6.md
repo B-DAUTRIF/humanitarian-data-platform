@@ -92,8 +92,10 @@ des connecteurs et restaurations restent séparées.
     officielles disponibles à une date donnée. Un module permet d'ajouter et de
     tester de nouveaux flux sans les activer implicitement.
 13. Les sauvegardes SQL couvrent l'instance entière, un projet ou les signaux.
-    La bibliothèque peut ouvrir le dossier contenant un fichier seulement en
-    mode poste local et dans un répertoire confiné.
+    Pour les signaux, l'opérateur choisit des UUID du projet actif, le projet
+    entier ou tous les projets, avec une période optionnelle dont le début est
+    inclus et la fin exclue. La bibliothèque peut ouvrir le dossier contenant
+    un fichier seulement en mode poste local et dans un répertoire confiné.
 14. La réception de mails est séparée de tout envoi. Messages et pièces jointes
     sont bornés, tracés et rattachables aux projets avant d'être exposés aux règles.
 15. Une étape de développement ne produit pas automatiquement un EXE ou une

@@ -5,7 +5,7 @@
   "working_version": "6.0.0-dev",
   "latest_qualified_release": "5.0.2",
   "previous_working_line": "5.2",
-  "state_generated_at": "2026-08-24T14:59:20+02:00",
+  "state_generated_at": "2026-08-24T15:07:43+02:00",
   "status": "implementation_in_progress",
   "basis": {
     "archive": "HumanitarianDataPlatform_Archive_complete_v5.0.2.zip",
@@ -13,7 +13,7 @@
     "remote_reference_branch": "develop/5.2",
     "remote_reference_commit": "d0257a402a958439f6f28e6b3de2290112bfbbfc",
     "working_branch": "codex/v6-build-20260821",
-    "local_worktree_base_commit": "43c944f9e4b5c3f342fbafb3a52f5f142ba97beb",
+    "local_worktree_base_commit": "b3ba673a3676d642593f7cbd1f2e109793c8b750",
     "pull_request": 8,
     "remote_published": true,
     "remote_publication_scope": "development branch and draft pull request only",
@@ -69,7 +69,7 @@
     "compatibility_fixes": "lookback, signal idempotence, aggregation readiness, V5 route/table preservation and linked migration of flat V5 rules"
   },
   "last_implementation_gate": {
-    "executed_at": "2026-08-24T14:59:20+02:00",
+    "executed_at": "2026-08-24T15:07:43+02:00",
     "result": "passed",
     "blocking_failures": [],
     "qualification_complete": false,
@@ -84,7 +84,7 @@
     "operator_tracking": "two integration tests remotely verified on PostgreSQL 16 for multi-attempt history, decisions, drafts, associated jobs and unfiltered project lists",
     "legacy_rule_migration": "preview, strict template materialization, historical text overlap, lookback, linked atomic switch and idempotent replay verified on PostgreSQL 16",
     "windows_uninstall": "source contracts require a valid installer marker, compose down without volumes, exact payload deletion and target-verified shortcut removal; MSVC strict build passed and real Windows recipe remains pending",
-    "backup_restore": "global, signal and project restores are remotely verified with exact compatibility, dependency order, confined assets, collision rollback and mandatory temporary-database deletion; global/project/period signal selection and multi-project restore await the current remote recipe",
+    "backup_restore": "global, signal and project restores are remotely verified with exact compatibility, dependency order, confined assets, collision rollback and mandatory temporary-database deletion; global/project/period signal selection and multi-project restore passed on PostgreSQL 16",
     "not_executed": [
       "SPIP PHP syntax and native runtime: PHP/SPIP unavailable",
       "Docker Compose recipe: Docker unavailable",
@@ -96,18 +96,19 @@
     ]
   },
   "remote_ci_evidence": {
-    "head_commit": "43c944f9e4b5c3f342fbafb3a52f5f142ba97beb",
-    "validation_workflow_run": 32728875464,
-    "windows_workflow_run": 32728875372,
-    "python_tests": "282 passed, no skipped tests",
-    "workflow_artifact_id": 9520601666,
-    "workflow_artifact_sha256": "f69eace252ae01ac66645f34b577ffa5cb8d863e8df1a122e41400aa5d1306fa",
-    "artifact_expires_at": "2026-09-23T12:46:57Z",
+    "head_commit": "b3ba673a3676d642593f7cbd1f2e109793c8b750",
+    "validation_workflow_run": 32730557868,
+    "windows_workflow_run": 32730557849,
+    "python_tests": "287 passed, no skipped tests",
+    "workflow_artifact_id": 9521236706,
+    "workflow_artifact_sha256": "d5485f2c22a3e95f1d61c8402ed4dcbf368c098c23d834b3e2b83b6f5ae0c4bd",
+    "artifact_expires_at": "2026-09-23T13:05:25Z",
+    "signal_backup_selection": "explicit identifiers, complete project, all projects and half-open period verified against PostgreSQL 16; multi-project restore remained transactional and dropped its temporary database",
     "unified_timelines": "two real PostgreSQL 16 recipes verified factual global migration/contract/activation coverage and project search/acquisition/script/refresh/signal coverage with V6 audit deduplication",
     "source_contract_dossiers": "structured endpoint, input, response, metadata, technique, history and activation views; reference portals keep a read-only non-executable dossier",
     "visual_rule_builder": "five-level visual editing, synchronized text formula and JSON, advanced deep-tree preservation and pre-save simulation covered by the static contract and remote JavaScript validation",
     "temporary_global_restore_integration": "passed on PostgreSQL 16 with collision non-deletion proof",
-    "temporary_signals_restore_integration": "passed on PostgreSQL 16 with dependency-order and collision rollback proof",
+    "temporary_signals_restore_integration": "passed on PostgreSQL 16 with dependency order, multi-project selection/restore, half-open time period, collision rollback and mandatory database deletion",
     "temporary_project_restore_integration": "passed on PostgreSQL 16 with transitive graph, physical asset and child-collision rollback proof",
     "postgresql_action_worker_integration": "seven tests passed on PostgreSQL 16 with no skipped tests",
     "postgresql_data_job_worker_integration": "five tests passed on PostgreSQL 16 for concurrent claim, source progress, partial retry, cancellation and unfiltered operator listing, with no skipped tests",
@@ -116,11 +117,11 @@
     "qualification_complete": false
   },
   "last_failed_candidate": {
-    "commit": "379a49d5aff6865beca1d24531c5759b422fe6c3",
-    "validation_workflow_run": 32711512021,
-    "windows_workflow_run": 32711512024,
-    "cause": "PostgreSQL could not infer the type of a null optional status parameter used only by an IS NULL predicate",
-    "correction": "cast optional action and data-job status parameters to text and cover both unfiltered project lists with real PostgreSQL tests"
+    "commit": "8f2dfd4b10371e061bbe564f25c7a4bfbad76a7b",
+    "validation_workflow_run": 32730295300,
+    "windows_workflow_run": 32730295339,
+    "cause": "the expanded PostgreSQL signal_events fixture required occurred_at, while two older project-backup fixture inserts still omitted it",
+    "correction": "name all inserted signal-event columns and provide an explicit UTC occurrence time; the complete Linux and Windows workflows then passed from scratch"
   },
   "program": {
     "notice": "docs/NOTICE_TECHNIQUE_FONCTIONNELLE_V6.md",

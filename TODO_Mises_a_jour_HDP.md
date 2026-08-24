@@ -264,7 +264,7 @@ Windows/Docker, SPIP/HTTPS, mails réseau ou connecteurs réels.
   autant le déploiement cible ;
 - [x] ajouter une sauvegarde cohérente d'un projet incluant ses dépendances,
   fichiers, lignées, règles, cache référencé et chronologie ;
-- [ ] ajouter une sauvegarde des signaux, globale ou limitée à un projet et à une
+- [x] ajouter une sauvegarde des signaux, globale ou limitée à un projet et à une
   période, avec règles, évaluations et actions associées ;
 - [x] produire manifeste, version de schéma, périmètre, empreintes, inventaire des
   exclusions et contrôle de compatibilité avant restauration ;
@@ -277,6 +277,9 @@ Windows/Docker, SPIP/HTTPS, mails réseau ou connecteurs réels.
 - [x] fermer le bundle des signaux sur le projet et les règles référencées, puis
   restaurer ses neuf tables dans l'ordre des clés étrangères, en transaction et
   avec refus des champs sensibles ou identifiants dupliqués ;
+- [x] vérifier sur PostgreSQL 16 la sélection Signaux par UUID, projet entier,
+  tous projets et fenêtre temporelle `[début, fin[`, puis la restauration d'un
+  bundle multiprojets et la suppression obligatoire de la base temporaire ;
 - [x] prouver à distance la fermeture transitive du bundle projet : séparation
   propriété/dépendance, fichiers confinés adressés par SHA-256, import ordonné,
   collision annulée et base temporaire supprimée ;

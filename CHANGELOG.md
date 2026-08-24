@@ -1,5 +1,16 @@
 # Journal des versions
 
+## 6.0.0-dev - sauvegardes de signaux par portée et période - 24 août 2026
+
+- sélection par UUID dans le projet actif, par projet entier ou sur tous les
+  projets, avec début inclus et fin exclue optionnels ;
+- manifeste enrichi du mode de sélection, des bornes et des volumes résolus ;
+- dépendances projets, règles, évaluations, demandes, exécutions et effets
+  internes conservées sans mélanger les autres signaux ;
+- restauration multiprojets transactionnelle, collisions refusées et base
+  temporaire supprimée après succès comme après échec ;
+- 287/287 tests réussis à distance sur PostgreSQL 16, Linux et Windows verts.
+
 ## 6.0.0-dev - chronologies globales et projet unifiées - 24 août 2026
 
 - migrations appliquées, versions de contrats et transitions d'activation
