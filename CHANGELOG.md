@@ -11,8 +11,8 @@
   motif opérateur ;
 - filtres de statut optionnels explicitement typés pour éviter l'ambiguïté des
   paramètres nuls dans PostgreSQL ;
-- 267 tests recensés localement, dont deux nouvelles recettes d'observabilité
-  PostgreSQL réservées à la CI.
+- 267/267 tests réussis à distance sur PostgreSQL 16, dont deux nouvelles
+  recettes d'observabilité ; Linux et Windows restent verts.
 
 ## 6.0.0-dev - exécution contrôlée des travaux de données - 24 août 2026
 
