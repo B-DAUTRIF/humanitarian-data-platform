@@ -340,7 +340,12 @@ def execute_claimed_action_request(
         (output_sha256, Jsonb(result), finished_at, request["execution_id"]),
     )
     _record_timeline(connection, request, "action.completed", "completed", "Action interne exécutée", {**result, "output_sha256": output_sha256}, finished_at)
-    return {"request_id": str(request["id"]), "status": "completed", **result, "output_sha256": output_sha256}
+    return {
+        "request_id": str(request["id"]),
+        **result,
+        "output_sha256": output_sha256,
+        "status": "completed",
+    }
 
 
 def _record_timeline(

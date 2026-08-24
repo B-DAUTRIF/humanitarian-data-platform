@@ -5,7 +5,7 @@
   "working_version": "6.0.0-dev",
   "latest_qualified_release": "5.0.2",
   "previous_working_line": "5.2",
-  "state_generated_at": "2026-08-24T10:40:12+02:00",
+  "state_generated_at": "2026-08-24T10:42:38+02:00",
   "status": "implementation_in_progress",
   "basis": {
     "archive": "HumanitarianDataPlatform_Archive_complete_v5.0.2.zip",
@@ -13,7 +13,7 @@
     "remote_reference_branch": "develop/5.2",
     "remote_reference_commit": "d0257a402a958439f6f28e6b3de2290112bfbbfc",
     "working_branch": "codex/v6-build-20260821",
-    "local_worktree_base_commit": "a42899d2219051f1a731ba433f02de130086bbb0",
+    "local_worktree_base_commit": "80be58ecc693f41745993430bc98fb17016669d2",
     "pull_request": 8,
     "remote_published": true,
     "remote_publication_scope": "development branch and draft pull request only",
@@ -63,7 +63,7 @@
     "compatibility_fixes": "lookback, signal idempotence, aggregation readiness and V5 route/table preservation"
   },
   "last_implementation_gate": {
-    "executed_at": "2026-08-24T10:40:12+02:00",
+    "executed_at": "2026-08-24T10:42:38+02:00",
     "result": "passed",
     "blocking_failures": [],
     "qualification_complete": false,
@@ -98,11 +98,11 @@
     "qualification_complete": false
   },
   "last_failed_candidate": {
-    "commit": "a42899d2219051f1a731ba433f02de130086bbb0",
-    "validation_workflow_run": 32707156756,
-    "windows_workflow_run": 32707156742,
-    "cause": "PostgreSQL rejected FOR UPDATE on the nullable policy join; stale-lease unpacking retained the previous arity; legacy signal fixtures were treated as if migration 6.0.0-011 were already present",
-    "correction": "lock action_requests explicitly with FOR UPDATE OF r, unpack project_id, and make the five effect tables mandatory only when the action-worker schema version is declared"
+    "commit": "80be58ecc693f41745993430bc98fb17016669d2",
+    "validation_workflow_run": 32707548932,
+    "windows_workflow_run": 32707548951,
+    "cause": "the draft effect status overwrote the completed request status in the API response dictionary",
+    "correction": "make the request lifecycle status the final authoritative response field while preserving the draft effect details"
   },
   "program": {
     "notice": "docs/NOTICE_TECHNIQUE_FONCTIONNELLE_V6.md",
