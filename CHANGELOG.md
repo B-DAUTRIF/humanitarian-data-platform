@@ -1,5 +1,17 @@
 # Journal des versions
 
+## 6.0.0-dev - suivi opérateur des actions - 24 août 2026
+
+- vue projet dédiée aux demandes, décisions, tentatives et effets internes ;
+- brouillons associés exposés par canal, statut et empreinte sans afficher leur
+  corps dans la liste ;
+- travaux de données et résultats par source visibles avec acquisitions, erreurs
+  et compteurs de tentatives ;
+- approbation, rejet et annulation disponibles uniquement après confirmation et
+  motif opérateur ;
+- 266 tests recensés localement, dont une nouvelle recette d'observabilité
+  PostgreSQL réservée à la CI.
+
 ## 6.0.0-dev - exécution contrôlée des travaux de données - 24 août 2026
 
 - sources et requête désormais obligatoires avant toute action réseau ; secrets,

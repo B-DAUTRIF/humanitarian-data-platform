@@ -27,6 +27,7 @@ from .v6_action_queue import (
     execute_claimed_action_request,
     mark_action_request_failed,
 )
+from .v6_action_observability import list_project_action_requests
 from .v6_data_jobs import DataJobError, cancel_data_job
 from .v6_catalog import (
     CAPABILITIES,
@@ -439,31 +440,7 @@ def project_action_requests(
 ) -> list[dict[str, Any]]:
     ensure_project(project_id)
     with db() as connection:
-        rows = connection.execute(
-            """SELECT r.id,r.evaluation_id,r.action_type,r.risk_level,r.status,r.parameters,
-                      r.limits,r.idempotency_key,r.requested_at,r.decided_at,r.decided_by,
-                      r.decision_reason,r.attempt_count,r.max_attempts,r.next_attempt_at,
-                      r.cancel_requested_at,r.cancelled_at,r.completed_at,r.last_error,
-                      x.status,x.started_at,x.finished_at,x.output_sha256,x.result,x.error
-               FROM action_requests r
-               LEFT JOIN LATERAL (
-                    SELECT status,started_at,finished_at,output_sha256,result,error
-                    FROM action_executions WHERE request_id=r.id
-                    ORDER BY attempt_number DESC LIMIT 1
-               ) x ON TRUE
-               WHERE r.project_id=%s AND (%s IS NULL OR r.status=%s)
-               ORDER BY r.requested_at DESC,r.id LIMIT %s""",
-            (project_id, status, status, limit),
-        ).fetchall()
-    keys = (
-        "id", "evaluation_id", "action_type", "risk_level", "status", "parameters",
-        "limits", "idempotency_key", "requested_at", "decided_at", "decided_by",
-        "decision_reason", "attempt_count", "max_attempts", "next_attempt_at",
-        "cancel_requested_at", "cancelled_at", "completed_at", "last_error",
-        "last_execution_status", "last_started_at", "last_finished_at",
-        "last_output_sha256", "last_result", "last_execution_error",
-    )
-    return [dict(zip(keys, row, strict=True)) for row in rows]
+        return list_project_action_requests(connection, project_id, status, limit)
 
 
 @router.post("/actions/{request_id}/decision")

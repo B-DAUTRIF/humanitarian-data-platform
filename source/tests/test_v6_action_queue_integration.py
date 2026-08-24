@@ -25,6 +25,7 @@ from app.v6_action_queue import (  # noqa: E402
     mark_action_request_failed,
     recover_stale_action_requests,
 )
+from app.v6_action_observability import list_project_action_requests  # noqa: E402
 
 
 TEST_DATABASE_URL = os.getenv("HDP_BACKUP_RESTORE_TEST_DATABASE_URL", "").strip()
@@ -336,6 +337,50 @@ class ActionQueuePostgresIntegrationTest(unittest.TestCase):
             self.assertEqual(row[2], 1)
             self.assertEqual(connection.execute("SELECT count(*) FROM project_tasks WHERE request_id=%s", (request_id,)).fetchone()[0], 0)
             self.assertEqual(connection.execute("SELECT status FROM action_executions WHERE request_id=%s", (request_id,)).fetchone()[0], "failed")
+
+    def test_operator_view_exposes_attempts_decision_draft_and_data_job(self) -> None:
+        draft_request_id = self._request("email_draft", {"document": {"subject": "Bulletin choléra"}})
+        first = self._claim(lease_seconds=5)
+        self.assertIsNotNone(first)
+        with psycopg.connect(self.database_url, autocommit=False) as connection:
+            recover_stale_action_requests(connection, NOW + timedelta(seconds=6))
+        second = self._claim(now=NOW + timedelta(seconds=7))
+        self.assertIsNotNone(second)
+        assert second is not None
+        self._execute(second, now=NOW + timedelta(seconds=8))
+
+        job_request_id = self._request(
+            "data_search",
+            {"sources": ["hdx"], "query": "cholera", "result_limit": 10},
+        )
+        job_request = self._claim(now=NOW + timedelta(seconds=9))
+        self.assertIsNotNone(job_request)
+        assert job_request is not None
+        self._execute(job_request, now=NOW + timedelta(seconds=10))
+
+        rejected_request_id = self._request("notification", status="pending_approval")
+        with psycopg.connect(self.database_url, autocommit=False) as connection:
+            decide_action_request(
+                connection,
+                rejected_request_id,
+                "reject",
+                "integration-operator",
+                "Action refusée pendant la recette",
+                NOW + timedelta(seconds=11),
+            )
+        with psycopg.connect(self.database_url, autocommit=True) as connection:
+            items = list_project_action_requests(connection, self.project_id)
+
+        draft = next(item for item in items if item["id"] == draft_request_id)
+        self.assertEqual([item["status"] for item in draft["executions"]], ["failed", "completed"])
+        self.assertEqual(draft["draft_status"], "draft")
+        self.assertEqual(draft["draft_title"], "Bulletin choléra")
+        job = next(item for item in items if item["id"] == job_request_id)
+        self.assertIsNotNone(job["data_job_id"])
+        self.assertEqual(job["data_job_status"], "queued")
+        rejected = next(item for item in items if item["id"] == rejected_request_id)
+        self.assertEqual(rejected["status"], "rejected")
+        self.assertEqual(rejected["decision_reason"], "Action refusée pendant la recette")
 
 
 if __name__ == "__main__":

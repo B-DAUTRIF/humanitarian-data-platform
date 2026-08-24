@@ -83,8 +83,9 @@ preuves ne remplacent pas la recette Windows/Docker du déploiement cible.
 - [ ] exécuter les travaux `automated_data_jobs` avec les connecteurs réels,
   puis qualifier les appels Internet, quotas de source et annulations pendant
   un transfert en cours ;
-- [ ] exposer dans l'interface le suivi des tentatives, décisions, brouillons et
-  travaux de données associés.
+- [x] exposer dans l'interface le suivi des tentatives, décisions, brouillons et
+  travaux de données associés ; la recette PostgreSQL du candidat reste à
+  exécuter à distance.
 
 ### HDP6-020 — Inventaire exhaustif des connecteurs
 
@@ -293,10 +294,11 @@ preuves ne remplacent pas la recette Windows/Docker du déploiement cible.
 
 Dernier passage du jalon : **réussi localement et à distance le 24 août 2026**
 après qualification des travailleurs d'actions et de travaux de données. Les
-265 tests distants passent sur PostgreSQL 16 sans test ignoré ; les dix-sept
-tests d'intégration PostgreSQL sont seulement ignorés sur l'hôte local dépourvu
-de serveur. Les appels connecteurs réels et la recette du déploiement cible
-restent des qualifications distinctes.
+265 tests distants du dernier sommet vérifié passent sur PostgreSQL 16 sans test
+ignoré. Le candidat de suivi opérateur recense **266 tests** : 248 passent
+localement et dix-huit recettes PostgreSQL sont ignorées sur l'hôte dépourvu de
+serveur, dont une nouvelle recette d'observabilité. Les appels connecteurs réels
+et la recette du déploiement cible restent des qualifications distinctes.
 
 - [x] traiter les descriptions fonctionnelles comme source du besoin et traduire
   chaque lot en options techniques, effets, risques et critères d'acceptation ;

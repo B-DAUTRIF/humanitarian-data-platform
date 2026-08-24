@@ -138,6 +138,7 @@
   <nav aria-label="Rubriques">
     <button data-view="search">Recherche</button>
     <button data-view="intelligence">Règles & Data Grid</button>
+    <button data-view="actions">Actions & travaux</button>
     <button data-view="sources">Sources sanitaires</button>
     <button data-view="projects">Projets & préférences</button>
     <button data-view="data">Données locales</button>
@@ -244,6 +245,18 @@
           <div id="v6-policy-status" class="status"></div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section id="view-actions" class="view">
+    <div class="card">
+      <div class="item-head"><div><h2>Suivi opérateur des actions</h2><p class="intro">Chaque décision, tentative et effet interne reste visible. Une approbation ou une annulation exige toujours une confirmation manuelle.</p></div><div class="actions"><button id="action-operations-refresh" class="secondary" type="button">Actualiser</button></div></div>
+      <div class="schema-grid"><div><label for="action-status-filter">Statut des demandes</label><select id="action-status-filter"><option value="">Tous</option><option value="pending_approval">En attente d’approbation</option><option value="queued">En file</option><option value="approved">Approuvée</option><option value="running">En cours</option><option value="cancel_requested">Annulation demandée</option><option value="completed">Terminée</option><option value="failed">Échec</option><option value="blocked">Bloquée</option><option value="rejected">Rejetée</option><option value="cancelled">Annulée</option></select></div><div><label for="data-job-status-filter">Statut des travaux de données</label><select id="data-job-status-filter"><option value="">Tous</option><option value="queued">En file</option><option value="running">En cours</option><option value="partial">Partiel</option><option value="completed">Terminé</option><option value="failed">Échec</option><option value="cancelled">Annulé</option></select></div></div>
+      <div id="action-operations-status" class="status"></div>
+    </div>
+    <div class="grid equal">
+      <div class="card"><h2>Demandes, décisions et brouillons</h2><div id="action-operation-list" class="list"><div class="empty">Aucune demande d’action.</div></div></div>
+      <div class="card"><h2>Travaux et résultats par source</h2><div id="data-job-operation-list" class="list"><div class="empty">Aucun travail de données.</div></div></div>
     </div>
   </section>
 
@@ -711,7 +724,7 @@
   function button(label,handler,className=''){const b=document.createElement('button');b.type='button';b.textContent=label;b.className=className;b.addEventListener('click',handler);return b;}
   function empty(container,message){container.innerHTML='';const div=document.createElement('div');div.className='empty';div.textContent=message;container.appendChild(div);}
 
-  function activateView(name){document.querySelectorAll('nav button').forEach(item=>item.classList.toggle('active',item.dataset.view===name));document.querySelectorAll('.view').forEach(view=>view.classList.toggle('active',view.id===`view-${name}`));if(name==='data')loadResources();if(name==='scripts'){loadScripts();loadProcessingWorkspace();}if(name==='notebooks')loadNotebooks();if(name==='intelligence')loadIntelligence();if(name==='schedules')loadSchedules();if(name==='projects')loadProjectSettings();if(name==='sources')renderSources();if(name==='source-settings')loadSourceSettings();if(name==='rss')loadRss();if(name==='spip')loadSpip();if(name==='mail')loadMail();if(name==='timeline')loadTimeline();if(name==='map')loadMapLayers();if(name==='sql')loadSqlSchema();if(name==='backups')loadBackups();if(name==='technologies')loadTechnologies();window.location.hash=name;}
+  function activateView(name){document.querySelectorAll('nav button').forEach(item=>item.classList.toggle('active',item.dataset.view===name));document.querySelectorAll('.view').forEach(view=>view.classList.toggle('active',view.id===`view-${name}`));if(name==='data')loadResources();if(name==='scripts'){loadScripts();loadProcessingWorkspace();}if(name==='notebooks')loadNotebooks();if(name==='intelligence')loadIntelligence();if(name==='actions')loadActionOperations();if(name==='schedules')loadSchedules();if(name==='projects')loadProjectSettings();if(name==='sources')renderSources();if(name==='source-settings')loadSourceSettings();if(name==='rss')loadRss();if(name==='spip')loadSpip();if(name==='mail')loadMail();if(name==='timeline')loadTimeline();if(name==='map')loadMapLayers();if(name==='sql')loadSqlSchema();if(name==='backups')loadBackups();if(name==='technologies')loadTechnologies();window.location.hash=name;}
   document.querySelectorAll('nav button').forEach(tab=>tab.addEventListener('click',()=>activateView(tab.dataset.view)));
   q('#brand-home').addEventListener('click',event=>{event.preventDefault();activateView('home');});
   document.querySelectorAll('[data-go-view]').forEach(button=>button.addEventListener('click',()=>activateView(button.dataset.goView)));
@@ -797,7 +810,7 @@
     state.projects.forEach(project=>{const option=document.createElement('option');option.value=project.id;option.textContent=project.name;els.project.appendChild(option);});
     state.projectId=state.projects.some(p=>p.id===previous)?previous:state.projects[0]?.id;els.project.value=state.projectId||'';if(state.projectId)localStorage.setItem('hdp-project',state.projectId);renderProjectList();await loadProjectSettings();
   }
-  els.project.addEventListener('change',async()=>{if(state.leafletMap)state.leafletLayers.forEach(layer=>state.leafletMap.removeLayer(layer));state.leafletLayers.clear();state.projectId=els.project.value;localStorage.setItem('hdp-project',state.projectId);renderProjectList();await Promise.all([loadProjectSettings(),loadResources(),loadScripts(),loadProcessingWorkspace(),loadSchedules(),loadRss(),loadSpip(),loadTimeline(),loadMapLayers(),renderSearchSourceFields(),loadV6Workspace()]);});
+  els.project.addEventListener('change',async()=>{if(state.leafletMap)state.leafletLayers.forEach(layer=>state.leafletMap.removeLayer(layer));state.leafletLayers.clear();state.projectId=els.project.value;localStorage.setItem('hdp-project',state.projectId);renderProjectList();await Promise.all([loadProjectSettings(),loadResources(),loadScripts(),loadProcessingWorkspace(),loadSchedules(),loadRss(),loadSpip(),loadTimeline(),loadMapLayers(),renderSearchSourceFields(),loadV6Workspace(),loadActionOperations()]);});
 
   q('#search-form').addEventListener('submit',async event=>{
     event.preventDefault();const submit=q('#search-submit');submit.disabled=true;setStatus('#search-status','Acquisition en cours…');empty(q('#search-results'),'Interrogation et archivage en cours…');
@@ -926,6 +939,80 @@
   function renderV6Rules(items){state.v6Rules=items;const container=q('#v6-rule-list');container.innerHTML='';if(!items.length)return empty(container,'Aucune règle V6 dans le projet.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=`${item.scope} · v${item.version_number}`;head.append(title,pill);const detail=document.createElement('small');detail.textContent=`${item.rule_tree.operator||item.rule_tree.type} · ${(item.actions||[]).map(action=>action.type).join(', ')||'aucune action'} · SHA-256 ${item.sha256}`;card.append(head,detail);container.appendChild(card);});}
   function renderV6Policy(policy){state.v6Policy=policy;q('#v6-stale-policy').value=policy.stale_policy||'stale_if_error';q('#v6-stale-mode').value=policy.max_stale_mode||'manual';q('#v6-stale-fixed').value=policy.fixed_duration_seconds||'';q('#v6-stale-multiple').value=policy.frequency_multiple||'';q('#v6-stale-cap').value=policy.project_cap_seconds||'';setStatus('#v6-policy-status',policy.arbitration_required?'Le calcul maximal reste à arbitrer ; toute donnée périmée nécessite une validation.':'Politique active et applicable à tout le projet.');}
   async function loadV6Workspace(){if(!state.projectId)return;try{const [rules,policy]=await Promise.all([api(`/api/v6/projects/${state.projectId}/rules`),api(`/api/v6/projects/${state.projectId}/data-policy`)]);renderV6Rules(rules);renderV6Policy(policy);}catch(error){setStatus('#v6-rule-status',error.message,true);}}
+  async function loadActionOperations(){
+    if(!state.projectId||!q('#action-operation-list'))return;
+    const actionParams=new URLSearchParams({limit:'100'}),jobParams=new URLSearchParams({limit:'100'});
+    if(q('#action-status-filter').value)actionParams.set('status',q('#action-status-filter').value);
+    if(q('#data-job-status-filter').value)jobParams.set('status',q('#data-job-status-filter').value);
+    setStatus('#action-operations-status','Chargement du journal opérateur…');
+    try{
+      const [actions,jobs]=await Promise.all([api(`/api/v6/projects/${state.projectId}/actions?${actionParams}`),api(`/api/v6/projects/${state.projectId}/data-jobs?${jobParams}`)]);
+      renderActionOperations(actions);renderDataJobOperations(jobs);
+      setStatus('#action-operations-status',`${actions.length} demande(s) · ${jobs.length} travail(aux) de données. Les appels Internet réels restent qualifiés séparément.`);
+    }catch(error){setStatus('#action-operations-status',error.message,true);}
+  }
+  function renderActionOperations(items){
+    const container=q('#action-operation-list');container.innerHTML='';
+    if(!items.length)return empty(container,'Aucune demande correspondant au filtre.');
+    const cancellable=new Set(['queued','pending_approval','approved','running','cancel_requested','blocked']);
+    items.forEach(item=>{
+      const card=document.createElement('div');card.className='item';
+      const head=document.createElement('div');head.className='item-head';
+      const title=document.createElement('h4');title.textContent=item.action_type;
+      const pill=document.createElement('span');pill.className=`pill ${item.status}`;pill.textContent=item.status;
+      head.append(title,pill);
+      const detail=document.createElement('small');detail.textContent=`demandée ${date(item.requested_at)} · risque ${item.risk_level} · tentatives ${item.attempt_count}/${item.max_attempts} · ${item.id}`;
+      const executions=(item.executions||[]).map(execution=>`#${execution.attempt_number} · ${execution.status} · ${date(execution.started_at)} → ${date(execution.finished_at)}${execution.worker_id?' · '+execution.worker_id:''}${execution.error?' · '+execution.error:''}`).join('\n');
+      const decision=item.decided_at?`${item.status} par ${item.decided_by||'opérateur'} le ${date(item.decided_at)} · ${item.decision_reason||'sans motif'}`:'aucune décision enregistrée';
+      const draft=item.draft_id?`${item.draft_channel} · ${item.draft_status} · ${item.draft_title||'sans titre'} · SHA-256 ${item.draft_content_sha256}`:'aucun brouillon associé';
+      const dataJob=item.data_job_id?`${item.data_job_id} · ${item.data_job_status}`:'aucun travail associé';
+      const proof=document.createElement('pre');proof.className='request-preview';proof.textContent=`DÉCISION\n${decision}\n\nTENTATIVES\n${executions||'aucune tentative'}\n\nBROUILLON\n${draft}\n\nTRAVAIL DE DONNÉES\n${dataJob}${item.last_error?'\n\nERREUR\n'+item.last_error:''}`;
+      const controls=document.createElement('div');controls.className='mini-actions';
+      if(item.status==='pending_approval'){
+        controls.append(button('Approuver',()=>decideActionOperation(item.id,'approve')));
+        controls.append(button('Rejeter',()=>decideActionOperation(item.id,'reject'),'danger'));
+      }
+      if(cancellable.has(item.status))controls.append(button('Annuler',()=>cancelActionOperation(item.id),'danger'));
+      card.append(head,detail,proof,controls);container.appendChild(card);
+    });
+  }
+  function renderDataJobOperations(items){
+    const container=q('#data-job-operation-list');container.innerHTML='';
+    if(!items.length)return empty(container,'Aucun travail correspondant au filtre.');
+    items.forEach(item=>{
+      const card=document.createElement('div');card.className='item';
+      const head=document.createElement('div');head.className='item-head';
+      const title=document.createElement('h4');title.textContent=item.job_type;
+      const pill=document.createElement('span');pill.className=`pill ${item.status}`;pill.textContent=item.status;
+      head.append(title,pill);
+      const parameters=document.createElement('small');parameters.textContent=`requête « ${item.parameters?.query||'—'} » · ${(item.parameters?.sources||[]).join(', ')||'aucune source'} · tentatives ${item.attempt_count}/${item.max_attempts} · demande ${item.request_id}`;
+      const sources=(item.source_results||[]).map(source=>`${source.source_id} · ${source.status} · ${source.attempt_count} tentative(s)${source.acquisition_id?' · acquisition '+source.acquisition_id:''}${source.error?' · '+source.error:''}`).join('\n');
+      const proof=document.createElement('pre');proof.className='request-preview';proof.textContent=`SOURCES\n${sources||'aucun résultat par source'}${item.error?'\n\nERREUR\n'+item.error:''}\n\nCréé ${date(item.created_at)} · terminé ${date(item.finished_at)}`;
+      const controls=document.createElement('div');controls.className='mini-actions';
+      if(['queued','running'].includes(item.status))controls.append(button('Annuler le travail',()=>cancelDataJobOperation(item.id),'danger'));
+      card.append(head,parameters,proof,controls);container.appendChild(card);
+    });
+  }
+  async function decideActionOperation(id,decision){
+    const reason=prompt(`Motif obligatoire pour ${decision==='approve'?'approuver':'rejeter'} cette demande :`,'Contrôle opérateur effectué');
+    if(reason===null)return;if(reason.trim().length<2)return setStatus('#action-operations-status','Le motif doit contenir au moins deux caractères.',true);
+    try{await api(`/api/v6/actions/${id}/decision`,{method:'POST',body:JSON.stringify({decision,reason:reason.trim()})});await loadActionOperations();}catch(error){setStatus('#action-operations-status',error.message,true);}
+  }
+  async function cancelActionOperation(id){
+    if(!confirm('Demander l’annulation de cette action ?'))return;
+    const reason=prompt('Motif obligatoire de l’annulation :','Annulation demandée par l’opérateur');
+    if(reason===null)return;if(reason.trim().length<2)return setStatus('#action-operations-status','Le motif doit contenir au moins deux caractères.',true);
+    try{await api(`/api/v6/actions/${id}/cancel`,{method:'POST',body:JSON.stringify({reason:reason.trim()})});await loadActionOperations();}catch(error){setStatus('#action-operations-status',error.message,true);}
+  }
+  async function cancelDataJobOperation(id){
+    if(!confirm('Demander l’annulation de ce travail entre deux sources ?'))return;
+    const reason=prompt('Motif obligatoire de l’annulation :','Annulation demandée par l’opérateur');
+    if(reason===null)return;if(reason.trim().length<2)return setStatus('#action-operations-status','Le motif doit contenir au moins deux caractères.',true);
+    try{await api(`/api/v6/data-jobs/${id}/cancel`,{method:'POST',body:JSON.stringify({reason:reason.trim()})});await loadActionOperations();}catch(error){setStatus('#action-operations-status',error.message,true);}
+  }
+  q('#action-operations-refresh').addEventListener('click',loadActionOperations);
+  q('#action-status-filter').addEventListener('change',loadActionOperations);
+  q('#data-job-status-filter').addEventListener('change',loadActionOperations);
   q('#v6-rule-validate').addEventListener('click',async()=>{try{const data=await api('/api/v6/rules/validate',{method:'POST',body:JSON.stringify({rule_tree:readV6RuleTree()})});q('#v6-rule-proof').textContent=JSON.stringify(data.rule_tree,null,2);setStatus('#v6-rule-status',`Arbre valide · SHA-256 ${data.sha256}`);}catch(error){setStatus('#v6-rule-status',error.message,true);}});
   q('#v6-rule-simulate').addEventListener('click',async()=>{try{const event=readV6Event();const data=await api('/api/v6/rules/simulate',{method:'POST',body:JSON.stringify({rule_tree:readV6RuleTree(),event,events:[event],now:event.occurred_at})});q('#v6-rule-proof').textContent=JSON.stringify(data,null,2);setStatus('#v6-rule-status',data.matched?'Simulation positive ; aucune action exécutée.':'Simulation négative ; aucune action exécutée.');}catch(error){setStatus('#v6-rule-status',error.message,true);}});
   q('#v6-rule-form').addEventListener('submit',async event=>{event.preventDefault();try{const data=await api(`/api/v6/projects/${state.projectId}/rules`,{method:'POST',body:JSON.stringify({name:q('#v6-rule-name').value,description:'Règle créée dans le constructeur HDP 6',rule_tree:readV6RuleTree(),actions:readV6Actions()})});setStatus('#v6-rule-status',`Règle versionnée créée · ${data.sha256}`);await loadV6Workspace();}catch(error){setStatus('#v6-rule-status',error.message,true);}});

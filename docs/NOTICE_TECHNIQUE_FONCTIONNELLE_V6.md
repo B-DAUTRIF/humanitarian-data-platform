@@ -132,6 +132,10 @@ disproportionnée et créerait deux moteurs techniques difficiles à qualifier.
   Une acquisition est unique pour le couple travail/source ; une annulation est
   observée avant chaque source, mais ne prétend pas interrompre un transfert HTTP
   déjà engagé tant que la recette réseau correspondante n'est pas qualifiée.
+- La vue **Actions & travaux** expose par projet les décisions, toutes les
+  tentatives, les brouillons associés et les résultats de chaque source. Elle ne
+  permet une approbation, un rejet ou une annulation qu'après confirmation et
+  saisie d'un motif opérateur.
 
 Une règle est un arbre composé de groupes logiques et de feuilles `condition` ou
 `correlation`. Le schéma est versionné, strict, borné et validé côté serveur.

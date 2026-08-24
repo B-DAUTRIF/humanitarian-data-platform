@@ -20,6 +20,7 @@ class V6StaticContractTest(unittest.TestCase):
         cls.catalog = (API_APP / "v6_catalog.py").read_text(encoding="utf-8")
         cls.actions = (API_APP / "v6_actions.py").read_text(encoding="utf-8")
         cls.action_queue = (API_APP / "v6_action_queue.py").read_text(encoding="utf-8")
+        cls.action_observability = (API_APP / "v6_action_observability.py").read_text(encoding="utf-8")
         cls.data_jobs = (API_APP / "v6_data_jobs.py").read_text(encoding="utf-8")
         cls.storage = (API_APP / "v6_storage.py").read_text(encoding="utf-8")
         cls.openapi = (API_APP / "v6_openapi.py").read_text(encoding="utf-8")
@@ -35,6 +36,7 @@ class V6StaticContractTest(unittest.TestCase):
             ("v6_catalog.py", self.catalog),
             ("v6_actions.py", self.actions),
             ("v6_action_queue.py", self.action_queue),
+            ("v6_action_observability.py", self.action_observability),
             ("v6_data_jobs.py", self.data_jobs),
             ("v6_storage.py", self.storage),
             ("v6_openapi.py", self.openapi),
@@ -209,6 +211,17 @@ class V6StaticContractTest(unittest.TestCase):
         self.assertIn("await execute_acquisition(", self.main)
         self.assertIn("automated_data_job_source=source", self.main)
         self.assertNotIn("download_public_file", self.data_jobs)
+        for marker in (
+            'data-view="actions"',
+            'id="action-operation-list"',
+            'id="data-job-operation-list"',
+            "loadActionOperations",
+            "decideActionOperation",
+            "cancelDataJobOperation",
+        ):
+            self.assertIn(marker, self.html)
+        for marker in ("jsonb_agg", "action_drafts", "automated_data_jobs", "executions"):
+            self.assertIn(marker, self.action_observability)
 
     def test_cache_materialization_is_content_addressed_and_versioned(self) -> None:
         for marker in (
