@@ -329,8 +329,14 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
         with psycopg.connect(self.source_url, autocommit=True) as connection:
             connection.execute("INSERT INTO projects VALUES (%s,%s)", (project_id, "Projet fixture"))
             connection.execute(
-                "INSERT INTO signal_events VALUES (%s,%s,%s)",
-                (event_id, project_id, json.dumps({"source": "fixture"})),
+                """INSERT INTO signal_events(id,project_id,payload,occurred_at)
+                   VALUES (%s,%s,%s,%s)""",
+                (
+                    event_id,
+                    project_id,
+                    json.dumps({"source": "fixture"}),
+                    datetime(2026, 8, 1, 12, tzinfo=UTC),
+                ),
             )
             connection.execute(
                 "INSERT INTO signal_rules VALUES (%s,%s,%s)",
