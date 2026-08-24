@@ -13,13 +13,13 @@ La notice de référence est conservée dans
 Une case n'est cochée que si le code, les migrations, les tests et la preuve de
 non-régression correspondants existent.
 
-**Dernier jalon distant validé au 24 août 2026** : le commit
-`bda9f2d0f537…` a réussi 257 tests Python sans test ignoré, dont les
-restaurations globale, signaux et projet et les sept recettes du travailleur
-d'actions sur PostgreSQL 16. La validation Linux et la construction Windows
-sont vertes. Le schéma OpenAPI compte 169 routes dont 55 chemins `/api/v6`.
-Les lots sauvegardes et travailleur interne sont fermés dans ce périmètre ; ces
-preuves ne remplacent pas la recette Windows/Docker du déploiement cible.
+**Dernier jalon distant validé au 24 août 2026** : le commit fonctionnel
+`05cccb543ec5…`, documenté au sommet `2e69f04627f7…`, a réussi 270 tests
+Python sans test ignoré sur PostgreSQL 16. La validation Linux, les images R,
+les contrôles JavaScript/OpenAPI/sécurité et la construction Windows MSVC
+stricte sont verts. Le schéma compte 172 routes, 136 chemins OpenAPI et 58
+chemins `/api/v6`. Ces preuves ne remplacent pas les recettes interactives
+Windows/Docker, SPIP/HTTPS, mails réseau ou connecteurs réels.
 
 ### HDP6-001 — Gouvernance et compatibilité
 
@@ -30,7 +30,7 @@ preuves ne remplacent pas la recette Windows/Docker du déploiement cible.
 - [x] maintenir `HDP_STATE.json` pour le lot local 1 ;
 - [x] réconcilier les preuves locales et distantes du jalon V6 et empêcher une
   nouvelle divergence du nombre de tests et de fichiers Python ;
-- [ ] réconcilier README, référence API, architecture et wiki ;
+- [x] réconcilier README, référence API, architecture et wiki ;
 - [ ] n'effectuer aucune publication, fusion ou livraison sans validation
   explicite et preuve de qualification.
 
@@ -152,7 +152,9 @@ preuves ne remplacent pas la recette Windows/Docker du déploiement cible.
   l'ancienne version uniquement après échec et dans l'ancienneté autorisée ;
 - [x] rendre configurables les quatre calculs d'ancienneté maximale : durée fixe,
   multiple de fréquence, fréquence avec plafond projet, décision manuelle ;
-- [ ] **arbitrage restant** : choisir le calcul proposé par défaut dans l'interface.
+- [x] proposer par défaut dans l'interface la fréquence source multipliée par
+  trois et plafonnée à sept jours, sans modifier silencieusement les projets
+  restés en arbitrage manuel.
 
 ### HDP6-050 — Interface des sources et des règles
 

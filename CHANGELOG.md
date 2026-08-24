@@ -1,5 +1,17 @@
 # Journal des versions
 
+## 6.0.0-dev - cohérence documentaire et recommandation de cache - 24 août 2026
+
+- référence distincte des 58 chemins API V6 et conservation explicite de la
+  référence V5 ;
+- architecture, README, wiki, todo-list et état du projet réconciliés avec le
+  jalon distant de 270 tests et le sommet de branche `2e69f04627f7…` ;
+- recommandation d'ancienneté maximale fixée à trois fois la fréquence publiée,
+  avec plafond projet de sept jours ;
+- aucun projet resté en mode manuel n'est modifié silencieusement : la
+  recommandation doit être enregistrée par l'opérateur ;
+- 271 tests recensés localement, dont 19 recettes PostgreSQL réservées à la CI.
+
 ## 6.0.0-dev - désinstallation Windows non destructive - 24 août 2026
 
 - marqueur de gestion écrit par l'installateur et exigé avant toute suppression ;

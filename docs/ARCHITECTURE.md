@@ -4,12 +4,14 @@
 
 ```mermaid
 flowchart TD
-    U["Interface web locale"] --> A["FastAPI 4.1.0"]
+    U["Interface web locale"] --> A["FastAPI 6.0.0-dev"]
     A --> P["PostgreSQL + PostGIS"]
     A --> F["Fichiers et rapports"]
     A --> X["Sources distantes"]
     U --> G["Passerelle GitHub locale"]
     A --> Q["Spool d'exécution"]
+    A --> W["Files d'actions et de données"]
+    W --> A
     Q --> Y["Runner Python sans réseau"]
     Q -. facultatif .-> R["Runner R sans réseau"]
 ```
@@ -48,7 +50,27 @@ runners utilisent `network_mode: none`.
 
 Le projet par défaut utilise l'UUID stable `00000000-0000-4000-8000-000000000001`. Le démarrage crée les nouvelles tables de façon idempotente, ajoute `project_id` et `schedule_id` à l'historique v1.5, puis rattache les lignes sans projet.
 
-## Intégrations de projet 4.1.0
+## Compléments V6 de développement
+
+La ligne V6 conserve les routes et tables V5 tout en ajoutant quatre ensembles
+versionnés : règles ET/OU et héritage, catalogue de contrats, cache adressé par
+contenu et opérations contrôlées. Les demandes d'action et travaux de données
+sont réclamés par bail avec `FOR UPDATE SKIP LOCKED`; chaque source possède son
+résultat, ses tentatives et son acquisition idempotente. Les effets externes
+restent soumis à validation ou désactivés tant que leur infrastructure n'est
+pas qualifiée.
+
+Les sauvegardes globale, projet et signaux sont prévalidées avant toute
+restauration. Leur recette automatisée crée une base PostgreSQL 16 neuve,
+refuse les collisions, exécute une transaction unique puis supprime la base
+temporaire, y compris après échec. Cette preuve ne remplace pas la recette du
+déploiement Windows/Docker cible.
+
+La passerelle SPIP n'expose que des brouillons publics approuvés manuellement.
+La messagerie n'accepte à ce stade qu'un import EML public, borné et confiné.
+Voir la [référence API V6](API_V6_DEV.md) pour le périmètre exact.
+
+## Intégrations de projet héritées de 4.1.0
 
 Le registre 4.1.0 sépare le contrat global de chaque connecteur et expose son
 profil technique, ses liens officiels et ses exemples cURL/Python/R expurgés.
@@ -118,7 +140,7 @@ elle ne transforme pas HDP en plateforme d'exécution de code hostile.
 
 ## RSS, cartographie et chronologie
 
-Le registre RSS ne contient que quatre URL ReliefWeb vérifiées. Les lectures
+Le registre V6 contient quinze flux officiels versionnés. Les lectures
 sont bornées, suivent uniquement les hôtes autorisés, utilisent ETag et
 Last-Modified, refusent DTD/entités XML et dédupliquent par identifiant externe.
 
@@ -165,7 +187,7 @@ L'intervalle est compris entre 15 minutes et 30 jours. Une erreur de base tempor
 | `GET /api/cod/families` | Liste, état sélectionnable/retiré et registre COD-CS |
 | `GET /api/cod/availability` | Intersection pays/zone ONU M49 × familles HDX |
 | `GET /api/un-m49/entities` | Nomenclature hiérarchique M49 et source d'autorité |
-| `GET /api/search` | Acquisition manuelle et téléchargement optionnel |
+| `POST /api/acquisitions` | Acquisition manuelle et téléchargement optionnel |
 | `GET /api/acquisitions?project_id=...` | Historique du projet |
 | `GET /api/resources?project_id=...` | Inventaire local |
 | `GET /api/resources/{id}/file` | Téléchargement depuis le stockage local |
@@ -192,7 +214,9 @@ L'intervalle est compris entre 15 minutes et 30 jours. Une erreur de base tempor
 | `GET /api/schedules/{id}/runs` | Historique d'exécution |
 | `GET /docs` | Swagger UI générée par FastAPI |
 
-`GET /api/search` et `POST /api/schedules/{id}/run` ont des effets : ils créent une acquisition et peuvent télécharger des fichiers.
+`GET /api/search` répond 405. `POST /api/acquisitions` et
+`POST /api/schedules/{id}/run` ont des effets : ils créent une acquisition et
+peuvent télécharger des fichiers.
 
 ## Service R
 

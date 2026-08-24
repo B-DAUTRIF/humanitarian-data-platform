@@ -5,7 +5,7 @@
   "working_version": "6.0.0-dev",
   "latest_qualified_release": "5.0.2",
   "previous_working_line": "5.2",
-  "state_generated_at": "2026-08-24T11:47:10+02:00",
+  "state_generated_at": "2026-08-24T13:41:35+02:00",
   "status": "implementation_in_progress",
   "basis": {
     "archive": "HumanitarianDataPlatform_Archive_complete_v5.0.2.zip",
@@ -13,7 +13,7 @@
     "remote_reference_branch": "develop/5.2",
     "remote_reference_commit": "d0257a402a958439f6f28e6b3de2290112bfbbfc",
     "working_branch": "codex/v6-build-20260821",
-    "local_worktree_base_commit": "05cccb543ec5aaa2e1b753c3bbe8572845bf7241",
+    "local_worktree_base_commit": "2e69f04627f7ae7b636675c4ba7ae92d3f49b521",
     "pull_request": 8,
     "remote_published": true,
     "remote_publication_scope": "development branch and draft pull request only",
@@ -26,8 +26,8 @@
     "local_windows_uninstall_candidate_published": true
   },
   "baseline_tests": {
-    "executed": 270,
-    "passed": 251,
+    "executed": 271,
+    "passed": 252,
     "skipped": 19,
     "failures": 0,
     "errors": 0,
@@ -51,10 +51,10 @@
     "live_connector_calls_executed": false
   },
   "implemented_lot": {
-    "identifier": "v6-archive-rebuild-lots-1-to-12",
+    "identifier": "v6-archive-rebuild-lots-1-to-13",
     "rule_engine": "nested AND/OR, temporal correlations, validation and simulation",
     "catalog": "raw immutable metadata, lineage, confidence, OpenAPI inventory and progressive activation",
-    "cache": "content-addressed public artifacts, atomic publication, HTTP revalidation and project stale policy",
+    "cache": "content-addressed public artifacts, atomic publication, HTTP revalidation and an operator-saved recommendation of three source frequencies capped at seven days",
     "rss": "15 official feeds plus candidate preview, approval and project subscription lifecycle",
     "backup": "global, signal and project restore paths verified in disposable PostgreSQL 16 databases; project graph uses transitive foreign-key closure and content-addressed physical assets",
     "authentication": "WebAuthn passkey, hashed opaque sessions, exact origin and no installation token in URLs",
@@ -63,15 +63,15 @@
     "action_workers": "PostgreSQL-verified internal worker and data-job worker with per-source leases, retries, cancellation and idempotent acquisition linkage; external actions remain manual-only",
     "installer": "timeouts, cancellation, activity logs, native Windows desktop shortcut and marker-gated non-destructive uninstall candidate",
     "api": "58 V6 OpenAPI paths",
-    "ui": "rules, sources, RSS candidates, SPIP, mail, backups, dual timeline, confined folder exploration and operator action/data-job tracking",
+    "ui": "rules, sources, RSS candidates, SPIP, mail, backups, dual timeline, confined folder exploration, operator action/data-job tracking and a non-silent bounded stale-age recommendation",
     "compatibility_fixes": "lookback, signal idempotence, aggregation readiness and V5 route/table preservation"
   },
   "last_implementation_gate": {
-    "executed_at": "2026-08-24T11:47:10+02:00",
+    "executed_at": "2026-08-24T13:41:35+02:00",
     "result": "passed",
     "blocking_failures": [],
     "qualification_complete": false,
-    "python_tests": "251 passed, 19 skipped locally",
+    "python_tests": "252 passed, 19 skipped locally",
     "python_ast": "74 files parsed",
     "postgresql": "21 migrations and 202 statements parsed",
     "javascript": "3 inline scripts valid across index and passkey login",
@@ -123,7 +123,6 @@
     "implementation_gate_command": "python tools/run_v6_quality_gate.py",
     "implementation_gate_policy": "mandatory after every new V6 implementation; blocking failures stop the next lot",
     "remaining_functional_arbitrations": [
-      "default maximum stale-age calculation mode",
       "mail reception protocol and provider",
       "mailbox folders, retention and network polling frequency",
       "desktop shortcut behavior outside Windows workstation mode"

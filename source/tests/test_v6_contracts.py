@@ -328,6 +328,13 @@ class V6StaticContractTest(unittest.TestCase):
             self.assertIn(f'id="{element_id}"', self.html)
         self.assertIn("button('Paramétrages'", self.html)
 
+    def test_ui_proposes_a_bounded_frequency_based_stale_policy_without_silent_migration(self) -> None:
+        self.assertIn("Fréquence × 3, plafond 7 jours — recommandé", self.html)
+        self.assertIn("recommendationRequired?3:''", self.html)
+        self.assertIn("recommendationRequired?604800:''", self.html)
+        self.assertIn("Le projet reste en arbitrage manuel jusqu’à l’enregistrement", self.html)
+        self.assertIn('"max_stale_mode": "manual"', self.features)
+
     def test_v5_metadata_and_signal_regressions_are_fixed(self) -> None:
         self.assertIn('keys = ["id", "dataset_id"', self.v5)
         self.assertIn("lookback_hours,data_grid_dimensions", self.v5)
@@ -339,10 +346,16 @@ class V6StaticContractTest(unittest.TestCase):
 
     def test_notice_and_todo_are_versioned(self) -> None:
         notice = PROJECT_ROOT / "docs" / "NOTICE_TECHNIQUE_FONCTIONNELLE_V6.md"
+        api_v6 = PROJECT_ROOT / "docs" / "API_V6_DEV.md"
+        architecture = PROJECT_ROOT / "docs" / "ARCHITECTURE.md"
+        wiki_home = PROJECT_ROOT / "wiki" / "Home.md"
         gate_notice = PROJECT_ROOT / "docs" / "V6_IMPLEMENTATION_GATE.md"
         gate_script = PROJECT_ROOT / "tools" / "run_v6_quality_gate.py"
         todo = (PROJECT_ROOT / "TODO_Mises_a_jour_HDP.md").read_text(encoding="utf-8")
         self.assertTrue(notice.is_file())
+        self.assertIn("58 chemins V6", api_v6.read_text(encoding="utf-8"))
+        self.assertIn("Compléments V6 de développement", architecture.read_text(encoding="utf-8"))
+        self.assertIn("6.0.0-dev", wiki_home.read_text(encoding="utf-8"))
         self.assertTrue(gate_notice.is_file())
         self.assertTrue(gate_script.is_file())
         self.assertIn("après chaque nouvelle implémentation V6", gate_notice.read_text(encoding="utf-8"))

@@ -37,6 +37,8 @@ Les secrets `POSTGRES_PASSWORD`, `HDP_LOCAL_TOKEN` et `HDP_SQL_PASSWORD` sont g�
 - [Guide général V5](docs/HDP_V5_GUIDE.md)
 - [Architecture et UML V5](docs/ARCHITECTURE_V5.md)
 - [Référence API V5](docs/API_V5.md)
+- [Architecture courante et compléments V6](docs/ARCHITECTURE.md)
+- [Référence API V6 de développement](docs/API_V6_DEV.md)
 - [Sécurité et validation V5](docs/SECURITY_AND_VALIDATION_V5.md)
 - [Installation V5](docs/INSTALLATION_V5.md)
 - [Prompt de recréation V6](HDP_Prompt_recreation_global_v6.0.0.txt)
@@ -44,7 +46,7 @@ Les secrets `POSTGRES_PASSWORD`, `HDP_LOCAL_TOKEN` et `HDP_SQL_PASSWORD` sont g�
 - [Rapport de conformité et évaluation V6](docs/RAPPORT_CONFORMITE_ET_EVALUATION_V6.md)
 - [Wiki versionné dans le dépôt](wiki/Home.md)
 - [Dépôt GitHub](https://github.com/B-DAUTRIF/humanitarian-data-platform)
-- [Wiki V5 versionné sur GitHub](https://github.com/B-DAUTRIF/humanitarian-data-platform/tree/main/wiki)
+- [Wiki versionné sur GitHub](https://github.com/B-DAUTRIF/humanitarian-data-platform/tree/main/wiki)
 
 Références externes : [HDX Data Grids](https://data.humdata.org/dashboards/overview-of-data-grids), [HDX Signals](https://docs.humdata.org/about/hdx-signals), [prompts HDX Signals](https://docs.humdata.org/about/hdx-signals/prompts), [Jupyter](https://jupyter.org/documentation), [ONU M49](https://unstats.un.org/unsd/methodology/m49/).
 
