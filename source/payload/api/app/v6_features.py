@@ -72,6 +72,7 @@ from .v6_backup import (
     restore_global_backup_to_temporary_database,
     restore_project_backup_to_temporary_database,
     restore_signals_backup_to_temporary_database,
+    select_signal_backup_events,
 )
 from .v6_rules import (
     CONDITION_OPERATORS,
@@ -392,6 +393,8 @@ class DatabaseBackupCreate(BaseModel):
     scope: str = Field(pattern="^(global|project|signals)$")
     project_id: uuid.UUID | None = None
     signal_ids: list[uuid.UUID] = Field(default_factory=list, max_length=10_000)
+    signal_from: datetime | None = None
+    signal_to: datetime | None = None
     actor: str = Field(default="local-operator", min_length=2, max_length=120)
 
 
@@ -2642,12 +2645,27 @@ def _export_backup_query(
 
 @router.post("/backups", status_code=201)
 def create_database_backup(payload: DatabaseBackupCreate) -> dict[str, Any]:
-    if payload.scope == "global" and (payload.project_id is not None or payload.signal_ids):
+    has_signal_period = payload.signal_from is not None or payload.signal_to is not None
+    if payload.scope == "global" and (
+        payload.project_id is not None or payload.signal_ids or has_signal_period
+    ):
         raise HTTPException(status_code=422, detail="Une sauvegarde globale n'accepte aucun sélecteur projet ou signal")
-    if payload.scope in {"project", "signals"} and payload.project_id is None:
+    if payload.scope == "project" and payload.project_id is None:
         raise HTTPException(status_code=422, detail="Le projet est obligatoire pour ce périmètre")
-    if payload.scope == "signals" and not payload.signal_ids:
-        raise HTTPException(status_code=422, detail="Sélectionnez au moins un signal")
+    if payload.scope != "signals" and payload.signal_ids:
+        raise HTTPException(status_code=422, detail="Les identifiants de signaux exigent le périmètre signaux")
+    if payload.scope != "signals" and has_signal_period:
+        raise HTTPException(status_code=422, detail="La période est réservée aux sauvegardes de signaux")
+    if payload.scope == "signals" and payload.signal_ids and payload.project_id is None:
+        raise HTTPException(status_code=422, detail="Le projet est obligatoire pour une sélection explicite de signaux")
+    if len(set(payload.signal_ids)) != len(payload.signal_ids):
+        raise HTTPException(status_code=422, detail="Un identifiant de signal est dupliqué")
+    for boundary in (payload.signal_from, payload.signal_to):
+        if boundary is not None and (boundary.tzinfo is None or boundary.utcoffset() is None):
+            raise HTTPException(status_code=422, detail="La période des signaux doit inclure un fuseau horaire")
+    if payload.signal_from is not None and payload.signal_to is not None:
+        if payload.signal_from >= payload.signal_to:
+            raise HTTPException(status_code=422, detail="Le début de période doit précéder strictement la fin")
     if payload.project_id is not None:
         ensure_project(payload.project_id)
     backup_uuid, started = uuid.uuid4(), datetime.now(UTC)
@@ -2655,6 +2673,17 @@ def create_database_backup(payload: DatabaseBackupCreate) -> dict[str, Any]:
     selector = {
         "project_id": str(payload.project_id) if payload.project_id else None,
         "signal_ids": [str(identifier) for identifier in payload.signal_ids],
+        "signal_from": payload.signal_from.isoformat() if payload.signal_from else None,
+        "signal_to": payload.signal_to.isoformat() if payload.signal_to else None,
+        "selection_mode": (
+            "explicit_ids"
+            if payload.signal_ids
+            else "project"
+            if payload.scope == "signals" and payload.project_id is not None
+            else "global"
+            if payload.scope == "signals"
+            else payload.scope
+        ),
     }
     with db() as connection:
         connection.execute(
@@ -2691,44 +2720,51 @@ def create_database_backup(payload: DatabaseBackupCreate) -> dict[str, Any]:
                     )
                     connection.commit()
             else:
-                assert payload.project_id is not None
-                signal_ids = payload.signal_ids
                 with db(autocommit=False) as connection:
                     connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
-                    owned = connection.execute(
-                        "SELECT id FROM signal_events WHERE project_id=%s AND id=ANY(%s)",
-                        (payload.project_id, signal_ids),
-                    ).fetchall()
-                    if {row[0] for row in owned} != set(signal_ids):
-                        raise HTTPException(status_code=422, detail="Un signal n'appartient pas au projet")
+                    signal_ids, project_ids = select_signal_backup_events(
+                        connection,
+                        project_id=payload.project_id,
+                        signal_ids=payload.signal_ids,
+                        signal_from=payload.signal_from,
+                        signal_to=payload.signal_to,
+                    )
+                    if payload.signal_ids and set(signal_ids) != set(payload.signal_ids):
+                        raise HTTPException(
+                            status_code=422,
+                            detail="Un signal n'appartient pas au projet ou se trouve hors de la période",
+                        )
+                    if not signal_ids:
+                        raise HTTPException(status_code=422, detail="Aucun signal ne correspond au périmètre demandé")
                     _export_backup_query(
                         connection,
                         directory,
                         "projects",
-                        "SELECT * FROM projects WHERE id=%s",
-                        (payload.project_id,),
+                        "SELECT * FROM projects WHERE id=ANY(%s)",
+                        (project_ids,),
                         files,
                         row_counts,
                     )
                     signal_queries = {
-                        "signal_events": "SELECT * FROM signal_events WHERE project_id=%s AND id=ANY(%s)",
+                        "signal_events": "SELECT * FROM signal_events WHERE id=ANY(%s)",
                         "signal_actions": "SELECT * FROM signal_actions WHERE event_id=ANY(%s)",
-                        "signal_rules": """SELECT DISTINCT r.* FROM signal_rules r JOIN signal_actions a ON a.rule_id=r.id JOIN signal_events e ON e.id=a.event_id WHERE e.project_id=%s AND e.id=ANY(%s)""",
-                        "rule_evaluations": "SELECT * FROM rule_evaluations WHERE project_id=%s AND triggering_event_id=ANY(%s)",
-                        "action_requests": """SELECT r.* FROM action_requests r JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
-                        "action_executions": """SELECT x.* FROM action_executions x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
-                        "internal_notifications": """SELECT x.* FROM internal_notifications x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
-                        "project_tasks": """SELECT x.* FROM project_tasks x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
-                        "signal_classifications": "SELECT * FROM signal_classifications WHERE project_id=%s AND signal_event_id=ANY(%s)",
-                        "action_drafts": """SELECT x.* FROM action_drafts x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
-                        "automated_data_jobs": """SELECT x.* FROM automated_data_jobs x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
-                        "rule_definitions": """SELECT DISTINCT d.* FROM rule_definitions d JOIN rule_evaluations e ON e.definition_id=d.id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
-                        "rule_versions": """SELECT DISTINCT v.* FROM rule_versions v JOIN rule_evaluations e ON e.rule_version_id=v.id WHERE e.project_id=%s AND e.triggering_event_id=ANY(%s)""",
+                        "signal_rules": """SELECT DISTINCT r.* FROM signal_rules r JOIN signal_actions a ON a.rule_id=r.id WHERE a.event_id=ANY(%s)""",
+                        "rule_evaluations": "SELECT * FROM rule_evaluations WHERE triggering_event_id=ANY(%s)",
+                        "action_requests": """SELECT r.* FROM action_requests r JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.triggering_event_id=ANY(%s)""",
+                        "action_executions": """SELECT x.* FROM action_executions x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.triggering_event_id=ANY(%s)""",
+                        "internal_notifications": """SELECT x.* FROM internal_notifications x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.triggering_event_id=ANY(%s)""",
+                        "project_tasks": """SELECT x.* FROM project_tasks x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.triggering_event_id=ANY(%s)""",
+                        "signal_classifications": "SELECT * FROM signal_classifications WHERE signal_event_id=ANY(%s)",
+                        "action_drafts": """SELECT x.* FROM action_drafts x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.triggering_event_id=ANY(%s)""",
+                        "automated_data_jobs": """SELECT x.* FROM automated_data_jobs x JOIN action_requests r ON r.id=x.request_id JOIN rule_evaluations e ON e.id=r.evaluation_id WHERE e.triggering_event_id=ANY(%s)""",
+                        "rule_definitions": """SELECT DISTINCT d.* FROM rule_definitions d JOIN rule_evaluations e ON e.definition_id=d.id WHERE e.triggering_event_id=ANY(%s)""",
+                        "rule_versions": """SELECT DISTINCT v.* FROM rule_versions v JOIN rule_evaluations e ON e.rule_version_id=v.id WHERE e.triggering_event_id=ANY(%s)""",
                     }
                     for name, query in signal_queries.items():
-                        parameters = (signal_ids,) if name == "signal_actions" else (payload.project_id, signal_ids)
-                        _export_backup_query(connection, directory, name, query, parameters, files, row_counts)
+                        _export_backup_query(connection, directory, name, query, (signal_ids,), files, row_counts)
                     connection.commit()
+                selector["selected_signal_count"] = len(signal_ids)
+                selector["selected_project_count"] = len(project_ids)
             manifest = build_manifest(
                 backup_id=backup_id,
                 application_version="6.0.0-dev",
@@ -2747,10 +2783,11 @@ def create_database_backup(payload: DatabaseBackupCreate) -> dict[str, Any]:
         with db() as connection:
             connection.execute(
                 """UPDATE database_backups SET status='completed',storage_path=%s,
-                          bundle_sha256=%s,size_bytes=%s,manifest=%s,finished_at=%s WHERE id=%s""",
+                          bundle_sha256=%s,size_bytes=%s,selector=%s,manifest=%s,finished_at=%s
+                   WHERE id=%s""",
                 (
-                    str(bundle), bundle_sha256, bundle.stat().st_size, Jsonb(manifest),
-                    finished, backup_uuid,
+                    str(bundle), bundle_sha256, bundle.stat().st_size, Jsonb(selector),
+                    Jsonb(manifest), finished, backup_uuid,
                 ),
             )
             connection.execute(
@@ -2759,7 +2796,9 @@ def create_database_backup(payload: DatabaseBackupCreate) -> dict[str, Any]:
                    VALUES (%s,%s,%s,'backup.completed','database_backup',%s,'completed',%s,%s,%s,%s)""",
                 (
                     uuid.uuid4(), payload.project_id,
-                    "global" if payload.scope == "global" else "project",
+                    "global"
+                    if payload.scope == "global" or (payload.scope == "signals" and payload.project_id is None)
+                    else "project",
                     str(backup_uuid), f"Sauvegarde {payload.scope} terminée",
                     Jsonb({"bundle_sha256": bundle_sha256, "size_bytes": bundle.stat().st_size}),
                     payload.actor, finished,

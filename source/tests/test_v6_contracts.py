@@ -305,6 +305,10 @@ class V6StaticContractTest(unittest.TestCase):
             "create_global_dump",
             "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY",
             "signal_ids",
+            "signal_from",
+            "signal_to",
+            "selection_mode",
+            "select_signal_backup_events",
             "restore_automatically_authorized",
             "prevalidate_backup_bundle",
             "restore_global_backup_to_temporary_database",
@@ -328,6 +332,7 @@ class V6StaticContractTest(unittest.TestCase):
         self.assertIn('"collision_policy": "reject_without_overwrite"', self.backup)
         self.assertIn('"temporary_database_dropped": True', self.backup)
         self.assertIn('"--single-transaction"', self.backup)
+        self.assertIn('version="6.0.0-014-global-signal-backups"', self.migrations)
         dockerfile = (API_APP.parent / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn("postgresql-client", dockerfile)
 

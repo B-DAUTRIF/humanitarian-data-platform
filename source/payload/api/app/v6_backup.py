@@ -90,6 +90,43 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def select_signal_backup_events(
+    connection: psycopg.Connection[Any],
+    *,
+    project_id: Any | None,
+    signal_ids: list[Any],
+    signal_from: datetime | None,
+    signal_to: datetime | None,
+) -> tuple[list[Any], list[Any]]:
+    """Resolve a signal backup selector in one repeatable-read transaction.
+
+    The time window is half-open: ``signal_from`` is included and ``signal_to``
+    is excluded.  Query fragments are fixed constants; selector values remain
+    PostgreSQL parameters.
+    """
+    rows = connection.execute(
+        """SELECT id,project_id FROM signal_events
+           WHERE (%s::uuid IS NULL OR project_id=%s::uuid)
+             AND (NOT %s OR id=ANY(%s::uuid[]))
+             AND (%s::timestamptz IS NULL OR occurred_at>=%s::timestamptz)
+             AND (%s::timestamptz IS NULL OR occurred_at<%s::timestamptz)
+           ORDER BY occurred_at,id""",
+        (
+            project_id,
+            project_id,
+            bool(signal_ids),
+            signal_ids,
+            signal_from,
+            signal_from,
+            signal_to,
+            signal_to,
+        ),
+    ).fetchall()
+    selected_signal_ids = [row[0] for row in rows]
+    selected_project_ids = sorted({row[1] for row in rows}, key=str)
+    return selected_signal_ids, selected_project_ids
+
+
 def pg_dump_command(database_url: str, destination: Path) -> tuple[list[str], dict[str, str]]:
     parsed = urlparse(database_url)
     if parsed.scheme not in {"postgres", "postgresql"} or not parsed.hostname or not parsed.path.strip("/"):

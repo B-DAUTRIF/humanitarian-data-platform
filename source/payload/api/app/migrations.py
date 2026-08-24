@@ -1471,6 +1471,17 @@ MIGRATIONS: tuple[Migration, ...] = (
             "ALTER TABLE automated_data_jobs ADD CONSTRAINT automated_data_jobs_job_type_check CHECK (job_type IN ('data_search','data_refresh','legacy_datagrid_search_and_due_refresh'))",
         ),
     ),
+    Migration(
+        version="6.0.0-014-global-signal-backups",
+        description="Sauvegardes de signaux globales, par projet ou par période",
+        statements=(
+            "ALTER TABLE database_backups DROP CONSTRAINT IF EXISTS database_backups_check",
+            """ALTER TABLE database_backups ADD CONSTRAINT database_backups_scope_project_check
+               CHECK ((scope='global' AND project_id IS NULL)
+                   OR (scope='project' AND project_id IS NOT NULL)
+                   OR scope='signals')""",
+        ),
+    ),
 )
 
 

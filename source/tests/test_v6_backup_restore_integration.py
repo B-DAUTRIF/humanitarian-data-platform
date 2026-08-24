@@ -32,6 +32,7 @@ from app.v6_backup import (  # noqa: E402
     restore_global_backup_to_temporary_database,
     restore_project_backup_to_temporary_database,
     restore_signals_backup_to_temporary_database,
+    select_signal_backup_events,
 )
 
 
@@ -101,7 +102,8 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
                 """CREATE TABLE signal_events (
                        id UUID PRIMARY KEY,
                        project_id UUID NOT NULL REFERENCES projects(id),
-                       payload JSONB NOT NULL
+                       payload JSONB NOT NULL,
+                       occurred_at TIMESTAMPTZ NOT NULL
                    )"""
             )
             connection.execute(
@@ -196,10 +198,18 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
         )
         return publish_bundle(root, "global-integration", [dump], manifest)
 
-    def _signals_bundle(self, root: Path, *, duplicate_project: bool = False) -> Path:
+    def _signals_bundle(
+        self,
+        root: Path,
+        *,
+        duplicate_project: bool = False,
+        multi_project: bool = False,
+    ) -> Path:
         identifiers = {
             "project": "11111111-1111-4111-8111-111111111111",
+            "project_two": "11111111-1111-4111-8111-222222222222",
             "event": "22222222-2222-4222-8222-222222222222",
+            "event_two": "22222222-2222-4222-8222-333333333333",
             "signal_rule": "33333333-3333-4333-8333-333333333333",
             "signal_action": "44444444-4444-4444-8444-444444444444",
             "definition": "55555555-5555-4555-8555-555555555555",
@@ -215,6 +225,7 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
                     "id": identifiers["event"],
                     "project_id": identifiers["project"],
                     "payload": {"source": "fixture"},
+                    "occurred_at": "2026-08-01T12:00:00+00:00",
                 }
             ],
             "signal_rules": [
@@ -267,6 +278,18 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
         }
         if duplicate_project:
             rows["projects"].append(dict(rows["projects"][0]))
+        if multi_project:
+            rows["projects"].append(
+                {"id": identifiers["project_two"], "name": "Second projet restauré"}
+            )
+            rows["signal_events"].append(
+                {
+                    "id": identifiers["event_two"],
+                    "project_id": identifiers["project_two"],
+                    "payload": {"source": "fixture-global"},
+                    "occurred_at": "2026-08-02T12:00:00+00:00",
+                }
+            )
         files: list[Path] = []
         row_counts: dict[str, int] = {}
         for table, documents in rows.items():
@@ -283,8 +306,9 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
             schema_versions=SCHEMA_VERSIONS,
             scope="signals",
             selector={
-                "project_id": identifiers["project"],
-                "signal_ids": [identifiers["event"]],
+                "project_id": None if multi_project else identifiers["project"],
+                "signal_ids": [] if multi_project else [identifiers["event"]],
+                "selection_mode": "global" if multi_project else "explicit_ids",
             },
             files=files,
             row_counts=row_counts,
@@ -419,6 +443,81 @@ class TemporaryPostgresRestoreIntegrationTest(unittest.TestCase):
                     "SELECT 1 FROM pg_database WHERE datname=%s", (temporary_database,)
                 ).fetchone()
             self.assertIsNone(exists)
+
+    def test_multi_project_signal_bundle_is_restored_and_database_is_dropped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            token = secrets.token_hex(8)
+            temporary_database = f"{TEMPORARY_RESTORE_DATABASE_PREFIX}{token}"
+            bundle = self._signals_bundle(Path(directory), multi_project=True)
+            with patch("app.v6_backup.secrets.token_hex", return_value=token):
+                report = restore_signals_backup_to_temporary_database(
+                    bundle,
+                    self.source_url,
+                    expected_application_version="6.0.0-dev",
+                    expected_schema_versions=SCHEMA_VERSIONS,
+                    timeout_seconds=120,
+                )
+            self.assertEqual(report["restored_table_count"], 9)
+            self.assertEqual(report["restored_row_count"], 11)
+            self.assertTrue(report["temporary_database_dropped"])
+            with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as connection:
+                exists = connection.execute(
+                    "SELECT 1 FROM pg_database WHERE datname=%s", (temporary_database,)
+                ).fetchone()
+            self.assertIsNone(exists)
+
+    def test_signal_selector_applies_project_and_half_open_period(self) -> None:
+        project_one = "aaaaaaaa-1111-4111-8111-111111111111"
+        project_two = "aaaaaaaa-2222-4222-8222-222222222222"
+        event_one = "bbbbbbbb-1111-4111-8111-111111111111"
+        event_boundary = "bbbbbbbb-2222-4222-8222-222222222222"
+        event_other_project = "bbbbbbbb-3333-4333-8333-333333333333"
+        start = datetime(2026, 8, 1, tzinfo=UTC)
+        end = datetime(2026, 8, 2, tzinfo=UTC)
+        with psycopg.connect(self.source_url, autocommit=True) as connection:
+            connection.execute(
+                "INSERT INTO projects(id,name) VALUES (%s,'Projet un'),(%s,'Projet deux')",
+                (project_one, project_two),
+            )
+            connection.execute(
+                """INSERT INTO signal_events(id,project_id,payload,occurred_at)
+                   VALUES (%s,%s,'{}',%s),(%s,%s,'{}',%s),(%s,%s,'{}',%s)""",
+                (
+                    event_one,
+                    project_one,
+                    datetime(2026, 8, 1, 12, tzinfo=UTC),
+                    event_boundary,
+                    project_one,
+                    end,
+                    event_other_project,
+                    project_two,
+                    datetime(2026, 8, 1, 18, tzinfo=UTC),
+                ),
+            )
+            selected, projects = select_signal_backup_events(
+                connection,
+                project_id=project_one,
+                signal_ids=[],
+                signal_from=start,
+                signal_to=end,
+            )
+            self.assertEqual([str(identifier) for identifier in selected], [event_one])
+            self.assertEqual([str(identifier) for identifier in projects], [project_one])
+            selected, projects = select_signal_backup_events(
+                connection,
+                project_id=None,
+                signal_ids=[],
+                signal_from=start,
+                signal_to=end,
+            )
+            self.assertEqual(
+                {str(identifier) for identifier in selected},
+                {event_one, event_other_project},
+            )
+            self.assertEqual(
+                {str(identifier) for identifier in projects},
+                {project_one, project_two},
+            )
 
     def test_duplicate_signal_bundle_identifier_is_rejected_and_database_is_dropped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
