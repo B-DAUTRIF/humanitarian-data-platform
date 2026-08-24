@@ -352,6 +352,7 @@ class ActionQueuePostgresIntegrationTest(unittest.TestCase):
         job_request_id = self._request(
             "data_search",
             {"sources": ["hdx"], "query": "cholera", "result_limit": 10},
+            {"estimated_requests": 1, "estimated_bytes": 0, "estimated_duration_seconds": 0},
         )
         job_request = self._claim(now=NOW + timedelta(seconds=9))
         self.assertIsNotNone(job_request)

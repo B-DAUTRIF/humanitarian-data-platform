@@ -105,11 +105,11 @@
     "qualification_complete": false
   },
   "last_failed_candidate": {
-    "commit": "80be58ecc693f41745993430bc98fb17016669d2",
-    "validation_workflow_run": 32707548932,
-    "windows_workflow_run": 32707548951,
-    "cause": "the draft effect status overwrote the completed request status in the API response dictionary",
-    "correction": "make the request lifecycle status the final authoritative response field while preserving the draft effect details"
+    "commit": "49ae8264bfa641423f073d2ad710367635492dcd",
+    "validation_workflow_run": 32711296458,
+    "windows_workflow_run": 32711296451,
+    "cause": "the observability integration fixture selected one source without declaring the required estimated request count",
+    "correction": "keep the production safety validation unchanged and declare one estimated request in the PostgreSQL fixture"
   },
   "program": {
     "notice": "docs/NOTICE_TECHNIQUE_FONCTIONNELLE_V6.md",
