@@ -9,8 +9,10 @@
   et compteurs de tentatives ;
 - approbation, rejet et annulation disponibles uniquement après confirmation et
   motif opérateur ;
-- 266 tests recensés localement, dont une nouvelle recette d'observabilité
-  PostgreSQL réservée à la CI.
+- filtres de statut optionnels explicitement typés pour éviter l'ambiguïté des
+  paramètres nuls dans PostgreSQL ;
+- 267 tests recensés localement, dont deux nouvelles recettes d'observabilité
+  PostgreSQL réservées à la CI.
 
 ## 6.0.0-dev - exécution contrôlée des travaux de données - 24 août 2026
 

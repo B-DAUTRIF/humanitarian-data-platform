@@ -27,6 +27,7 @@ from app.v6_data_jobs import (  # noqa: E402
     initialize_data_job_sources,
     recover_stale_data_jobs,
 )
+from app.v6_action_observability import list_project_data_jobs  # noqa: E402
 
 
 TEST_DATABASE_URL = os.getenv("HDP_BACKUP_RESTORE_TEST_DATABASE_URL", "").strip()
@@ -132,6 +133,15 @@ class AutomatedDataJobsPostgresIntegrationTest(unittest.TestCase):
         first = self._claim()
         self.assertIsNotNone(first)
         self.assertIsNone(self._claim())
+
+    def test_operator_view_lists_jobs_without_optional_status_type_ambiguity(self) -> None:
+        job_id = self._job(sources=["hdx"])
+        with psycopg.connect(self.database_url, autocommit=True) as connection:
+            items = list_project_data_jobs(connection, self.project_id)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], job_id)
+        self.assertEqual(items[0]["status"], "queued")
+        self.assertEqual(items[0]["source_results"], [])
 
     def test_partial_attempt_retries_only_failed_source_then_completes(self) -> None:
         job_id = self._job()

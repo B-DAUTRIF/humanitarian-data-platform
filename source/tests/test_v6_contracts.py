@@ -220,7 +220,7 @@ class V6StaticContractTest(unittest.TestCase):
             "cancelDataJobOperation",
         ):
             self.assertIn(marker, self.html)
-        for marker in ("jsonb_agg", "action_drafts", "automated_data_jobs", "executions"):
+        for marker in ("jsonb_agg", "action_drafts", "automated_data_jobs", "executions", "%s::text IS NULL"):
             self.assertIn(marker, self.action_observability)
 
     def test_cache_materialization_is_content_addressed_and_versioned(self) -> None:

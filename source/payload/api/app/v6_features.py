@@ -27,7 +27,7 @@ from .v6_action_queue import (
     execute_claimed_action_request,
     mark_action_request_failed,
 )
-from .v6_action_observability import list_project_action_requests
+from .v6_action_observability import list_project_action_requests, list_project_data_jobs
 from .v6_data_jobs import DataJobError, cancel_data_job
 from .v6_catalog import (
     CAPABILITIES,
@@ -486,31 +486,7 @@ def project_automated_data_jobs(
 ) -> list[dict[str, Any]]:
     ensure_project(project_id)
     with db() as connection:
-        rows = connection.execute(
-            """SELECT j.id,j.request_id,j.job_type,j.parameters,j.status,j.result,j.error,
-                      j.attempt_count,j.max_attempts,j.next_attempt_at,j.lease_owner,
-                      j.lease_expires_at,j.cancel_requested_at,j.cancelled_at,
-                      j.created_at,j.updated_at,j.started_at,j.finished_at,
-                      COALESCE((
-                        SELECT jsonb_agg(jsonb_build_object(
-                            'source_id',r.source_id,'status',r.status,
-                            'attempt_count',r.attempt_count,'acquisition_id',r.acquisition_id,
-                            'result',r.result,'error',r.error,'started_at',r.started_at,
-                            'finished_at',r.finished_at) ORDER BY r.source_id)
-                        FROM automated_data_job_results r WHERE r.job_id=j.id
-                      ),'[]'::jsonb)
-               FROM automated_data_jobs j
-               WHERE j.project_id=%s AND (%s IS NULL OR j.status=%s)
-               ORDER BY j.created_at DESC,j.id LIMIT %s""",
-            (project_id, status, status, limit),
-        ).fetchall()
-    keys = (
-        "id", "request_id", "job_type", "parameters", "status", "result", "error",
-        "attempt_count", "max_attempts", "next_attempt_at", "lease_owner",
-        "lease_expires_at", "cancel_requested_at", "cancelled_at", "created_at",
-        "updated_at", "started_at", "finished_at", "source_results",
-    )
-    return [dict(zip(keys, row, strict=True)) for row in rows]
+        return list_project_data_jobs(connection, project_id, status, limit)
 
 
 @router.post("/data-jobs/{job_id}/cancel")

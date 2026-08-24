@@ -5,7 +5,7 @@
   "working_version": "6.0.0-dev",
   "latest_qualified_release": "5.0.2",
   "previous_working_line": "5.2",
-  "state_generated_at": "2026-08-24T11:20:56+02:00",
+  "state_generated_at": "2026-08-24T11:28:08+02:00",
   "status": "implementation_in_progress",
   "basis": {
     "archive": "HumanitarianDataPlatform_Archive_complete_v5.0.2.zip",
@@ -25,9 +25,9 @@
     "local_operator_tracking_candidate_published": false
   },
   "baseline_tests": {
-    "executed": 266,
+    "executed": 267,
     "passed": 248,
-    "skipped": 18,
+    "skipped": 19,
     "failures": 0,
     "errors": 0,
     "suite_green": true,
@@ -43,7 +43,7 @@
     "backup_bundle_prevalidation_and_restore_tests": 16,
     "postgresql_restore_integration_tests_skipped_locally": 6,
     "postgresql_action_worker_integration_tests_skipped_locally": 8,
-    "postgresql_data_job_worker_integration_tests_skipped_locally": 4,
+    "postgresql_data_job_worker_integration_tests_skipped_locally": 5,
     "spip_php_syntax_checked": false,
     "docker_recipe_executed": false,
     "windows_recipe_executed": false,
@@ -66,11 +66,11 @@
     "compatibility_fixes": "lookback, signal idempotence, aggregation readiness and V5 route/table preservation"
   },
   "last_implementation_gate": {
-    "executed_at": "2026-08-24T11:20:56+02:00",
+    "executed_at": "2026-08-24T11:28:08+02:00",
     "result": "passed",
     "blocking_failures": [],
     "qualification_complete": false,
-    "python_tests": "248 passed, 18 skipped locally",
+    "python_tests": "248 passed, 19 skipped locally",
     "python_ast": "74 files parsed",
     "postgresql": "21 migrations and 202 statements parsed",
     "javascript": "3 inline scripts valid across index and passkey login",
@@ -86,7 +86,7 @@
       "live connector and RSS calls: separate validation required",
       "deployment-target restore recipe: temporary PostgreSQL 16 evidence does not replace Windows/Docker qualification",
       "data-job live connector calls: no external source is called by the local or CI test suite",
-      "operator tracking PostgreSQL recipe: enriched request history test skipped locally and delegated to remote CI"
+      "operator tracking PostgreSQL recipes: enriched request history and unfiltered data-job list tests skipped locally and delegated to remote CI"
     ]
   },
   "remote_ci_evidence": {
@@ -105,11 +105,11 @@
     "qualification_complete": false
   },
   "last_failed_candidate": {
-    "commit": "49ae8264bfa641423f073d2ad710367635492dcd",
-    "validation_workflow_run": 32711296458,
-    "windows_workflow_run": 32711296451,
-    "cause": "the observability integration fixture selected one source without declaring the required estimated request count",
-    "correction": "keep the production safety validation unchanged and declare one estimated request in the PostgreSQL fixture"
+    "commit": "379a49d5aff6865beca1d24531c5759b422fe6c3",
+    "validation_workflow_run": 32711512021,
+    "windows_workflow_run": 32711512024,
+    "cause": "PostgreSQL could not infer the type of a null optional status parameter used only by an IS NULL predicate",
+    "correction": "cast optional action and data-job status parameters to text and cover both unfiltered project lists with real PostgreSQL tests"
   },
   "program": {
     "notice": "docs/NOTICE_TECHNIQUE_FONCTIONNELLE_V6.md",
