@@ -9,8 +9,8 @@
 - événements déjà écrits dans `application_timeline` dédupliqués par objet ;
 - catégories, compteurs d'échecs et séparation explicite entre Gantt projet et
   audit global dans l'interface ;
-- deux recettes PostgreSQL réelles prévues pour vérifier les unions et la
-  déduplication dans une base jetable.
+- 282/282 tests réussis à distance ; deux recettes PostgreSQL 16 vérifient les
+  unions et la déduplication dans une base jetable, Linux et Windows verts.
 
 ## 6.0.0-dev - dossiers contractuels des sources - 24 août 2026
 
