@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fr">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HDP V6 — Paramètres API</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;margin:0;background:#f5f7fa;color:#172033}
+header{padding:18px 24px;background:#172033;color:white} main{padding:20px;max-width:1500px;margin:auto}
+.toolbar{display:grid;grid-template-columns:280px 1fr auto;gap:10px;margin-bottom:16px}
+select,input,textarea,button{font:inherit;padding:8px;border:1px solid #b8c0cc;border-radius:6px}
+button{cursor:pointer;background:white}.op{background:white;border:1px solid #d9dee7;border-radius:8px;margin:10px 0;overflow:hidden}
+.op summary{padding:12px;font-weight:600;cursor:pointer;background:#eef2f7}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:10px;padding:12px}
+.field{border:1px solid #e0e5ec;border-radius:7px;padding:10px;background:#fff}.field label{display:block;font-weight:600;margin-bottom:6px}
+.meta{font-size:12px;color:#667085;margin-top:5px}.readonly{background:#f3f4f6}.readonly input,.readonly select,.readonly textarea{background:#e5e7eb}
+.field input[type=checkbox]{width:auto}.field input,.field select,.field textarea{width:100%;box-sizing:border-box}.field textarea{min-height:70px}
+pre{white-space:pre-wrap;background:#111827;color:#e5e7eb;padding:12px;border-radius:8px;max-height:480px;overflow:auto}
+.badge{font-size:11px;padding:2px 6px;border-radius:9px;background:#e8edf5;margin-left:6px}
+</style></head><body>
+<header><h1>HDP V6 — Interface native des paramètres API</h1><div>Chaque paramètre de l’inventaire est visible et rendu selon son type.</div></header>
+<main>
+<div class="toolbar"><select id="source"></select><input id="search" placeholder="Filtrer paramètres / endpoints / opérations"><button id="reload">Actualiser</button></div>
+<div id="stats"></div><div id="ops"></div>
+<h2>Aperçu entrée → sortie</h2><pre id="preview">Sélectionnez une opération puis renseignez les paramètres.</pre>
+</main>
+<script>
+const $=s=>document.querySelector(s); let current=null;
+async function init(){const ss=await fetch('/api/sources').then(r=>r.json()); $('#source').innerHTML=ss.map(s=>`<option value="${s.slug}">${s.name} — ${s.parameters} paramètres</option>`).join(''); await load()}
+async function load(){let src=$('#source').value,q=$('#search').value; current=await fetch(`/api/schema/${src}?q=${encodeURIComponent(q)}`).then(r=>r.json()); $('#stats').textContent=`${current.parameter_count} paramètres visibles`; render()}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function control(p){
+ const id=`p_${p.id}`, ro=p.readonly?'disabled':'', val=esc(p["Valeur par défaut"]||'');
+ if(p.widget==='checkbox') return `<input id="${id}" data-name="${esc(p.Paramètre)}" type="checkbox" ${ro}>`;
+ if(['select','multiselect','dynamic_select','dynamic_multiselect'].includes(p.widget)){
+   let multi=p.widget.includes('multi')?'multiple':'';
+   let opts=(p.options||[]).map(x=>`<option>${esc(x)}</option>`).join('');
+   if(!opts) opts=`<option value="">${p.widget.includes('dynamic')?'Référentiel fournisseur à charger':'—'}</option>`;
+   return `<select id="${id}" data-name="${esc(p.Paramètre)}" ${multi} ${ro}>${opts}</select>`;
+ }
+ if(p.widget==='number') return `<input id="${id}" data-name="${esc(p.Paramètre)}" type="number" value="${val}" ${ro}>`;
+ if(p.widget==='date') return `<input id="${id}" data-name="${esc(p.Paramètre)}" type="date" value="${val}" ${ro}>`;
+ if(p.widget==='date_range') return `<input id="${id}" data-name="${esc(p.Paramètre)}" type="text" placeholder="ISO 8601 / période" value="${val}" ${ro}>`;
+ if(p.widget==='json') return `<textarea id="${id}" data-name="${esc(p.Paramètre)}" ${ro}>${val}</textarea>`;
+ return `<input id="${id}" data-name="${esc(p.Paramètre)}" type="text" value="${val}" ${ro}>`;
+}
+function render(){
+ $('#ops').innerHTML=current.operations.map((o,oi)=>`<details class="op" data-oi="${oi}"><summary>${esc(o.operation)} <span class=badge>${esc(o.method)}</span> ${esc(o.endpoint)} — ${o.parameters.length}</summary>
+ <div class=grid>${o.parameters.map(p=>`<div class="field ${p.readonly?'readonly':''}"><label>${esc(p.Paramètre)} <span class=badge>${esc(p.widget)}</span></label>${control(p)}
+ <div class=meta>${esc(p.Type)} · ${esc(p.Emplacement)} · ${esc(p["Obligatoire"])}<br>${esc(p["Description officielle / synthèse"]||'')}<br>${esc(p["Activation UI v6"]||'')}</div></div>`).join('')}</div>
+ <div style="padding:0 12px 12px"><button onclick="preview(${oi})">Prévisualiser la requête</button></div></details>`).join('');
+}
+async function preview(i){
+ const o=current.operations[i], values={};
+ document.querySelectorAll(`details[data-oi="${i}"] [data-name]`).forEach(el=>{
+   if(el.disabled)return; let v=el.type==='checkbox'?el.checked:(el.multiple?[...el.selectedOptions].map(x=>x.value):el.value); if(v!==''&&v!==false)values[el.dataset.name]=v;
+ });
+ const body={source:current.source_slug,operation:o.operation,endpoint:o.endpoint,values};
+ const x=await fetch('/api/requests/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
+ $('#preview').textContent=JSON.stringify(x,null,2)
+}
+$('#source').addEventListener('change',load); $('#reload').onclick=load; $('#search').addEventListener('input',()=>{clearTimeout(window.t);window.t=setTimeout(load,250)}); init();
+</script></body></html>
