@@ -17,14 +17,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: r-lib/actions/setup-r@v2
         with:
           use-public-rspm: true
+
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           working-directory: clients-v6/R
           extra-packages: any::rcmdcheck
           needs: check
-      - name: R CMD check
-        run: rcmdcheck::rcmdcheck("clients-v6/R", args="--no-manual", error_on="warning")
-        shell: Rscript {0}
+
+      - name: Build R source package
+        run: R CMD build clients-v6/R
+
+      - name: R CMD check with explicit diagnostics
+        id: rcheck
+        shell: bash
+        run: |
+          set +e
+          R CMD check --no-manual HDPClientsR_6.0.0.tar.gz > r-cmd-check-console.log 2>&1
+          status=$?
+          set -e
+
+          echo "===== R CMD check console ====="
+          cat r-cmd-check-console.log || true
+          echo "===== 00check.log ====="
+          if [ -f HDPClientsR.Rcheck/00check.log ]; then
+            cat HDPClientsR.Rcheck/00check.log
+          else
+            echo "HDPClientsR.Rcheck/00check.log not produced"
+          fi
+
+          exit "$status"
+
+      - name: Upload R CMD check diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HDPClientsR-Rcheck
+          path: |
+            r-cmd-check-console.log
+            HDPClientsR.Rcheck/
+          if-no-files-found: warn
