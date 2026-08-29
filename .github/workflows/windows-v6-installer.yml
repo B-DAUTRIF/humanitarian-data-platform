@@ -1,0 +1,119 @@
+name: HDP V6 Windows installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["codex/v6-installer-fix-20260829"]
+    paths:
+      - ".github/workflows/windows-v6-installer.yml"
+      - "windows-v6/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-qualify:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - name: Récupérer les sources
+        uses: actions/checkout@v4
+
+      - name: Préparer Python de compilation
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Construire l'application autonome
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install fastapi==0.116.1 uvicorn==0.35.0 pydantic==2.11.7 pyinstaller==6.15.0
+          pyinstaller --noconfirm --clean --onefile --name HDP_V6_API_UI `
+            --add-data "windows-v6/index.html;." `
+            --add-data "windows-v6/invparts;invparts" `
+            windows-v6/v6_app_runtime.py
+
+      - name: Vérifier l'application avant emballage
+        shell: pwsh
+        run: |
+          $app = (Resolve-Path "dist/HDP_V6_API_UI.exe").Path
+          $proc = Start-Process -FilePath $app -PassThru -WindowStyle Hidden
+          try {
+            $ok = $false
+            for ($i=0; $i -lt 30; $i++) {
+              Start-Sleep -Seconds 1
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:8766/api/health" -TimeoutSec 2
+                if ($health.status -eq "ok" -and $health.parameters -eq 2057 -and $health.sources -eq 10) { $ok=$true; break }
+              } catch {}
+            }
+            if (-not $ok) { throw "Le runtime V6 n'a pas exposé 2057 paramètres / 10 sources." }
+          } finally {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Installer NSIS et construire l'installateur
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          & "C:\Program Files (x86)\NSIS\makensis.exe" /V2 windows-v6/installer_v6.nsi
+
+      - name: Vérifier PE x64 et imports Windows
+        shell: pwsh
+        run: |
+          $exe = "windows-v6/HDP_V6_API_UI_Setup_Windows_x64.exe"
+          if (!(Test-Path $exe)) { throw "Installateur manquant" }
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC" -Filter dumpbin.exe -Recurse | Where-Object FullName -match 'Hostx64\\x64\\dumpbin\.exe$' | Select-Object -First 1
+          if (-not $dumpbin) { throw "dumpbin x64 introuvable" }
+          $headers = & $dumpbin.FullName /headers $exe | Out-String
+          $imports = & $dumpbin.FullName /imports $exe | Out-String
+          if ($headers -notmatch 'machine \(x64\)' -or $headers -notmatch 'Windows GUI') { throw 'PE x64 GUI invalide' }
+          if ($imports -notmatch '(?i)KERNEL32\.dll') { throw 'Table d imports Windows absente' }
+
+      - name: Installer réellement puis tester l'exécutable installé
+        shell: pwsh
+        run: |
+          $installer = (Resolve-Path "windows-v6/HDP_V6_API_UI_Setup_Windows_x64.exe").Path
+          $target = Join-Path $env:RUNNER_TEMP "HDP_V6_QUALIFICATION"
+          if (Test-Path $target) { Remove-Item $target -Recurse -Force }
+          $p = Start-Process -FilePath $installer -ArgumentList '/S', "/D=$target" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Installation NSIS échouée: $($p.ExitCode)" }
+          $installed = Join-Path $target 'HDP_V6_API_UI.exe'
+          if (!(Test-Path $installed)) { throw "Application installée absente" }
+          $app = Start-Process -FilePath $installed -PassThru -WindowStyle Hidden
+          try {
+            $ok = $false
+            for ($i=0; $i -lt 30; $i++) {
+              Start-Sleep -Seconds 1
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:8766/api/health" -TimeoutSec 2
+                if ($health.status -eq "ok" -and $health.parameters -eq 2057 -and $health.sources -eq 10) { $ok=$true; break }
+              } catch {}
+            }
+            if (-not $ok) { throw "L'application installée ne répond pas correctement." }
+          } finally {
+            Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Calculer les empreintes
+        shell: pwsh
+        run: |
+          $exe = "windows-v6/HDP_V6_API_UI_Setup_Windows_x64.exe"
+          $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  HDP_V6_API_UI_Setup_Windows_x64.exe" | Set-Content -Encoding ascii "$exe.sha256"
+          Get-Item $exe | Select-Object Name,Length,LastWriteTime
+          Write-Host "SHA256=$hash"
+
+      - name: Publier l'installateur qualifié
+        uses: actions/upload-artifact@v4
+        with:
+          name: HDP-V6-Windows-installer-qualified
+          path: |
+            windows-v6/HDP_V6_API_UI_Setup_Windows_x64.exe
+            windows-v6/HDP_V6_API_UI_Setup_Windows_x64.exe.sha256
+            windows-v6/README_COMPLET.txt
+          if-no-files-found: error
+          retention-days: 30
