@@ -1,0 +1,12 @@
+Package: HDPClientsR
+Type: Package
+Title: R Clients for Humanitarian Data Platform Sources
+Version: 6.0.0
+Authors@R: person("HDP", "Project", role=c("aut","cre"), email="noreply@example.invalid")
+Description: Inventory-driven clients for the ten data sources exposed by HDP.
+License: file LICENSE
+Encoding: UTF-8
+LazyData: false
+Imports: httr2, jsonlite, writexl
+Suggests: testthat (>= 3.0.0)
+Config/testthat/edition: 3
