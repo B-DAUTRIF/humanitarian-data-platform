@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-"""Versioned internal contracts shared by HDP semantic/acquisition contexts."""
+"""Versioned contracts shared by the four HDP bounded contexts."""
 
 from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
-CONTRACT_VERSION = "7.0.0-alpha.1"
+CONTRACT_VERSION = "7.0.0"
 
 
 class CapabilityMode(StrEnum):
@@ -50,7 +49,6 @@ class ExecutionStatus(StrEnum):
 class GeographyRef(BaseModel):
     input: str
     name: str
-    iso2: str | None = None
     iso3: str
     m49: str
     authority: str = "United Nations Statistics Division / M49"
@@ -59,11 +57,13 @@ class GeographyRef(BaseModel):
 class SearchIntent(BaseModel):
     schema_version: Literal[1] = 1
     keywords: str = ""
+    canonical_keywords: str = ""
     location: str = ""
     date_from: str = ""
     date_to: str = ""
     geography: GeographyRef | None = None
     interpretation: str
+    semantic_notes: list[str] = Field(default_factory=list)
 
 
 class QueryPlanStep(BaseModel):
@@ -83,6 +83,7 @@ class QueryPlan(BaseModel):
     contract_version: str = CONTRACT_VERSION
     intent: SearchIntent
     routes: list[QueryPlanStep]
+    query_fingerprint: str
 
 
 class SourceExecution(BaseModel):
@@ -92,11 +93,20 @@ class SourceExecution(BaseModel):
     item_count: int = 0
     items: list[dict[str, Any]] = Field(default_factory=list)
     error: str | None = None
+    native_request: dict[str, Any] = Field(default_factory=dict)
+    response_hash: str | None = None
     route: QueryPlanStep
 
 
+class ProvenanceRecord(BaseModel):
+    query_fingerprint: str
+    result_snapshot_hash: str
+    contract_version: str = CONTRACT_VERSION
+    source_executions: list[dict[str, Any]] = Field(default_factory=list)
+
+
 def can_claim_empty_valid(*, completeness: Completeness, used_post_filter: bool) -> bool:
-    """P0 invariant: a bounded/partial post-filter can never prove absence."""
+    """P0 invariant: bounded/partial post-filtering can never prove absence."""
     if not used_post_filter:
         return True
     return completeness in {Completeness.EXHAUSTIVE, Completeness.PAGINATED_EXHAUSTIVE}
