@@ -26,15 +26,13 @@ test_that("unsafe provider operations require explicit authorization before netw
   expect_gt(length(unsafe), 0)
   operation <- unsafe[[1]]
 
-  # The safety guard must fire before any remote HTTP call. Parameters are intentionally
-  # left empty; an operation with mandatory values may reject them first, which also
-  # proves that no uncontrolled request was emitted. Prefer an operation without
-  # mandatory parameters when the catalogue exposes one.
   optional_unsafe <- Filter(
     function(candidate) {
       parameters <- candidate$parameters
       !length(Filter(function(parameter) {
-        tolower(trimws(as.character(parameter$required %||% ""))) %in%
+        required <- parameter$required
+        if (is.null(required) || !length(required)) required <- ""
+        tolower(trimws(as.character(required))) %in%
           c("oui", "yes", "true", "1", "required", "obligatoire")
       }, parameters))
     },
