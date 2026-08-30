@@ -1,0 +1,241 @@
+{
+  "schema_version": "1.0",
+  "purpose": "Machine-readable complement to API_INVENTORY.csv describing parameter domains, codelists and discovery mechanisms. This file records only values or discovery rules supported by provider documentation or by a machine specification already loaded by the V6 inventory builder.",
+  "audit_date": "2026-08-30",
+  "domain_kinds": [
+    "static_enum",
+    "dynamic_catalog",
+    "controlled_vocabulary",
+    "grammar",
+    "date_or_period",
+    "numeric_range",
+    "boolean",
+    "free_text",
+    "opaque_identifier",
+    "provider_schema",
+    "unknown"
+  ],
+  "sources": {
+    "hdx": {
+      "name": "HDX / CKAN",
+      "documentation": [
+        "https://data.humdata.org/dataset/2048a947-5714-4220-905b-e662cbcd14c8/resource/3b675846-d01c-4fc9-b577-b7d426d2a598/download/hdx-ckan-api-cookbook.pdf",
+        "https://docs.ckan.org/en/latest/api/"
+      ],
+      "audit_status": "partially_documented_dynamic",
+      "parameters": {
+        "q": {"domain_kind": "grammar", "grammar": "CKAN/Solr-style full-text search expression", "enumerable": false},
+        "fq": {"domain_kind": "grammar", "grammar": "Solr filter query", "enumerable": false},
+        "fq_list": {"domain_kind": "grammar", "grammar": "list of additional Solr filter queries", "enumerable": false},
+        "sort": {"domain_kind": "grammar", "enumerable": false},
+        "rows": {"domain_kind": "numeric_range", "enumerable": false},
+        "start": {"domain_kind": "numeric_range", "enumerable": false},
+        "qf": {"domain_kind": "grammar", "enumerable": false},
+        "location": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "resolve against HDX dataset/location metadata; retain ISO/M49 aliases in HDP semantic layer rather than inventing a static enum"}
+      }
+    },
+    "reliefweb": {
+      "name": "ReliefWeb",
+      "documentation": [
+        "https://apidoc.reliefweb.int/parameters",
+        "https://apidoc.reliefweb.int/fields-tables",
+        "https://apidoc.reliefweb.int/presets"
+      ],
+      "audit_status": "well_documented",
+      "parameters": {
+        "query[value]": {"domain_kind": "free_text", "enumerable": false},
+        "query[fields]": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "derive from provider fields tables per content type"},
+        "query[operator]": {"domain_kind": "static_enum", "enum": ["AND", "OR"], "default": "OR"},
+        "filter": {"domain_kind": "provider_schema", "enumerable": false, "strategy": "structured filter tree; field names derive from fields tables and field values from indexed content"},
+        "facets": {"domain_kind": "provider_schema", "enumerable": false, "strategy": "facet definitions; field vocabulary derives from fields tables"},
+        "profile": {"domain_kind": "static_enum", "enum": ["minimal", "full", "list"], "default": "minimal"},
+        "preset": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "provider presets documentation; known documented presets include analysis/latest/minimal"},
+        "fields[include]": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "derive from provider fields tables per content type"},
+        "fields[exclude]": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "derive from provider fields tables per content type"},
+        "limit": {"domain_kind": "numeric_range", "enumerable": false},
+        "offset": {"domain_kind": "numeric_range", "enumerable": false},
+        "sort[]": {"domain_kind": "grammar", "enumerable": false}
+      },
+      "semantic_catalogs": {
+        "country": {"strategy": "ReliefWeb countries resource / indexed country fields", "identifiers": ["id", "iso3", "name", "shortname"]},
+        "language": {"strategy": "indexed language fields", "identifiers": ["id", "code", "name"]},
+        "source": {"strategy": "ReliefWeb sources resource / indexed source fields", "identifiers": ["name", "shortname", "type.id", "type.name"]},
+        "theme": {"strategy": "indexed theme fields", "identifiers": ["id", "name"]},
+        "disaster_type": {"strategy": "indexed disaster type fields", "identifiers": ["id", "code", "name"]}
+      }
+    },
+    "who-gho": {
+      "name": "WHO Global Health Observatory",
+      "documentation": ["https://www.who.int/data/gho/info/gho-odata-api"],
+      "audit_status": "well_documented_dynamic",
+      "parameters": {
+        "$filter": {"domain_kind": "grammar", "grammar": "OData filter expression", "enumerable": false},
+        "$select": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "derive from OData entity schema"},
+        "$orderby": {"domain_kind": "grammar", "enumerable": false},
+        "$top": {"domain_kind": "numeric_range", "enumerable": false},
+        "$skip": {"domain_kind": "numeric_range", "enumerable": false},
+        "$format": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "derive from OData service capabilities; do not hard-code without schema confirmation"},
+        "$expand": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "derive from OData navigation properties"},
+        "$count": {"domain_kind": "boolean", "enum": [true, false]}
+      },
+      "semantic_catalogs": {
+        "dimensions": {"endpoint": "/api/Dimension", "domain_kind": "dynamic_catalog"},
+        "dimension_values": {"endpoint_template": "/api/DIMENSION/{dimension}/DimensionValues", "domain_kind": "dynamic_catalog"},
+        "indicators": {"endpoint": "/api/Indicator", "domain_kind": "dynamic_catalog"},
+        "regions": {"endpoint": "/api/DIMENSION/REGION", "domain_kind": "dynamic_catalog"},
+        "time": {"fields": ["TimeDimensionBegin", "TimeDimensionEnd"], "domain_kind": "date_or_period"}
+      }
+    },
+    "world-bank-health": {
+      "name": "World Bank Health Indicators",
+      "documentation": [
+        "https://datahelpdesk.worldbank.org/knowledgebase/articles/898581-api-basic-call-structures",
+        "https://datahelpdesk.worldbank.org/knowledgebase/articles/898590-country-api-queries",
+        "https://datahelpdesk.worldbank.org/knowledgebase/articles/898614-aggregate-api-queries",
+        "https://datahelpdesk.worldbank.org/knowledgebase/articles/1886695-metadata-api-queries"
+      ],
+      "audit_status": "well_documented_dynamic",
+      "parameters": {
+        "date": {"domain_kind": "date_or_period", "grammar": "year, month, quarter or colon-separated range", "enumerable": false},
+        "page": {"domain_kind": "numeric_range", "enumerable": false},
+        "per_page": {"domain_kind": "numeric_range", "enumerable": false, "default": 50},
+        "mrv": {"domain_kind": "numeric_range", "enumerable": false},
+        "mrnev": {"domain_kind": "numeric_range", "enumerable": false},
+        "gapfill": {"domain_kind": "static_enum", "enum": ["Y", "N"]},
+        "frequency": {"domain_kind": "static_enum", "enum": ["Y", "Q", "M"]},
+        "source": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "World Bank sources endpoint / metadata API"},
+        "footnote": {"domain_kind": "static_enum", "enum": ["y", "n"]},
+        "format": {"domain_kind": "static_enum", "enum": ["json", "xml"]},
+        "downloadformat": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "metadata download formats where endpoint supports them"},
+        "language": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "language path values supported by World Bank API"},
+        "country": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "GET /v2/country; aliases include ISO2, ISO3 and World Bank codes"},
+        "indicator": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "indicator catalog scoped by source"}
+      },
+      "semantic_catalogs": {
+        "countries": {"endpoint": "/v2/country", "identifiers": ["id", "iso2Code", "name"]},
+        "regions": {"endpoint": "/v2/region", "identifiers": ["code", "iso2code", "name"]},
+        "income_levels": {"endpoint": "/v2/incomelevel", "domain_kind": "dynamic_catalog"},
+        "lending_types": {"endpoint": "/v2/lendingtype", "domain_kind": "dynamic_catalog"},
+        "sources": {"endpoint": "/v2/source", "domain_kind": "dynamic_catalog"},
+        "metadata": {"endpoint_template": "/v2/sources/{source}/.../metadata", "domain_kind": "dynamic_catalog"}
+      }
+    },
+    "unicef-sdmx": {
+      "name": "UNICEF Data Warehouse (SDMX)",
+      "documentation": ["https://data.unicef.org/sdmx-api-documentation/"],
+      "audit_status": "well_documented_dynamic",
+      "parameters": {
+        "agency": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "dataflow catalogue"},
+        "dataflow": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "dataflow catalogue"},
+        "version": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "dataflow catalogue"},
+        "dataQuery": {"domain_kind": "grammar", "grammar": "SDMX dimension-key query using ordered dimensions, dot separators and + selectors", "enumerable": false},
+        "format": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "SDMX representation formats supported by endpoint"},
+        "detail": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "SDMX structural detail values"},
+        "references": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "SDMX structural reference values"},
+        "startPeriod": {"domain_kind": "date_or_period", "enumerable": false},
+        "endPeriod": {"domain_kind": "date_or_period", "enumerable": false},
+        "firstNObservations": {"domain_kind": "numeric_range", "enumerable": false},
+        "lastNObservations": {"domain_kind": "numeric_range", "enumerable": false},
+        "dimension_at_observation": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "derive from DSD dimensions"}
+      },
+      "semantic_catalogs": {
+        "dataflows": {"endpoint": "/dataflow/all/all/latest/", "domain_kind": "dynamic_catalog"},
+        "dsd": {"strategy": "download selected dataflow with detail=full&references=all", "domain_kind": "provider_schema"},
+        "codelists": {"strategy": "extract controlled code lists referenced by the DSD; these define allowed values for dimensions such as country and indicator", "domain_kind": "dynamic_catalog"}
+      }
+    },
+    "un-sdg": {
+      "name": "UN Global SDG Indicators Database",
+      "documentation": ["https://unstats.un.org/SDGAPI/swagger/"],
+      "audit_status": "machine_spec_loaded_and_documented",
+      "parameters": {
+        "goal": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "SDG goal catalogue"},
+        "target": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "SDG target catalogue"},
+        "indicator": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "SDG indicator catalogue"},
+        "dataPointType": {"domain_kind": "static_enum", "enum": [1, 2, 3], "meaning": {"1": "data for at least 1 year since 2015", "2": "data for at least 2 years since 2015", "3": "at least two years since 2015 and at least two years before 2015"}},
+        "countryId": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "country catalogue exposed by SDG API; documented value 0 means all countries"},
+        "natureOfData": {"domain_kind": "controlled_vocabulary", "enumerable": true, "known_values": {"All": "All", "C": "Country Data", "CNA": "Country data and adjusted country data"}, "strategy": "complete from Swagger/schema rather than assuming only known examples"}
+      }
+    },
+    "dhs": {
+      "name": "DHS Program Indicator Data",
+      "documentation": ["https://api.dhsprogram.com/"],
+      "audit_status": "documented_dynamic_catalogs",
+      "parameters": {
+        "f": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "documented DHS response formats"},
+        "page": {"domain_kind": "numeric_range", "enumerable": false},
+        "perpage": {"domain_kind": "numeric_range", "enumerable": false},
+        "countryIds": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "DHS country catalogue; accept provider country IDs, not arbitrary names"},
+        "indicatorIds": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "DHS indicator catalogue"},
+        "surveyYears": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "derive from available surveys/data catalogue"},
+        "breakdown": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "derive from DHS indicator/data metadata; national is a documented example"},
+        "surveyIds": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "DHS surveys catalogue"},
+        "surveyType": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "derive from DHS survey metadata"}
+      },
+      "semantic_catalogs": {
+        "countries": {"domain_kind": "dynamic_catalog"},
+        "indicators": {"endpoint": "/rest/dhs/indicators", "domain_kind": "dynamic_catalog"},
+        "surveys": {"domain_kind": "dynamic_catalog"}
+      }
+    },
+    "hdx-hapi": {
+      "name": "HDX Humanitarian API (HAPI)",
+      "documentation": ["https://hapi.humdata.org/openapi.json"],
+      "audit_status": "machine_spec_loaded_in_existing_inventory_not_refetched_due_http_403_during_audit",
+      "parameters": {
+        "app_identifier": {"domain_kind": "free_text", "enumerable": false},
+        "output_format": {"domain_kind": "provider_schema", "enumerable": true, "strategy": "use enum from loaded OpenAPI when present"},
+        "limit": {"domain_kind": "numeric_range", "enumerable": false},
+        "offset": {"domain_kind": "numeric_range", "enumerable": false},
+        "location_code": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "HAPI location/reference endpoints and OpenAPI schemas"},
+        "admin_level": {"domain_kind": "provider_schema", "enumerable": true, "strategy": "use OpenAPI constraints/enums where declared; do not infer undocumented levels"}
+      }
+    },
+    "unhcr": {
+      "name": "UNHCR Refugee Statistics",
+      "documentation": ["https://api.unhcr.org/docs/refugee-statistics.html"],
+      "audit_status": "well_documented",
+      "parameters": {
+        "page": {"domain_kind": "numeric_range", "enumerable": false},
+        "limit": {"domain_kind": "numeric_range", "enumerable": false, "default": 100},
+        "yearFrom": {"domain_kind": "date_or_period", "granularity": "year", "enumerable": false},
+        "yearTo": {"domain_kind": "date_or_period", "granularity": "year", "enumerable": false},
+        "year": {"domain_kind": "date_or_period", "granularity": "year", "enumerable": true},
+        "download": {"domain_kind": "boolean", "enum": [true, false]},
+        "coo": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "UNHCR country/region code lookup; ISO3 can be requested with cf_type=ISO"},
+        "coa": {"domain_kind": "dynamic_catalog", "enumerable": true, "strategy": "UNHCR country/region code lookup; ISO3 can be requested with cf_type=ISO"},
+        "coo_all": {"domain_kind": "boolean", "enum": [true, false]},
+        "coa_all": {"domain_kind": "boolean", "enum": [true, false]},
+        "cf_type": {"domain_kind": "controlled_vocabulary", "enumerable": true, "known_values": ["ISO"], "strategy": "provider documentation only explicitly documents ISO; retain provider default when omitted"},
+        "columns": {"domain_kind": "static_enum", "enum": ["refugees", "asylum_seekers", "idps", "oip", "stateless", "ooc"]},
+        "ptype_show": {"domain_kind": "boolean", "enum": [true, false]}
+      }
+    },
+    "gdacs": {
+      "name": "GDACS",
+      "documentation": [
+        "https://www.gdacs.org/gdacsapi/swagger/index.html",
+        "https://www.gdacs.org/Documents/2025/GDACS_API_quickstart_v2.pdf"
+      ],
+      "audit_status": "machine_spec_loaded_and_documented",
+      "parameters": {
+        "eventtype": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "derive from Swagger/event schemas"},
+        "eventlist": {"domain_kind": "controlled_vocabulary", "enumerable": true, "known_values": ["EQ", "TC", "FL"], "strategy": "examples are documented; complete set must come from Swagger/schema rather than inference"},
+        "alertlevel": {"domain_kind": "controlled_vocabulary", "enumerable": true, "known_values": ["red", "orange", "green"], "strategy": "complete from Swagger/schema; quick-start examples also contain 'reg', which should not be normalized without schema confirmation"},
+        "fromdate": {"domain_kind": "date_or_period", "enumerable": false},
+        "todate": {"domain_kind": "date_or_period", "enumerable": false},
+        "eventid": {"domain_kind": "opaque_identifier", "enumerable": false},
+        "episodeid": {"domain_kind": "opaque_identifier", "enumerable": false},
+        "iso3": {"domain_kind": "controlled_vocabulary", "enumerable": true, "strategy": "ISO3 / GADM0 lookup via Administrative endpoint"},
+        "page": {"domain_kind": "numeric_range", "enumerable": false},
+        "pagesize": {"domain_kind": "numeric_range", "enumerable": false}
+      }
+    }
+  },
+  "audit_rules": {
+    "no_inference": "A modality is not promoted to a static enum unless the provider documentation or machine specification explicitly defines it.",
+    "dynamic_preferred": "When a provider exposes a codelist, dimension endpoint, metadata endpoint or resource catalogue, HDP should treat that endpoint as the authoritative source of modalities and maintain only a versioned cache locally.",
+    "provenance": "Every cached modality should retain source URL/endpoint, retrieval timestamp, provider code, provider label, and semantic mapping status.",
+    "semantic_mapping": "This audit does not assert semantic equivalence between provider values; it only establishes the authoritative domains needed for a future semantic router."
+  }
+}
