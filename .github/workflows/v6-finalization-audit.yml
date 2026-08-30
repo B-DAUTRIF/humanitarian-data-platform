@@ -103,7 +103,7 @@ jobs:
         run: python -m compileall -q source/payload/api/app tools
 
       - name: Validate inline JavaScript
-        run: node tools/check_inline_javascript.mjs
+        run: node tools/check_inline_javascript.mjs source/payload/api/static/index.html
 
       - name: Run exhaustive V6 functional and UI audit
         run: python tools/audit_v6_complete.py
@@ -125,4 +125,4 @@ jobs:
           git commit -m "fix(v6): rebuild API inventory and complete functional UI audit"
           git push origin HEAD:main
 
-# Audit revision 3: OpenAPI operations may omit the parameters property.
+# Audit revision 4: validate the actual HDP UI file.
