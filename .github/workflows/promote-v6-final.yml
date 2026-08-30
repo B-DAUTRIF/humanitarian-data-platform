@@ -1,0 +1,113 @@
+name: Promote HDP V6 final
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: v6.0.0
+  RC_TAG: v6.0.0-rc1
+  RC_EXE_SHA256: 559b2ad3491e491b7b3a67d8eebbed76bbaf3c81d9e534e398d8e9bbbfb10df5
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Vérifier les deux qualifications réelles sur le binaire RC exact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          check_real_gate(){
+            workflow="$1"
+            label="$2"
+            runs=$(gh api --method GET "repos/$repo/actions/workflows/$workflow/runs" -f status=completed -f per_page=100)
+            ok=$(printf '%s' "$runs" | python -c 'import json,sys; d=json.load(sys.stdin); print(any(r.get("conclusion")=="success" for r in d.get("workflow_runs",[])))')
+            if [ "$ok" != "True" ]; then
+              echo "Porte bloquante absente: $label" >&2
+              exit 1
+            fi
+          }
+          check_real_gate windows10-v6-full.yml "Windows 10 x64 réel"
+          check_real_gate windows11-v6-full.yml "Windows 11 x64 réel"
+      - name: Vérifier que les preuves Windows portent sur le même EXE RC
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          verify_artifact(){
+            workflow="$1"
+            prefix="$2"
+            run_id=$(gh api --method GET "repos/$repo/actions/workflows/$workflow/runs" -f status=success -f per_page=100 --jq '.workflow_runs[0].id')
+            [ -n "$run_id" ] || { echo "Aucun run vert pour $workflow" >&2; exit 1; }
+            artifact=$(gh api "repos/$repo/actions/runs/$run_id/artifacts" --jq ".artifacts[] | select(.name|startswith(\"$prefix\")) | .archive_download_url" | head -1)
+            [ -n "$artifact" ] || { echo "Preuve absente pour $workflow" >&2; exit 1; }
+            tmp=$(mktemp -d)
+            gh api "$artifact" > "$tmp/proof.zip"
+            unzip -q "$tmp/proof.zip" -d "$tmp/proof"
+            hash=$(python - "$tmp/proof" <<'PY'
+import json, pathlib, sys
+p=next(pathlib.Path(sys.argv[1]).glob('*.json'))
+d=json.loads(p.read_text(encoding='utf-8-sig'))
+assert d.get('status') == 'passed', d
+print(d['installer_sha256'].lower())
+PY
+)
+            if [ "$hash" != "$RC_EXE_SHA256" ]; then
+              echo "Preuve $workflow sur un autre EXE: $hash" >&2
+              exit 1
+            fi
+          }
+          verify_artifact windows10-v6-full.yml HDP-V6-Windows10-qualification-
+          verify_artifact windows11-v6-full.yml HDP-V6-Windows11-qualification-
+      - name: Rejouer le gate fonctionnel sur la source courante
+        shell: bash
+        run: python tools/v6_use_case_gate.py
+      - name: Préparer le dossier final depuis les octets RC qualifiés
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=releases/v6.0.0-rc1
+          dst=releases/v6.0.0
+          rm -rf "$dst"
+          mkdir -p "$dst"
+          cp "$src/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe" "$dst/"
+          cp "$src/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe.sha256" "$dst/"
+          cp "$src/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc1.zip" "$dst/HumanitarianDataPlatform_Archive_complete_v6.0.0.zip"
+          sha256sum "$dst/HumanitarianDataPlatform_Archive_complete_v6.0.0.zip" | sed 's#releases/v6.0.0/##' > "$dst/HumanitarianDataPlatform_Archive_complete_v6.0.0.zip.sha256"
+          cp "$src/FINAL_TEST_REPORT.md" "$dst/FINAL_TEST_REPORT.md"
+          cp "$src/WINDOWS_STATIC_COMPATIBILITY.json" "$dst/WINDOWS_STATIC_COMPATIBILITY.json"
+          printf '# HDP V6.0.0\n\nRelease finale promue uniquement après qualifications réelles Windows 10 x64 et Windows 11 x64 sur le même EXE publié.\n' > "$dst/README.md"
+          test "$(sha256sum "$dst/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe" | cut -d' ' -f1)" = "$RC_EXE_SHA256"
+      - name: Publier le dossier final dans main
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add releases/v6.0.0
+          git commit -m "release: publish HDP v6.0.0 final [skip ci]"
+          git push origin HEAD:main
+      - name: Créer la release finale GitHub
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          dst=releases/v6.0.0
+          gh release create "$RELEASE_TAG" \
+            "$dst/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe" \
+            "$dst/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe.sha256" \
+            "$dst/HumanitarianDataPlatform_Archive_complete_v6.0.0.zip" \
+            "$dst/HumanitarianDataPlatform_Archive_complete_v6.0.0.zip.sha256" \
+            "$dst/FINAL_TEST_REPORT.md" \
+            "$dst/WINDOWS_STATIC_COMPATIBILITY.json" \
+            --target main --title "HDP v6.0.0" --notes-file "$dst/README.md" --latest
