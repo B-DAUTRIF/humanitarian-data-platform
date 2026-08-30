@@ -87,6 +87,32 @@ jobs:
           curl --fail --silent http://127.0.0.1:18080/api/health >/dev/null || { cat /tmp/hdp-browser-api.log; exit 1; }
           python tools/browser_ui_e2e.py --base-url http://127.0.0.1:18080 --token "$HDP_LOCAL_TOKEN"
           cat /tmp/hdp-browser-api.log
+      - name: Recette bootstrap Passkey sans boucle de rechargement
+        timeout-minutes: 8
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/humanitarian
+          SQL_READER_URL: postgresql://postgres:postgres@127.0.0.1:5432/humanitarian
+          HDP_LOCAL_TOKEN: ci-passkey-bootstrap-secret-000000000000000000000000000000
+          HDP_SQL_PASSWORD: ci-browser-sql-password-000000000000000000000000000000
+          HDP_AUTH_MODE: passkey
+          HDP_WEBAUTHN_RP_ID: 127.0.0.1
+          HDP_WEBAUTHN_ORIGIN: http://127.0.0.1:18081
+          DATA_DIR: /tmp/hdp-passkey-browser-data
+          EXECUTION_SPOOL_DIR: /tmp/hdp-passkey-browser-spool
+          PYTHONPATH: source/payload/api
+        run: |
+          python -m uvicorn app.main_v6:app --host 127.0.0.1 --port 18081 >/tmp/hdp-passkey-api.log 2>&1 &
+          API_PID=$!
+          cleanup(){ kill "$API_PID" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:18081/api/health >/dev/null; then break; fi
+            if ! kill -0 "$API_PID" 2>/dev/null; then cat /tmp/hdp-passkey-api.log; exit 1; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:18081/api/health >/dev/null || { cat /tmp/hdp-passkey-api.log; exit 1; }
+          python tools/browser_auth_bootstrap_e2e.py --base-url http://127.0.0.1:18081
+          cat /tmp/hdp-passkey-api.log
       - name: Images R, client R et initialisation du spool
         timeout-minutes: 20
         run: |
