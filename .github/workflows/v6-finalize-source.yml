@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: {fetch-depth: 0}
-      - name: Finaliser identité V6 native
+      - name: Finaliser identité et interface V6
         shell: bash
         run: |
           python - <<'PY'
@@ -31,6 +31,25 @@ jobs:
               s=p.read_text(encoding='utf-8')
               for old,new in pairs: s=s.replace(old,new)
               p.write_text(s,encoding='utf-8',newline='\n')
+          ui=Path('source/payload/api/static/index.html')
+          s=ui.read_text(encoding='utf-8')
+          if 'data-view="source-settings"' not in s:
+              s=s.replace('<button data-view="sources">Sources sanitaires</button>', '<button data-view="sources">Sources sanitaires</button>\n    <button data-view="source-settings">Paramètres des sources</button>\n    <button data-view="inventory">Inventaire API</button>')
+          if 'id="view-inventory"' not in s:
+              marker='  <section id="view-intelligence" class="view">'
+              section='''  <section id="view-inventory" class="view">\n    <div class="card"><h2>Inventaire API exhaustif</h2><p class="intro">Tous les paramètres inventoriés sont visibles. Le vert indique les paramètres effectivement mappés dans HDP ; les autres restent explicitement informatifs jusqu’à validation de leur adaptateur.</p><div class="actions"><a class="button" href="/api-inventory" target="_blank" rel="noopener">Ouvrir l’inventaire complet</a></div><iframe title="Inventaire API HDP V6" src="/api-inventory" style="width:100%;height:70vh;border:1px solid var(--line);border-radius:10px;margin-top:14px;background:white"></iframe></div>\n  </section>\n\n'''
+              s=s.replace(marker,section+marker)
+          if 'id="ui-mode"' not in s:
+              s=s.replace('<select id="project-select" aria-label="Projet actif"></select>', '<select id="project-select" aria-label="Projet actif"></select>\n      <select id="ui-mode" aria-label="Mode d’interface" title="Mode d’interface"><option value="simple">Simple</option><option value="advanced">Avancé</option><option value="expert">Expert</option></select>')
+              s=s.replace('</body>', '''<script>\n(()=>{const m=document.getElementById('ui-mode');if(!m)return;const saved=localStorage.getItem('hdp-ui-mode')||'advanced';m.value=saved;document.body.dataset.uiMode=saved;m.addEventListener('change',()=>{document.body.dataset.uiMode=m.value;localStorage.setItem('hdp-ui-mode',m.value);});})();\n</script>\n</body>''')
+          ui.write_text(s,encoding='utf-8',newline='\n')
+
+          audit=Path('tools/audit_v6_complete.py')
+          a=audit.read_text(encoding='utf-8')
+          needle='    path = re.sub(r"\\{[^}]+\\}", "{x}", path)\n    return path.rstrip("/") or "/"'
+          repl='    path = re.sub(r"\\{[^}]+\\}", "{x}", path)\n    path = re.sub(r"/\\d+(?=/|$)", "/{x}", path)\n    return path.rstrip("/") or "/"'
+          if needle in a: a=a.replace(needle,repl)
+          audit.write_text(a,encoding='utf-8',newline='\n')
           PY
       - name: Générer inventaire vérifiable et documentation
         run: python tools/build_v6_inventory.py
@@ -39,12 +58,15 @@ jobs:
           python -m compileall -q source/payload/api/app tools
           grep -q 'APP_VERSION L"6.0.0"' source/src/installer.c
           grep -q 'REGISTRY_VERSION = "6.0.0"' source/payload/api/app/source_registry.py
+          grep -q 'data-view="inventory"' source/payload/api/static/index.html
+          grep -q 'data-view="source-settings"' source/payload/api/static/index.html
+          grep -q 'value="expert"' source/payload/api/static/index.html
           test -n "$(find source/payload/api/app/api_inventory_parts -name 'part*.jsonl' -print -quit)"
       - name: Commit de qualification source
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add source/src/installer.c source/payload/api/app/source_registry.py source/payload/api/app/main.py source/payload/api/static/index.html source/payload/api/app/api_inventory_parts docs/versions/6.0.0
+          git add source/src/installer.c source/payload/api/app/source_registry.py source/payload/api/app/main.py source/payload/api/static/index.html source/payload/api/app/api_inventory_parts docs/versions/6.0.0 tools/audit_v6_complete.py
           if git diff --cached --quiet; then echo 'Aucun changement'; exit 0; fi
-          git commit -m 'chore(v6): finalize native version and verified API inventory'
+          git commit -m 'fix(v6): expose inventory source settings and UI modes'
           git push origin HEAD:main
