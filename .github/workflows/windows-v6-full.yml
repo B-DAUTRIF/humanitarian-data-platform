@@ -1,4 +1,4 @@
-# Final V6 qualification: source-native 6.0.0, generated inventory, real installer journey.
+# Final V6 qualification: source-native 6.0.0, canonical JSONL inventory, real installer journey.
 name: HDP V6 full Windows installer
 
 on:
@@ -24,13 +24,18 @@ jobs:
         shell: pwsh
         run: |
           python tools/build_v6_inventory.py
-          python -c "import sys; sys.path.insert(0,'source/payload/api'); from app.api_inventory import inventory,sources; r=inventory(); s=sources(); assert len(r)>0; assert s['sources']==10,s; assert s['operations']>0,s; print('API inventory:',len(r),'entries /',s['sources'],'sources /',s['operations'],'operations')"
+          python -c "import sys; sys.path.insert(0,'source/payload/api'); from app.api_inventory import inventory,sources; r=inventory(); s=sources(); assert len(r)==1020,r; assert s['sources']==10,s; assert s['operations']==196,s; assert s['supported']==228,s; assert s['informational']==792,s; print('API inventory:',len(r),'entries /',s['sources'],'sources /',s['operations'],'operations')"
       - name: Audit fonctionnel backend UI
         shell: pwsh
         run: python tools/audit_v6_complete.py
-      - name: Recette métier épidémiologie
+      - name: Recettes métier épidémiologie
         shell: pwsh
-        run: python tools/epidemiology_acceptance.py
+        run: |
+          python tools/epidemiology_acceptance.py
+          python tools/epidemiology_reference_acceptance.py
+      - name: Finalisation canonique des sources V6
+        shell: pwsh
+        run: python tools/finalize_v6.py
       - name: Tests Python
         shell: pwsh
         run: |
@@ -54,6 +59,7 @@ jobs:
           $h=& $dumpbin.FullName /headers $exe|Out-String; $i=& $dumpbin.FullName /imports $exe|Out-String; if($h -notmatch 'machine \(x64\)' -or $h -notmatch 'Windows GUI' -or $i -notmatch '(?i)KERNEL32\.dll'){throw 'PE invalide'}
           $vi=(Get-Item $exe).VersionInfo; if($vi.FileVersion -notlike '6.0.0*' -or $vi.ProductVersion -notlike '6.0.0*'){throw 'Version PE incorrecte'}
           if(!(Get-ChildItem source/payload/api/app/api_inventory_parts -Filter 'part*.jsonl')){throw 'Inventaire JSONL absent'}
+          if(Get-ChildItem source/payload/api/app/api_inventory_parts -Filter 'part*.txt'){throw 'Ancien inventaire compressé détecté'}
           $docker=Get-Content source/payload/api/Dockerfile -Raw; if($docker -notmatch 'app\.main_v6:app'){throw 'Backend V6 non actif'}
       - name: Recette installateur Windows réelle
         shell: pwsh
@@ -70,8 +76,8 @@ jobs:
           Write-Host '--- Journaux installateur ---'
           $logDir=Join-Path $env:LOCALAPPDATA 'HumanitarianDataPlatform\logs'
           if(Test-Path $logDir){Get-ChildItem $logDir -Filter 'installer-*.log' | Sort-Object LastWriteTime | ForEach-Object { Write-Host "### $($_.FullName)"; Get-Content $_.FullName }}else{Write-Host 'Répertoire de journaux absent'}
-          Write-Host '--- Installation temporaire ---'
-          $installed=Join-Path $env:RUNNER_TEMP 'hdp-installer-e2e\installed-HDP'
+          Write-Host '--- Installation HDP du runner ---'
+          $installed=Join-Path $env:USERPROFILE 'HumanitarianDataPlatform'
           if(Test-Path $installed){Get-ChildItem $installed -Force | Format-Table Name,Length,LastWriteTime -AutoSize}else{Write-Host 'Dossier installation absent'}
       - name: Construire archive complète V6
         shell: pwsh
