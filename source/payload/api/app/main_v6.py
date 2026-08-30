@@ -8,7 +8,7 @@ isolés afin de préserver la compatibilité avec la ligne qualifiée précéden
 
 from .main import app
 from .github_sync import router as github_sync_router
-from .v6_inventory_ui import router as v6_inventory_router
+from .api_inventory import router as api_inventory_router
 
 app.version = "6.0.0"
 app.description = (
@@ -18,4 +18,4 @@ app.description = (
     "depuis /api-inventory."
 )
 app.include_router(github_sync_router)
-app.include_router(v6_inventory_router)
+app.include_router(api_inventory_router)
