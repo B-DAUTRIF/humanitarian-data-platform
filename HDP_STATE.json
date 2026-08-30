@@ -1,37 +1,20 @@
 {
-  "schema_version": "2.1",
+  "schema_version": "2.2",
   "application": "Humanitarian Data Platform",
   "repository": "B-DAUTRIF/humanitarian-data-platform",
   "visibility": "public",
   "default_branch": "main",
   "main_policy": "latest_qualified_installable_release",
   "main_version": "6.0.0",
-  "qualified_release": {
+  "qualification_candidate": {
     "version": "6.0.0",
-    "source_commit": "886bfe791b445eb278d94218e0ad966e20d9a709",
-    "windows_workflow_run": 33294423164,
-    "validation_workflow_run": 33294423294,
-    "workflow_conclusions": {
-      "windows_v6_full": "success",
-      "validation": "success"
-    },
-    "installer_sha256": "ddf96bb3091da5b7f2a6769e28b6bf621178f7a355a3fcadb94d167d4cfedb8c",
-    "complete_archive_sha256": "aad9533ff5507d2af7c1ba33741082f2dc31f56ffe8a2349b0e3f1c8145bf92c",
-    "artifact_zip_sha256": "1db4ed72ceddc3d13ab4ff1195c217d490e5e65c4123328b160868154884256c",
-    "windows_binary": "PE32+ GUI x86-64",
-    "p1_p2_status": "completed_with_external_qualification_limits",
-    "qualification_limits": [
-      "manual Windows 10/11 physical-host acceptance remains external",
-      "Authenticode signature is absent",
-      "independent penetration and load tests remain external",
-      "standalone HDPClientsR package has a separate R CMD check transport issue; embedded HDP R service is validated by platform CI"
-    ]
-  },
-  "working_line": {
-    "version": "6.0.0",
-    "branch": "codex/v6-installer-fix-20260829",
-    "anchor_commit": "886bfe791b445eb278d94218e0ad966e20d9a709",
-    "status": "qualified_candidate_for_main"
+    "source_commit": "6bad58a16e0d5b194e202cdbe7e8095fe04caee1",
+    "status": "final_gate_running",
+    "inventory_format": "plain_jsonl",
+    "inventory_sources": 10,
+    "desktop_shortcut_required": true,
+    "desktop_shortcut_name": "Humanitarian Data Platform.lnk",
+    "windows_target": "PE32+ GUI x86-64"
   },
   "repository_organization": {
     "distributions": "dist/<version>",
