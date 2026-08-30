@@ -26,8 +26,11 @@ test_that("preview constructs a safe HTTPS request from catalog metadata", {
   usable <- Filter(function(op) {
     params <- op$parameters
     !length(Filter(function(p) {
-      required <- tolower(trimws(as.character(p$required %||% ""))) %in% c("oui", "yes", "true", "1", "required", "obligatoire")
-      required && (is.null(p$default) || !nzchar(as.character(p$default))) && grepl("path", tolower(p$location %||% ""))
+      required_value <- if (is.null(p$required)) "" else p$required
+      location_value <- if (is.null(p$location)) "" else p$location
+      default_missing <- is.null(p$default) || !nzchar(as.character(p$default))
+      required <- tolower(trimws(as.character(required_value))) %in% c("oui", "yes", "true", "1", "required", "obligatoire")
+      required && default_missing && grepl("path", tolower(location_value))
     }, params))
   }, ops)
   expect_gt(length(usable), 0)
