@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import sys
 import unittest
+from pathlib import Path
 
-from source.payload.api.app.semantic_router import build_execution_plan
+APP_ROOT = Path(__file__).resolve().parents[1] / "payload" / "api"
+sys.path.insert(0, str(APP_ROOT))
+
+from app.semantic_router import build_execution_plan  # noqa: E402
 
 
 class SemanticInputContractTests(unittest.TestCase):
