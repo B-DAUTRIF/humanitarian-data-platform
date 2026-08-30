@@ -28,6 +28,9 @@ jobs:
       - name: Audit fonctionnel backend UI
         shell: pwsh
         run: python tools/audit_v6_complete.py
+      - name: Recette métier épidémiologie
+        shell: pwsh
+        run: python tools/epidemiology_acceptance.py
       - name: Tests Python
         shell: pwsh
         run: |
