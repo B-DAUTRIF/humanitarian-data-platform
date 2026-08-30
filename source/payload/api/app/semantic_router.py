@@ -106,6 +106,8 @@ def route_intent_to_source(source_id: str, intent: SemanticIntent, *, result_lim
 def build_execution_plan(sources: Iterable[str], *, query: str = "", location: str = "", date_from: str = "", date_to: str = "", result_limit: int = 25) -> dict[str, Any]:
     if result_limit < 1 or result_limit > 100:
         raise ValueError("result_limit doit être compris entre 1 et 100")
+    if not any(str(value or "").strip() for value in (query, location, date_from, date_to)):
+        raise ValueError("La recherche sémantique doit contenir au moins un critère : mots-clés, lieu ou période")
     intent = build_semantic_intent(query=query, location=location, date_from=date_from, date_to=date_to)
     routes = [route_intent_to_source(source_id, intent, result_limit=result_limit) for source_id in dict.fromkeys(sources)]
     plan = {
@@ -119,6 +121,7 @@ def build_execution_plan(sources: Iterable[str], *, query: str = "", location: s
             "post_filter_is_explicit": True,
             "non_exhaustive_post_filter_cannot_claim_empty": True,
             "provider_operations_are_explicit": True,
+            "semantic_request_requires_explicit_criterion": True,
         },
     }
     plan["query_fingerprint"] = query_fingerprint(plan)
