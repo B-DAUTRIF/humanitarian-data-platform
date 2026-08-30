@@ -83,7 +83,10 @@ class V7UseCaseMatrixTests(unittest.TestCase):
         plan = build_execution_plan(["unhcr"], query="malaria", location="Rwanda")
         route = plan["routes"][0]
         self.assertEqual(route["native_parameters"]["country_roles"], ["origin", "asylum"])
-        self.assertIn("deux", " ".join(route["warnings"]).casefold())
+        warning = " ".join(route["warnings"]).casefold()
+        self.assertIn("two distinct native queries", warning)
+        self.assertIn("origin", warning)
+        self.assertIn("asylum", warning)
 
 
 if __name__ == "__main__":
