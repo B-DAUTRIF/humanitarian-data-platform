@@ -1,0 +1,26 @@
+name: HDP V6 source normalization
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/v6-source-normalization.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  normalize-and-document:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Normalize V6 sources and generate documentation
+        run: python tools/finalize_v6.py
+      - name: Commit native V6 sources and generated documentation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source docs/versions/6.0.0
+          git diff --cached --exit-code && exit 0
+          git commit -m "fix(v6): make V6 native and expose complete API inventory"
+          git push origin HEAD:main
