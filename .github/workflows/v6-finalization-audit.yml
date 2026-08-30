@@ -1,0 +1,131 @@
+name: HDP V6 final inventory and functional audit
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/v6-finalization-audit.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Normalize native V6 identity and repair UI structure
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root=Path('.')
+          def patch(path, replacements):
+              p=root/path
+              s=p.read_text(encoding='utf-8')
+              for old,new in replacements:
+                  s=s.replace(old,new)
+              p.write_text(s,encoding='utf-8')
+
+          patch(Path('source/payload/api/app/main.py'), [
+              ('APP_VERSION = "6.0.0-dev"','APP_VERSION = "6.0.0"'),
+          ])
+          patch(Path('source/payload/api/app/source_registry.py'), [
+              ('REGISTRY_VERSION = "5.0.0"','REGISTRY_VERSION = "6.0.0"'),
+              ('VERIFIED_AT = "2026-08-15"','VERIFIED_AT = "2026-08-30"'),
+              ('HDP/5.0.2','HDP/6.0.0'),
+          ])
+          # Active source/build identifiers must be native V6, not manufactured by CI.
+          for rel in ['source/src/installer.c','source/src/installer.rc','source/build-windows.ps1']:
+              patch(Path(rel), [('5.0.2','6.0.0'),('5,0,2,0','6,0,0,0')])
+
+          p=root/'source/payload/api/static/index.html'
+          s=p.read_text(encoding='utf-8').replace('6.0.0-dev','6.0.0')
+
+          # Remove duplicate top-level view sections introduced by historical overlays.
+          section_re=re.compile(r'(?ms)^  <section id="(view-[^"]+)" class="view(?: active)?">.*?^  </section>\n')
+          seen=set(); out=[]; pos=0
+          for m in section_re.finditer(s):
+              out.append(s[pos:m.start()])
+              view=m.group(1)
+              block=m.group(0)
+              if block.count('<section') != 1:
+                  raise SystemExit(f'Nested section prevents safe deduplication: {view}')
+              if view not in seen:
+                  out.append(block); seen.add(view)
+              pos=m.end()
+          out.append(s[pos:]); s=''.join(out)
+
+          # Make source settings and inventory first-class tabs.
+          if 'data-view="source-settings"' not in s:
+              anchor='    <button data-view="sources">Sources sanitaires</button>'
+              if anchor not in s: raise SystemExit('Sources tab anchor missing')
+              s=s.replace(anchor, anchor+'\n    <button data-view="source-settings">Paramètres des sources</button>')
+          if 'data-view="inventory"' not in s:
+              anchor='    <button data-view="source-settings">Paramètres des sources</button>'
+              s=s.replace(anchor, anchor+'\n    <button data-view="inventory">Inventaire API</button>')
+          if 'id="view-inventory"' not in s:
+              marker='  <section id="view-projects"'
+              if marker not in s: raise SystemExit('Projects view anchor missing')
+              section='''  <section id="view-inventory" class="view">\n    <div class="card">\n      <h2>Inventaire des paramètres API</h2>\n      <p class="intro">Tous les paramètres catalogués restent accessibles. Les paramètres effectivement mappés dans HDP sont distingués des paramètres documentés mais encore informatifs.</p>\n      <div class="actions"><a class="button" href="/api-inventory" target="_blank" rel="noopener">Ouvrir l’inventaire détaillé</a></div>\n      <iframe src="/api-inventory" title="Inventaire des paramètres API HDP V6" style="width:100%;min-height:760px;border:1px solid var(--line);border-radius:12px;background:#fff;margin-top:16px"></iframe>\n    </div>\n  </section>\n\n'''
+              s=s.replace(marker,section+marker)
+
+          # Simple / Avancé / Expert is an actual user-selectable presentation mode.
+          if 'id="ui-mode"' not in s:
+              anchor='<div class="context">'
+              selector='''<div class="context">\n      <label for="ui-mode" style="margin:0;white-space:nowrap">Mode</label>\n      <select id="ui-mode" aria-label="Niveau d’interface"><option value="simple">Simple</option><option value="advanced">Avancé</option><option value="expert">Expert</option></select>'''
+              if anchor not in s: raise SystemExit('Header context anchor missing')
+              s=s.replace(anchor,selector,1)
+          if 'const UI_MODE_LEVELS=' not in s:
+              marker='  const state='
+              if marker not in s: raise SystemExit('JS state anchor missing')
+              js='''  const UI_MODE_LEVELS={simple:0,advanced:1,expert:2};\n  const UI_VIEW_LEVEL={search:0,sources:0,projects:0,data:0,map:0,technologies:0,intelligence:1,"source-settings":1,inventory:1,rss:1,notebooks:1,schedules:1,backups:1,actions:2,spip:2,mail:2,timeline:2,scripts:2,sql:2};\n  function applyUiMode(value){const mode=Object.hasOwn(UI_MODE_LEVELS,value)?value:'simple';localStorage.setItem('hdp-ui-mode',mode);const level=UI_MODE_LEVELS[mode];document.body.dataset.uiMode=mode;document.querySelectorAll('nav [data-view]').forEach(btn=>{const required=UI_VIEW_LEVEL[btn.dataset.view]??0;btn.hidden=required>level;});const active=document.querySelector('nav [data-view].active');if(active&&active.hidden){const target=document.querySelector('nav [data-view="search"]');if(target)target.click();}}\n'''
+              s=s.replace(marker,js+marker,1)
+          if "q('#ui-mode').addEventListener('change'" not in s:
+              marker='  async function init()'
+              hook="  q('#ui-mode').value=localStorage.getItem('hdp-ui-mode')||'simple';\n  q('#ui-mode').addEventListener('change',event=>applyUiMode(event.target.value));\n  applyUiMode(q('#ui-mode').value);\n\n"
+              if marker not in s: raise SystemExit('init anchor missing')
+              s=s.replace(marker,hook+marker,1)
+
+          p.write_text(s,encoding='utf-8')
+          PY
+
+      - name: Rebuild plain-text API inventory from executable schemas and provider contracts
+        run: |
+          rm -f source/payload/api/app/api_inventory_parts/part*.txt
+          python tools/build_v6_inventory.py
+
+      - name: Install Python audit dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r source/payload/api/requirements.txt pytest
+
+      - name: Compile Python sources
+        run: python -m compileall -q source/payload/api/app tools
+
+      - name: Validate inline JavaScript
+        run: node tools/check_inline_javascript.mjs
+
+      - name: Run exhaustive V6 functional and UI audit
+        run: python tools/audit_v6_complete.py
+
+      - name: Run automated test suite
+        env:
+          DATABASE_URL: postgresql://hdp:hdp@127.0.0.1:5432/hdp
+          SQL_READER_URL: postgresql://hdp:hdp@127.0.0.1:5432/hdp
+          HDP_LOCAL_TOKEN: audit-token
+        run: pytest -q source/tests
+
+      - name: Commit regenerated inventory, fixes and audit evidence
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source clients-v6 docs/versions/6.0.0 tools
+          git diff --cached --exit-code && exit 0
+          git commit -m "fix(v6): rebuild API inventory and complete functional UI audit"
+          git push origin HEAD:main
