@@ -24,19 +24,37 @@ _EXACT_SECRET_KEYS = {
     "set_cookie",
     "x_api_key",
 }
+_COMPACT_SECRET_KEYS = {
+    "appidentifier",
+    "authorization",
+    "password",
+    "passwd",
+    "secret",
+    "token",
+    "apikey",
+    "accesstoken",
+    "refreshtoken",
+    "clientsecret",
+    "cookie",
+    "setcookie",
+    "xapikey",
+}
 _SECRET_SUFFIXES = ("_password", "_passwd", "_secret", "_token", "_api_key")
+_COMPACT_SECRET_SUFFIXES = ("password", "passwd", "secret", "token", "apikey")
 
 
 def _normalized_key(value: Any) -> str:
-    key = re.sub(r"[^a-z0-9]+", "_", str(value).casefold()).strip("_")
-    return key
+    return re.sub(r"[^a-z0-9]+", "_", str(value).casefold()).strip("_")
 
 
 def _is_secret_key(value: Any) -> bool:
     key = _normalized_key(value)
-    if key in _EXACT_SECRET_KEYS:
+    compact = key.replace("_", "")
+    if key in _EXACT_SECRET_KEYS or compact in _COMPACT_SECRET_KEYS:
         return True
-    return any(key.endswith(suffix) for suffix in _SECRET_SUFFIXES)
+    if any(key.endswith(suffix) for suffix in _SECRET_SUFFIXES):
+        return True
+    return any(compact.endswith(suffix) for suffix in _COMPACT_SECRET_SUFFIXES) and compact not in {"tokencount"}
 
 
 def _redact(value: Any) -> Any:
