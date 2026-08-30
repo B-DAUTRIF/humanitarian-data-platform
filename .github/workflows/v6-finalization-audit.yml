@@ -31,14 +31,18 @@ jobs:
                   s=s.replace(old,new)
               p.write_text(s,encoding='utf-8')
 
-          patch(Path('source/payload/api/app/main.py'), [
-              ('APP_VERSION = "6.0.0-dev"','APP_VERSION = "6.0.0"'),
-          ])
-          patch(Path('source/payload/api/app/source_registry.py'), [
-              ('REGISTRY_VERSION = "5.0.0"','REGISTRY_VERSION = "6.0.0"'),
-              ('VERIFIED_AT = "2026-08-15"','VERIFIED_AT = "2026-08-30"'),
-              ('HDP/5.0.2','HDP/6.0.0'),
-          ])
+          p=root/'source/payload/api/app/main.py'
+          s=p.read_text(encoding='utf-8')
+          s=re.sub(r'^APP_VERSION\s*=\s*"[^"]+"', 'APP_VERSION = "6.0.0"', s, count=1, flags=re.M)
+          p.write_text(s,encoding='utf-8')
+
+          p=root/'source/payload/api/app/source_registry.py'
+          s=p.read_text(encoding='utf-8')
+          s=re.sub(r'^REGISTRY_VERSION\s*=\s*"[^"]+"', 'REGISTRY_VERSION = "6.0.0"', s, count=1, flags=re.M)
+          s=re.sub(r'^VERIFIED_AT\s*=\s*"[^"]+"', 'VERIFIED_AT = "2026-08-30"', s, count=1, flags=re.M)
+          s=s.replace('HDP/5.0.2','HDP/6.0.0').replace('HDP/6.0.0-dev','HDP/6.0.0')
+          p.write_text(s,encoding='utf-8')
+
           for rel in ['source/src/installer.c','source/src/installer.rc','source/build-windows.ps1']:
               patch(Path(rel), [('5.0.2','6.0.0'),('5,0,2,0','6,0,0,0')])
 
@@ -94,21 +98,29 @@ jobs:
           rm -f source/payload/api/app/api_inventory_parts/part*.txt
           python tools/build_v6_inventory.py
 
-      - name: Install Python audit dependencies
+      - name: Install Python audit dependencies and V6 client
         run: |
           python -m pip install --upgrade pip
           pip install -r source/payload/api/requirements.txt pytest
+          pip install -e clients-v6/python
 
       - name: Compile Python sources
-        run: python -m compileall -q source/payload/api/app tools
+        run: python -m compileall -q source/payload/api/app clients-v6/python/src tools
 
       - name: Validate inline JavaScript
         run: node tools/check_inline_javascript.mjs source/payload/api/static/index.html
 
+      - name: Diagnose notebook API contract
+        run: |
+          grep -nEi 'notebook|cells|execution' source/payload/api/app/main.py | grep -E '@app\.|def |notebook|cells' | tail -n 120 || true
+
       - name: Run exhaustive V6 functional and UI audit
         run: python tools/audit_v6_complete.py
 
-      - name: Run automated test suite
+      - name: Run Python client unit tests
+        run: pytest -q clients-v6/python/tests
+
+      - name: Run automated application test suite
         env:
           DATABASE_URL: postgresql://hdp:hdp@127.0.0.1:5432/hdp
           SQL_READER_URL: postgresql://hdp:hdp@127.0.0.1:5432/hdp
@@ -125,4 +137,4 @@ jobs:
           git commit -m "fix(v6): rebuild API inventory and complete functional UI audit"
           git push origin HEAD:main
 
-# Audit revision 4: validate the actual HDP UI file.
+# Audit revision 5: robust V6 identity, Python client tests, notebook route diagnostics.
