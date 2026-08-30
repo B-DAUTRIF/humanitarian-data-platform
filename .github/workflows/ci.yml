@@ -43,6 +43,12 @@ jobs:
           python -m pip install playwright
       - name: Tests Python et PostgreSQL
         run: python -m unittest discover -s source/tests -p 'test_*.py'
+      - name: Recettes épidémiologiques V6
+        run: |
+          python tools/epidemiology_acceptance.py
+          python tools/epidemiology_reference_acceptance.py
+      - name: Finalisation canonique des sources V6
+        run: python tools/finalize_v6.py
       - name: Compilation Python
         run: python -m compileall -q source/payload/api/app source/payload/github-api source/tests tools
       - name: Syntaxe JavaScript
