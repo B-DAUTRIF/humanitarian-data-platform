@@ -27,6 +27,7 @@ from .main import (
 from .github_sync import router as github_sync_router
 from .api_inventory import router as api_inventory_router
 from .v6_notebook_execution import router as v6_notebook_router
+from .v6_semantic_api import router as semantic_router
 
 
 LEGACY_NOTEBOOK_EXECUTION_PATH = "/api/notebooks/{notebook_id}/cells/{cell_index}/executions"
@@ -42,16 +43,17 @@ app.router.routes[:] = [
     )
 ]
 
-app.version = "6.0.0"
+app.version = "6.0.0-semantic-router-test"
 app.description = (
     "Humanitarian Data Platform V6 : acquisition, recherche fédérée, gestion locale, "
     "traitements R/Python, synchronisation GitHub et exploitation de sources "
     "humanitaires et sanitaires par projets. Inventaire API vérifiable accessible "
-    "depuis /api-inventory."
+    "depuis /api-inventory. Routeur sémantique de test accessible depuis /api/semantic."
 )
 app.include_router(v6_notebook_router)
 app.include_router(github_sync_router)
 app.include_router(api_inventory_router)
+app.include_router(semantic_router)
 
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
