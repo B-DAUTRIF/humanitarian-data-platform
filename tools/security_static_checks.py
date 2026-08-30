@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+VERSION = "6.0.0"
 
 
 def require(text: str, marker: str, label: str) -> None:
@@ -34,9 +35,10 @@ def main() -> None:
     require(main_source, "validate_public_url", "contrôle SSRF")
     require(main_source, "validate_upload_content", "validation d’import")
     require(main_source, "download_public_file", "transport HTTP à IP épinglée")
-    require(installer, ".env.backup-before-v5.0.2", "sauvegarde de configuration")
+    require(installer, f".env.backup-before-v{VERSION}", "sauvegarde de configuration V6")
+    forbid(installer, ".env.backup-before-v5.0.2", "aucun contrat de sauvegarde V5 actif")
     forbid(installer.casefold(), "down -v", "aucune suppression de volume")
-    print("Contrôles de sécurité statiques: OK")
+    print(f"Contrôles de sécurité statiques HDP {VERSION}: OK")
 
 
 if __name__ == "__main__":
