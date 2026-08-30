@@ -1,11 +1,10 @@
-name: Publish HDP V6 RC
+name: Publish HDP V6 RC2
 
 on:
   push:
     branches: [main]
     paths:
       - "docs/versions/6.0.0/FINAL_TEST_REPORT.md"
-      - ".github/workflows/publish-v6-rc.yml"
   workflow_dispatch:
 
 permissions:
@@ -39,6 +38,13 @@ jobs:
           python tools/epidemiology_acceptance.py
           python tools/epidemiology_reference_acceptance.py
           python tools/finalize_v6.py
+      - name: Vérifier correctif bootstrap Passkey présent
+        shell: pwsh
+        run: |
+          $main=Get-Content source/payload/api/app/main_v6.py -Raw
+          $test=Get-Content tools/browser_auth_bootstrap_e2e.py -Raw
+          if($main -notmatch 'active_passkey_session' -or $main -notmatch 'LOGIN_PATH'){throw 'Bootstrap Passkey V6 corrigé absent'}
+          if($test -notmatch 'document_navigation_counter' -or $test -notmatch 'Reload loop detected'){throw 'Recette anti-reload Passkey absente'}
       - name: Construire installateur Windows 10+ x64
         shell: pwsh
         run: ./source/build-windows.ps1 -OutputDirectory "${{ runner.temp }}/hdp-v6-installer"
@@ -49,6 +55,7 @@ jobs:
           ./tools/windows/windows10_compatibility_gate.ps1 -InstallerPath $exe
           $proof=[ordered]@{
             version='6.0.0'
+            release_candidate='v6.0.0-rc2'
             commit='${{ github.sha }}'
             status='passed'
             target='_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;x64'
@@ -63,7 +70,7 @@ jobs:
       - name: Construire archive complète
         shell: pwsh
         run: |
-          $stage=Join-Path $env:RUNNER_TEMP 'HDP_V6_RC'; New-Item -ItemType Directory -Force $stage|Out-Null
+          $stage=Join-Path $env:RUNNER_TEMP 'HDP_V6_RC2'; New-Item -ItemType Directory -Force $stage|Out-Null
           Copy-Item "${{ runner.temp }}/hdp-v6-installer/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe" $stage
           Copy-Item "${{ runner.temp }}/hdp-v6-installer/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe.sha256" $stage
           Copy-Item -Recurse source/payload (Join-Path $stage 'Linux_et_payload')
@@ -74,52 +81,53 @@ jobs:
           if(Test-Path docs){Copy-Item -Recurse docs (Join-Path $stage 'Documentation')}
           if(Test-Path wiki){Copy-Item -Recurse wiki (Join-Path $stage 'Wiki')}
           Copy-Item README.md,CHANGELOG.md,TODO_Mises_a_jour_HDP.md,VERSION,HDP_STATE.json $stage
-          $zip="${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc1.zip"
+          $zip="${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc2.zip"
           Compress-Archive -Path "$stage/*" -DestinationPath $zip -CompressionLevel Optimal
           $hash=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  HumanitarianDataPlatform_Archive_complete_v6.0.0-rc1.zip"|Set-Content -Encoding ascii "${zip}.sha256"
+          "$hash  HumanitarianDataPlatform_Archive_complete_v6.0.0-rc2.zip"|Set-Content -Encoding ascii "${zip}.sha256"
       - name: Préparer dossier GitHub dédié
         shell: pwsh
         run: |
-          $drop='releases/v6.0.0-rc1'
+          $drop='releases/v6.0.0-rc2'
           New-Item -ItemType Directory -Force $drop|Out-Null
           Copy-Item "${{ runner.temp }}/hdp-v6-installer/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe" "$drop/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"
           Copy-Item "${{ runner.temp }}/hdp-v6-installer/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe.sha256" "$drop/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe.sha256"
-          Copy-Item "${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc1.zip" "$drop/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc1.zip"
-          Copy-Item "${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc1.zip.sha256" "$drop/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc1.zip.sha256"
+          Copy-Item "${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc2.zip" "$drop/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc2.zip"
+          Copy-Item "${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc2.zip.sha256" "$drop/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc2.zip.sha256"
           Copy-Item "docs/versions/6.0.0/FINAL_TEST_REPORT.md" "$drop/FINAL_TEST_REPORT.md"
           Copy-Item "${{ runner.temp }}/WINDOWS_STATIC_COMPATIBILITY.json" "$drop/WINDOWS_STATIC_COMPATIBILITY.json"
           @"
-          # HDP V6.0.0 RC1
+          # HDP V6.0.0 RC2
           Livrables construits par GitHub Actions depuis le commit source `${{ github.sha }}`.
-          Cette RC satisfait toutes les portes automatisées/hébergées. La promotion `v6.0.0` reste bloquée jusqu'aux recettes réelles Windows 10 x64 et Windows 11 x64 sur le même état source.
+          RC2 remplace RC1 après correction de la boucle de rechargement du bootstrap Passkey et ajout d'une recette navigateur bloquante dédiée.
+          Toutes les portes automatisées/hébergées de RC2 sont rejouées avant publication. La promotion `v6.0.0` reste bloquée jusqu'aux recettes réelles Windows 10 x64 et Windows 11 x64 sur le binaire RC2 exact.
           "@ | Set-Content -Encoding utf8 "$drop/README.md"
       - name: Publier le dossier de livraison dans main
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add releases/v6.0.0-rc1
+          git add releases/v6.0.0-rc2
           git diff --cached --quiet
-          if($LASTEXITCODE -ne 0){ git commit -m "release: publish HDP v6.0.0-rc1 binaries [skip ci]"; git push origin HEAD:main }
+          if($LASTEXITCODE -ne 0){ git commit -m "release: publish HDP v6.0.0-rc2 binaries [skip ci]"; git push origin HEAD:main }
       - name: Créer ou mettre à jour la prerelease GitHub
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $drop='releases/v6.0.0-rc1'
+          $drop='releases/v6.0.0-rc2'
           $assets=@(
             "$drop/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe",
             "$drop/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe.sha256",
-            "$drop/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc1.zip",
-            "$drop/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc1.zip.sha256",
+            "$drop/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc2.zip",
+            "$drop/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc2.zip.sha256",
             "$drop/FINAL_TEST_REPORT.md",
             "$drop/WINDOWS_STATIC_COMPATIBILITY.json"
           )
-          gh release view v6.0.0-rc1 2>$null
+          gh release view v6.0.0-rc2 2>$null
           if($LASTEXITCODE -eq 0){
-            gh release upload v6.0.0-rc1 @assets --clobber
-            gh release edit v6.0.0-rc1 --title "HDP v6.0.0 RC1" --notes-file "$drop/README.md" --prerelease
+            gh release upload v6.0.0-rc2 @assets --clobber
+            gh release edit v6.0.0-rc2 --title "HDP v6.0.0 RC2" --notes-file "$drop/README.md" --prerelease
           } else {
-            gh release create v6.0.0-rc1 @assets --target main --title "HDP v6.0.0 RC1" --notes-file "$drop/README.md" --prerelease
+            gh release create v6.0.0-rc2 @assets --target main --title "HDP v6.0.0 RC2" --notes-file "$drop/README.md" --prerelease
           }
