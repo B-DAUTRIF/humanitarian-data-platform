@@ -31,12 +31,12 @@ def main() -> None:
     text = replace_once(text, catalog_old, catalog_new, "catalog optional filters query")
 
     dev_count = text.count("6.0.0-dev")
-    if dev_count != 3:
-        raise SystemExit(f"release identity: attendu 3 marqueurs 6.0.0-dev, trouvé {dev_count}")
+    if dev_count != 5:
+        raise SystemExit(f"release identity: attendu 5 marqueurs 6.0.0-dev, trouvé {dev_count}")
     text = text.replace("6.0.0-dev", "6.0.0")
 
     TARGET.write_text(text, encoding="utf-8")
-    print("v6_features.py: 3 requêtes optionnelles corrigées; 3 identités dev supprimées")
+    print("v6_features.py: 3 requêtes optionnelles corrigées; 5 identités dev supprimées")
 
 
 if __name__ == "__main__":
