@@ -153,6 +153,7 @@
     <div class="brand"><h1><a id="brand-home" href="#home" aria-label="Revenir à l’accueil de Humanitarian Data Platform">Humanitarian Data Platform</a></h1><p>Données humanitaires, épidémiologiques et sanitaires mondiales · développement 6.0.0 · dernière livraison qualifiée : version 6.0.0</p></div>
     <div class="context">
       <select id="project-select" aria-label="Projet actif"></select>
+      <select id="ui-mode" aria-label="Mode d’interface" title="Mode d’interface"><option value="simple">Simple</option><option value="advanced">Avancé</option><option value="expert">Expert</option></select>
       <span id="health" class="badge">Vérification…</span>
       <button id="logout" class="secondary" type="button">Déconnexion</button>
     </div>
@@ -164,6 +165,8 @@
     <button data-view="intelligence">Règles & Data Grid</button>
     <button data-view="actions">Actions & travaux</button>
     <button data-view="sources">Sources sanitaires</button>
+    <button data-view="source-settings">Paramètres des sources</button>
+    <button data-view="inventory">Inventaire API</button>
     <button data-view="projects">Projets & préférences</button>
     <button data-view="data">Données locales</button>
     <button data-view="rss">Flux RSS</button>
@@ -186,6 +189,10 @@
       <p>Les données restent organisées par projet sur votre poste. Vous pouvez comparer des catalogues en parallèle, importer vos propres données, scripts et documents, cartographier les fichiers géographiques, planifier les mises à jour et interroger les vues SQL du projet en lecture seule.</p>
       <div class="actions"><button type="button" data-go-view="search">Commencer une recherche</button><button type="button" class="secondary" data-go-view="data">Ouvrir la bibliothèque</button></div>
     </div>
+  </section>
+
+  <section id="view-inventory" class="view">
+    <div class="card"><h2>Inventaire API exhaustif</h2><p class="intro">Tous les paramètres inventoriés sont visibles. Le vert indique les paramètres effectivement mappés dans HDP ; les autres restent explicitement informatifs jusqu’à validation de leur adaptateur.</p><div class="actions"><a class="button" href="/api-inventory" target="_blank" rel="noopener">Ouvrir l’inventaire complet</a></div><iframe title="Inventaire API HDP V6" src="/api-inventory" style="width:100%;height:70vh;border:1px solid var(--line);border-radius:10px;margin-top:14px;background:white"></iframe></div>
   </section>
 
   <section id="view-intelligence" class="view">
@@ -1225,6 +1232,9 @@
   q('#notebook-form').addEventListener('submit',async event=>{event.preventDefault();try{const data=await api(`/api/projects/${state.projectId}/notebooks`,{method:'POST',body:JSON.stringify({name:q('#notebook-name').value,kernel:q('#notebook-kernel').value,description:'Notebook créé dans HDP 6.0.0',cells:[{cell_type:'code',source:q('#notebook-code').value,metadata:{}}]})});event.target.reset();setStatus('#notebook-status',`Notebook créé · révision ${data.revision} · SHA-256 ${data.sha256}`);await loadNotebooks();}catch(error){setStatus('#notebook-status',error.message,true);}});
 
   (async()=>{await loadHealth();try{await Promise.all([loadSources(),loadCodFamilies()]);await loadProjects();await Promise.all([loadResources(),loadScripts(),loadProcessingWorkspace(),loadSchedules(),loadSourceSettings(),loadRss(),loadTimeline(),loadMapLayers(),renderSearchSourceFields()]);const requested=window.location.hash.replace('#','');activateView(document.getElementById(`view-${requested}`)?requested:'home');}catch(error){setStatus('#project-status',error.message,true);setStatus('#source-catalog-status',error.message,true);}})();
+</script>
+<script>
+(()=>{const m=document.getElementById('ui-mode');if(!m)return;const saved=localStorage.getItem('hdp-ui-mode')||'advanced';m.value=saved;document.body.dataset.uiMode=saved;m.addEventListener('change',()=>{document.body.dataset.uiMode=m.value;localStorage.setItem('hdp-ui-mode',m.value);});})();
 </script>
 </body>
 </html>

@@ -39,6 +39,7 @@ def text(path: str | Path) -> str:
 def route_normal_form(path: str) -> str:
     path = re.sub(r"\$\{[^}]+\}", "{x}", path)
     path = re.sub(r"\{[^}]+\}", "{x}", path)
+    path = re.sub(r"/\d+(?=/|$)", "/{x}", path)
     return path.rstrip("/") or "/"
 
 
