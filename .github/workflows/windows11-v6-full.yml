@@ -2,12 +2,16 @@ name: HDP V6 Windows 11 x64 qualification
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/windows10-v6-full.yml", ".github/workflows/windows11-v6-full.yml", "source/**", "clients-v6/**", "tools/**", "VERSION", "HDP_STATE.json"]
 
 permissions:
   contents: read
 
 jobs:
   windows11-real-e2e:
+    # Porte de release obligatoire. Ce job exige un Windows 11 x64 réel portant ces labels.
     runs-on: [self-hosted, Windows, X64, windows-11, hdp-v6]
     timeout-minutes: 60
     steps:
