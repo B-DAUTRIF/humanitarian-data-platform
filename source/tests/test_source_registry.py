@@ -25,21 +25,13 @@ class SourceRegistryContractTest(unittest.TestCase):
         self.assertEqual(
             set(CONNECTORS),
             {
-                "hdx",
-                "reliefweb",
-                "who-gho",
-                "world-bank-health",
-                "unicef-sdmx",
-                "un-sdg",
-                "dhs",
-                "hdx-hapi",
-                "unhcr",
-                "gdacs",
+                "hdx", "reliefweb", "who-gho", "world-bank-health", "unicef-sdmx",
+                "un-sdg", "dhs", "hdx-hapi", "unhcr", "gdacs",
             },
         )
         for source_id in CONNECTORS:
             definition = connector_definition(source_id)
-            self.assertEqual(definition["registry_version"], "6.0.0-dev")
+            self.assertEqual(definition["registry_version"], "6.0.0")
             self.assertTrue(definition["documentation_evidence"])
             self.assertEqual(
                 merge_values(source_id, definition["project_defaults"], scope="project"),
@@ -54,10 +46,7 @@ class SourceRegistryContractTest(unittest.TestCase):
             validate_values("hdx", values, scope="project")
 
     def test_global_settings_reject_unknown_and_invalid_values(self) -> None:
-        defaults = {
-            name: definition["default"]
-            for name, definition in GLOBAL_SCHEMA["properties"].items()
-        }
+        defaults = {name: definition["default"] for name, definition in GLOBAL_SCHEMA["properties"].items()}
         self.assertEqual(validate_values("hdx", defaults, scope="global"), defaults)
         with self.assertRaisesRegex(ValueError, "Paramètres inconnus"):
             validate_values("hdx", {**defaults, "token": "secret"}, scope="global")
@@ -67,16 +56,12 @@ class SourceRegistryContractTest(unittest.TestCase):
     def test_array_parameters_are_validated_and_deduplicated(self) -> None:
         defaults = connector_definition("dhs")["project_defaults"]
         values = validate_values(
-            "dhs",
-            {**defaults, "query": "cholera", "country_ids": ["ML", "ML", "SN"]},
-            scope="project",
+            "dhs", {**defaults, "query": "cholera", "country_ids": ["ML", "ML", "SN"]}, scope="project"
         )
         self.assertEqual(values["country_ids"], ["ML", "SN"])
         with self.assertRaisesRegex(ValueError, "format attendu"):
             validate_values(
-                "dhs",
-                {**defaults, "query": "cholera", "country_ids": ["M L"]},
-                scope="project",
+                "dhs", {**defaults, "query": "cholera", "country_ids": ["M L"]}, scope="project"
             )
 
     def test_preview_stays_on_allowlist_and_never_contains_a_secret(self) -> None:
@@ -88,27 +73,19 @@ class SourceRegistryContractTest(unittest.TestCase):
             self.assertIn(preview["display_url"], preview["curl"])
             self.assertNotIn("real-secret", preview["curl"])
         reliefweb = request_preview(
-            "reliefweb",
-            {**connector_definition("reliefweb")["project_defaults"], "query": "cholera"},
+            "reliefweb", {**connector_definition("reliefweb")["project_defaults"], "query": "cholera"}
         )
         self.assertIn("RELIEFWEB_APPNAME", reliefweb["display_url"])
         hapi = request_preview(
-            "hdx-hapi",
-            {**connector_definition("hdx-hapi")["project_defaults"], "query": "cholera"},
+            "hdx-hapi", {**connector_definition("hdx-hapi")["project_defaults"], "query": "cholera"}
         )
         self.assertIn("HDX_HAPI_APP_IDENTIFIER", hapi["display_url"])
         self.assertNotIn("real-secret", hapi["display_url"])
 
     def test_reference_portal_is_enriched_without_project_contract(self) -> None:
-        catalog = enrich_source_catalog(
-            [
-                {
-                    "id": "reference",
-                    "documentation_url": "https://example.org/docs",
-                    "searchable": False,
-                }
-            ]
-        )
+        catalog = enrich_source_catalog([
+            {"id": "reference", "documentation_url": "https://example.org/docs", "searchable": False}
+        ])
         self.assertIsNone(catalog[0]["project_schema"])
         self.assertEqual(catalog[0]["documentation_evidence"], ["https://example.org/docs"])
 
@@ -117,19 +94,14 @@ class SourceRegistryContractTest(unittest.TestCase):
             definition = connector_definition(source_id)
             properties = definition["project_schema"]["properties"]
             self.assertTrue({"query", "date_from", "date_to", "location"} <= set(properties))
-            self.assertEqual(definition["capabilities"]["contract_version"], "6.0.0-dev")
-            self.assertEqual(
-                definition["capabilities"]["criteria"]["location"],
-                "normalized_post_filter",
-            )
+            self.assertEqual(definition["capabilities"]["contract_version"], "6.0.0")
+            self.assertEqual(definition["capabilities"]["criteria"]["location"], "normalized_post_filter")
 
     def test_invalid_common_date_range_is_rejected(self) -> None:
         defaults = connector_definition("hdx")["project_defaults"]
         with self.assertRaisesRegex(ValueError, "antérieure"):
             validate_values(
-                "hdx",
-                {**defaults, "date_from": "2026-08-16", "date_to": "2026-08-15"},
-                scope="project",
+                "hdx", {**defaults, "date_from": "2026-08-16", "date_to": "2026-08-15"}, scope="project"
             )
 
 
