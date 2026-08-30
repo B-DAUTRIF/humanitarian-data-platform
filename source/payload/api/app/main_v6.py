@@ -27,6 +27,7 @@ from .main import (
 from .github_sync import router as github_sync_router
 from .api_inventory import router as api_inventory_router
 from .v6_notebook_execution import router as v6_notebook_router
+from .v6_semantic_api import router as semantic_router
 
 
 LEGACY_NOTEBOOK_EXECUTION_PATH = "/api/notebooks/{notebook_id}/cells/{cell_index}/executions"
@@ -42,16 +43,17 @@ app.router.routes[:] = [
     )
 ]
 
-app.version = "6.0.0"
+app.version = "6.0.0-semantic-router-test"
 app.description = (
     "Humanitarian Data Platform V6 : acquisition, recherche fédérée, gestion locale, "
     "traitements R/Python, synchronisation GitHub et exploitation de sources "
     "humanitaires et sanitaires par projets. Inventaire API vérifiable accessible "
-    "depuis /api-inventory."
+    "depuis /api-inventory. Routeur sémantique de test accessible depuis /api/semantic."
 )
 app.include_router(v6_notebook_router)
 app.include_router(github_sync_router)
 app.include_router(api_inventory_router)
+app.include_router(semantic_router)
 
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -60,11 +62,20 @@ LOGIN_PATH = STATIC_DIR / "login.html"
 
 
 def v6_index_html() -> str:
-    """Return the authenticated V6 UI with inventory controls injected once."""
+    """Return the authenticated V6 UI with V6 test controls injected once."""
     html = INDEX_PATH.read_text(encoding="utf-8")
-    marker = '<script src="/api-inventory/native.js"></script>'
-    if marker not in html:
-        html = html.replace("</body>", f"{marker}</body>")
+    inventory_marker = '<script src="/api-inventory/native.js"></script>'
+    if inventory_marker not in html:
+        html = html.replace("</body>", f"{inventory_marker}</body>")
+    semantic_marker = 'id="hdp-semantic-router-test-link"'
+    if semantic_marker not in html:
+        banner = (
+            '<div id="hdp-semantic-router-test-link" style="position:fixed;right:18px;bottom:18px;z-index:9999;'
+            'background:#172033;border-radius:8px;padding:10px 14px;box-shadow:0 4px 16px #0003">'
+            '<a href="/api/semantic/ui" style="color:white;text-decoration:none;font-weight:600">'
+            'Routeur sémantique — TEST</a></div>'
+        )
+        html = html.replace("</body>", f"{banner}</body>")
     return html
 
 

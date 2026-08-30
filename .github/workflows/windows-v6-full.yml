@@ -4,7 +4,7 @@ name: HDP V6 full Windows installer
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, "test/v6-semantic-router"]
     paths: [".github/workflows/windows-v6-full.yml", "source/**", "clients-v6/**", "docs/**", "tools/**", "VERSION", "HDP_STATE.json", "CHANGELOG.md", "TODO_Mises_a_jour_HDP.md"]
 permissions: {contents: read}
 jobs:
@@ -39,10 +39,11 @@ jobs:
       - name: Finalisation canonique des sources V6
         shell: pwsh
         run: python tools/finalize_v6.py
-      - name: Tests Python
+      - name: Tests Python et routeur sémantique
         shell: pwsh
         run: |
           python -m compileall -q source/payload/api/app clients-v6/python
+          python -m unittest discover -s source/tests -p 'test_semantic_router.py'
           pip install -e clients-v6/python
           if(Test-Path clients-v6/python/tests){ pytest -q clients-v6/python/tests }
       - name: Vérifier raccourci Bureau obligatoire
