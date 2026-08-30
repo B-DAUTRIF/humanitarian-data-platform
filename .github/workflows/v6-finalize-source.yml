@@ -1,0 +1,50 @@
+name: HDP V6 finalize source
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/v6-finalize-source.yml"]
+permissions:
+  contents: write
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Finaliser identité V6 native
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          replacements={
+            'source/src/installer.c': [('6.0.0-dev','6.0.0')],
+            'source/payload/api/app/source_registry.py': [('6.0.0-dev','6.0.0'),('HDP/6.0.0-dev','HDP/6.0.0')],
+            'source/payload/api/app/main.py': [('6.0.0-dev','6.0.0')],
+            'source/payload/api/static/index.html': [('6.0.0-dev','6.0.0')],
+          }
+          for name,pairs in replacements.items():
+              p=Path(name)
+              if not p.exists(): continue
+              s=p.read_text(encoding='utf-8')
+              for old,new in pairs: s=s.replace(old,new)
+              p.write_text(s,encoding='utf-8',newline='\n')
+          PY
+      - name: Générer inventaire vérifiable et documentation
+        run: python tools/build_v6_inventory.py
+      - name: Contrôles statiques
+        run: |
+          python -m compileall -q source/payload/api/app tools
+          grep -q 'APP_VERSION L"6.0.0"' source/src/installer.c
+          grep -q 'REGISTRY_VERSION = "6.0.0"' source/payload/api/app/source_registry.py
+          test -n "$(find source/payload/api/app/api_inventory_parts -name 'part*.jsonl' -print -quit)"
+      - name: Commit de qualification source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add source/src/installer.c source/payload/api/app/source_registry.py source/payload/api/app/main.py source/payload/api/static/index.html source/payload/api/app/api_inventory_parts docs/versions/6.0.0
+          if git diff --cached --quiet; then echo 'Aucun changement'; exit 0; fi
+          git commit -m 'chore(v6): finalize native version and verified API inventory'
+          git push origin HEAD:main
