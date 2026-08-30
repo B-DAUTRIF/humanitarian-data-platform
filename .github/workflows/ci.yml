@@ -84,7 +84,7 @@ jobs:
         run: |
           docker compose -f source/payload/compose.yaml --profile analytics build r-service runner-python
           docker compose -f source/payload/compose.yaml --profile analytics run --rm --no-deps --entrypoint Rscript r-service -e "stopifnot(requireNamespace('plumber', quietly=TRUE), requireNamespace('jsonlite', quietly=TRUE), requireNamespace('httr2', quietly=TRUE), requireNamespace('writexl', quietly=TRUE), requireNamespace('testthat', quietly=TRUE))"
-          docker compose -f source/payload/compose.yaml --profile analytics run --rm --no-deps -v "$PWD/clients-v6/R:/pkg:ro" --entrypoint Rscript r-service -e "status <- system('R CMD INSTALL /pkg'); stopifnot(status == 0); library(testthat); library(HDPClientsR); test_dir('/pkg/tests/testthat', stop_on_failure=TRUE)"
+          docker compose -f source/payload/compose.yaml --profile analytics run --rm --no-deps -v "$PWD/clients-v6/R:/pkg:ro" --entrypoint Rscript r-service -e "lib <- '/tmp/hdp-r-lib'; dir.create(lib, recursive=TRUE, showWarnings=FALSE); status <- system2('R', c('CMD','INSTALL','-l',lib,'/pkg')); stopifnot(status == 0); .libPaths(c(lib,.libPaths())); library(testthat); library(HDPClientsR); test_dir('/pkg/tests/testthat', stop_on_failure=TRUE)"
           docker compose -f source/payload/compose.yaml up --no-build spool-init
           docker compose -f source/payload/compose.yaml down -v
         env:
