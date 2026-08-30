@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import sys
 import unittest
+from pathlib import Path
 
-from source.payload.api.app.semantic_provenance import canonical_json, query_fingerprint
+APP_ROOT = Path(__file__).resolve().parents[1] / "payload" / "api"
+sys.path.insert(0, str(APP_ROOT))
+
+from app.semantic_provenance import canonical_json, query_fingerprint  # noqa: E402
 
 
 class SemanticProvenanceSecurityTests(unittest.TestCase):
