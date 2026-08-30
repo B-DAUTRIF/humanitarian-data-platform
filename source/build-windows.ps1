@@ -27,7 +27,10 @@ try {
     & node "scripts/generate_payload.mjs" "payload" "src/payload_generated.h"
     if ($LASTEXITCODE -ne 0) { throw "La génération du payload a échoué ($LASTEXITCODE)." }
     $buildScript = Join-Path $OutputDirectory "build-msvc.cmd"
-    $compilerCommand = 'cl.exe /nologo /O2 /W4 /WX /utf-8 /std:c17 /D_CRT_SECURE_NO_WARNINGS "src\installer.c" "src\installer.res" ' +
+    # Windows 10 x64 est la plateforme minimale officiellement supportée par HDP V6.
+    # Ces macros demandent au SDK de masquer les API postérieures à la cible Win10
+    # lorsqu'elles sont correctement gardées par les en-têtes Microsoft.
+    $compilerCommand = 'cl.exe /nologo /O2 /W4 /WX /utf-8 /std:c17 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0A00 /DNTDDI_VERSION=0x0A000000 "src\installer.c" "src\installer.res" ' +
         "/link /OUT:`"$installerPath`" /SUBSYSTEM:WINDOWS /MACHINE:X64 " +
         '/DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA comctl32.lib shell32.lib advapi32.lib winhttp.lib ws2_32.lib bcrypt.lib gdi32.lib user32.lib ole32.lib uuid.lib || exit /b 1'
     $commands = @('@echo off', ('call "{0}" || exit /b 1' -f $vcvars), 'rc.exe /nologo /c 65001 /fo "src\installer.res" "src\installer.rc" || exit /b 1', $compilerCommand)
@@ -48,5 +51,6 @@ if ($LASTEXITCODE -ne 0 -or $headers -notmatch "machine \(x64\)" -or $headers -n
 $hash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $hashFile = "$installerPath.sha256"
 Set-Content -LiteralPath $hashFile -Encoding ascii -NoNewline -Value "$hash  $installerName`n"
-Write-Host "Installateur Windows vérifié : $installerPath"
+Write-Host "Installateur Windows 10+ x64 vérifié : $installerPath"
+Write-Host "Cible SDK : _WIN32_WINNT=0x0A00 ; NTDDI_VERSION=0x0A000000"
 Write-Host "SHA-256 : $hash"
