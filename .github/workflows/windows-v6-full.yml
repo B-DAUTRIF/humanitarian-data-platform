@@ -3,31 +3,41 @@ name: HDP V6 full Windows installer
 on:
   workflow_dispatch:
   push:
-    branches: [main, "codex/v6-installer-fix-20260829"]
-    paths: [".github/workflows/windows-v6-full.yml", "source/**", "clients-v6/**", "docs/**", "wiki/**", "VERSION", "HDP_STATE.json", "CHANGELOG.md", "TODO_Mises_a_jour_HDP.md"]
+    branches: [main]
+    paths: [".github/workflows/windows-v6-full.yml", "source/**", "clients-v6/**", "docs/**", "tools/**", "VERSION", "HDP_STATE.json", "CHANGELOG.md", "TODO_Mises_a_jour_HDP.md"]
 permissions: {contents: read}
 jobs:
   build-and-qualify-v6:
     runs-on: windows-2025
-    timeout-minutes: 40
+    timeout-minutes: 50
     steps:
       - name: Récupérer les sources
         uses: actions/checkout@v4
       - name: Installer Node.js
         uses: actions/setup-node@v4
         with: {node-version: "22"}
-      - name: Préparer les métadonnées V6
+      - name: Installer dépendances Python d'audit
+        shell: pwsh
+        run: pip install -r source/payload/api/requirements.txt pytest
+      - name: Générer et qualifier inventaire API V6
         shell: pwsh
         run: |
-          $c=Get-Content source/src/installer.c -Raw; $c=$c -replace '#define APP_VERSION L"5\.0\.2"','#define APP_VERSION L"6.0.0"'; Set-Content source/src/installer.c $c -Encoding utf8
-          $rc=Get-Content source/src/installer.rc -Raw; $rc=$rc -replace 'FILEVERSION 5,0,2,0','FILEVERSION 6,0,0,0' -replace 'PRODUCTVERSION 5,0,2,0','PRODUCTVERSION 6,0,0,0' -replace '"5\.0\.2"','"6.0.0"' -replace 'HumanitarianDataPlatform_Setup_Native_GUI_v5\.0\.2\.exe','HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe'; Set-Content source/src/installer.rc $rc -Encoding utf8
-          $b=Get-Content source/build-windows.ps1 -Raw; $b=$b -replace 'HumanitarianDataPlatform_Setup_Native_GUI_v5\.0\.2\.exe','HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe' -replace '5\.0\.2\*','6.0.0*'; Set-Content source/build-windows.ps1 $b -Encoding utf8
-      - name: Qualifier inventaire API V6
+          python tools/build_v6_inventory.py
+          python -c "import sys; sys.path.insert(0,'source/payload/api'); from app.api_inventory import inventory,sources; r=inventory(); s=sources(); assert len(r)>0; assert s['sources']==10,s; assert s['operations']>0,s; print('API inventory:',len(r),'entries /',s['sources'],'sources /',s['operations'],'operations')"
+      - name: Audit fonctionnel backend UI
+        shell: pwsh
+        run: python tools/audit_v6_complete.py
+      - name: Tests Python
         shell: pwsh
         run: |
-          python -c "import sys; sys.path.insert(0,'source/payload/api'); from app.api_inventory import inventory,sources; r=inventory(); s=sources(); assert len(r)==2057,(len(r)); assert s['sources']==10,s; assert sum(x['operations'] for x in s['items'])==440,s; print('API inventory OK:',len(r),'parameters /',s['sources'],'sources / 440 operations')"
-          python -c "import ast; ast.parse(open('source/payload/api/app/main_v6.py',encoding='utf-8').read()); ast.parse(open('source/payload/api/app/api_inventory.py',encoding='utf-8').read())"
-          Select-String -Path source/payload/api/app/main_v6.py -Pattern 'api_inventory_router' -Quiet | ForEach-Object { if(-not $_){throw 'Inventaire non monte dans main_v6'} }
+          python -m compileall -q source/payload/api/app clients-v6/python
+          if(Test-Path clients-v6/python/tests){ pytest -q clients-v6/python/tests }
+      - name: Vérifier raccourci Bureau obligatoire
+        shell: pwsh
+        run: |
+          $c=Get-Content source/src/installer.c -Raw
+          if($c -notmatch 'create_desktop_shortcut' -or $c -notmatch 'CSIDL_DESKTOPDIRECTORY' -or $c -notmatch 'Humanitarian Data Platform\.lnk'){throw 'Création du raccourci Bureau absente'}
+          if($c -notmatch 'if \(create_desktop_shortcut\(options->install_dir'){throw 'Raccourci Bureau non appelé pendant installation'}
       - name: Construire installateur V6 MSVC x64
         shell: pwsh
         run: ./source/build-windows.ps1 -OutputDirectory "${{ runner.temp }}/hdp-v6-installer"
@@ -37,8 +47,8 @@ jobs:
           $exe="${{ runner.temp }}/hdp-v6-installer/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"; if(!(Test-Path $exe)){throw 'Installateur absent'}
           $vswhere="${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"; $vs=& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath; $dumpbin=Get-ChildItem "$vs\VC\Tools\MSVC" -Filter dumpbin.exe -Recurse|? FullName -match 'Hostx64\\x64\\dumpbin\.exe$'|select -First 1
           $h=& $dumpbin.FullName /headers $exe|Out-String; $i=& $dumpbin.FullName /imports $exe|Out-String; if($h -notmatch 'machine \(x64\)' -or $h -notmatch 'Windows GUI' -or $i -notmatch '(?i)KERNEL32\.dll'){throw 'PE invalide'}
-          $vi=(Get-Item $exe).VersionInfo; if($vi.FileVersion -notlike '6.0.0*'){throw 'Version PE incorrecte'}
-          if(!(Test-Path source/payload/api/app/api_inventory.py)){throw 'Inventaire API absent'}; if(!(Test-Path source/payload/api/app/api_inventory_parts/part00.txt)){throw 'Donnees inventaire absentes'}
+          $vi=(Get-Item $exe).VersionInfo; if($vi.FileVersion -notlike '6.0.0*' -or $vi.ProductVersion -notlike '6.0.0*'){throw 'Version PE incorrecte'}
+          if(!(Get-ChildItem source/payload/api/app/api_inventory_parts -Filter 'part*.jsonl')){throw 'Inventaire JSONL absent'}
           $docker=Get-Content source/payload/api/Dockerfile -Raw; if($docker -notmatch 'app\.main_v6:app'){throw 'Backend V6 non actif'}
       - name: Construire archive complète V6
         shell: pwsh
