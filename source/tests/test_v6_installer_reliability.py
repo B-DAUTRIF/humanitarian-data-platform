@@ -115,10 +115,10 @@ class V6InstallerReliabilityTest(unittest.TestCase):
         ):
             self.assertIn(marker, self.source)
 
-    def test_installer_declares_the_v6_development_version(self) -> None:
+    def test_installer_declares_the_final_v6_version(self) -> None:
         resources = (SOURCE_ROOT / "src" / "installer.rc").read_text(encoding="utf-8")
         manifest = (SOURCE_ROOT / "src" / "installer.manifest").read_text(encoding="utf-8")
-        self.assertIn('#define APP_VERSION L"6.0.0-dev"', self.source)
+        self.assertIn('#define APP_VERSION L"6.0.0"', self.source)
         self.assertIn(".env.backup-before-v6.0.0", self.source)
         self.assertIn("FILEVERSION 6,0,0,0", resources)
         self.assertIn('assemblyIdentity version="6.0.0.0"', manifest)
