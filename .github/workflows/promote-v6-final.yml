@@ -8,8 +8,8 @@ permissions:
 
 env:
   RELEASE_TAG: v6.0.0
-  RC_TAG: v6.0.0-rc1
-  RC_EXE_SHA256: 559b2ad3491e491b7b3a67d8eebbed76bbaf3c81d9e534e398d8e9bbbfb10df5
+  RC_TAG: v6.0.0-rc2
+  RC_EXE_SHA256: dc828ddc31eea2efe8ace9aa585b64cad6770cbbd4bacf490e27918999d4dd1c
 
 jobs:
   promote:
@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Vérifier les deux qualifications réelles sur le binaire RC exact
+      - name: Vérifier les deux qualifications réelles sur le binaire RC2 exact
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -38,7 +38,7 @@ jobs:
           }
           check_real_gate windows10-v6-full.yml "Windows 10 x64 réel"
           check_real_gate windows11-v6-full.yml "Windows 11 x64 réel"
-      - name: Vérifier que les preuves Windows portent sur le même EXE RC
+      - name: Vérifier que les preuves Windows portent sur le même EXE RC2
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -51,36 +51,36 @@ jobs:
             run_id=$(gh api --method GET "repos/$repo/actions/workflows/$workflow/runs" -f status=success -f per_page=100 --jq '.workflow_runs[0].id')
             [ -n "$run_id" ] || { echo "Aucun run vert pour $workflow" >&2; exit 1; }
             artifact=$(gh api "repos/$repo/actions/runs/$run_id/artifacts" --jq ".artifacts[] | select(.name|startswith(\"$prefix\")) | .archive_download_url" | head -1)
-            [ -n "$artifact" ] || { echo "Preuve absente pour $workflow" >&2; exit 1; }
+            [ -n "$artifact" ] || { echo "Preuve RC2 absente pour $workflow" >&2; exit 1; }
             tmp=$(mktemp -d)
             gh api "$artifact" > "$tmp/proof.zip"
             unzip -q "$tmp/proof.zip" -d "$tmp/proof"
-            hash=$(python -c 'import json,pathlib,sys; p=next(pathlib.Path(sys.argv[1]).glob("*.json")); d=json.loads(p.read_text(encoding="utf-8-sig")); assert d.get("status")=="passed", d; print(d["installer_sha256"].lower())' "$tmp/proof")
-            if [ "$hash" != "$RC_EXE_SHA256" ]; then
-              echo "Preuve $workflow sur un autre EXE: $hash" >&2
+            proof=$(python -c 'import json,pathlib,sys; p=next(pathlib.Path(sys.argv[1]).glob("*.json")); d=json.loads(p.read_text(encoding="utf-8-sig")); assert d.get("status")=="passed", d; assert d.get("artifact")=="v6.0.0-rc2", d; print(d["installer_sha256"].lower())' "$tmp/proof")
+            if [ "$proof" != "$RC_EXE_SHA256" ]; then
+              echo "Preuve $workflow sur un autre EXE: $proof" >&2
               exit 1
             fi
           }
-          verify_artifact windows10-v6-full.yml HDP-V6-Windows10-qualification-
-          verify_artifact windows11-v6-full.yml HDP-V6-Windows11-qualification-
+          verify_artifact windows10-v6-full.yml HDP-V6-Windows10-RC2-qualification-
+          verify_artifact windows11-v6-full.yml HDP-V6-Windows11-RC2-qualification-
       - name: Rejouer le gate fonctionnel sur la source courante
         shell: bash
         run: python tools/v6_use_case_gate.py
-      - name: Préparer le dossier final depuis les octets RC qualifiés
+      - name: Préparer le dossier final depuis les octets RC2 qualifiés
         shell: bash
         run: |
           set -euo pipefail
-          src=releases/v6.0.0-rc1
+          src=releases/v6.0.0-rc2
           dst=releases/v6.0.0
           rm -rf "$dst"
           mkdir -p "$dst"
           cp "$src/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe" "$dst/"
           cp "$src/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe.sha256" "$dst/"
-          cp "$src/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc1.zip" "$dst/HumanitarianDataPlatform_Archive_complete_v6.0.0.zip"
+          cp "$src/HumanitarianDataPlatform_Archive_complete_v6.0.0-rc2.zip" "$dst/HumanitarianDataPlatform_Archive_complete_v6.0.0.zip"
           sha256sum "$dst/HumanitarianDataPlatform_Archive_complete_v6.0.0.zip" | sed 's#releases/v6.0.0/##' > "$dst/HumanitarianDataPlatform_Archive_complete_v6.0.0.zip.sha256"
           cp "$src/FINAL_TEST_REPORT.md" "$dst/FINAL_TEST_REPORT.md"
           cp "$src/WINDOWS_STATIC_COMPATIBILITY.json" "$dst/WINDOWS_STATIC_COMPATIBILITY.json"
-          printf '# HDP V6.0.0\n\nRelease finale promue uniquement après qualifications réelles Windows 10 x64 et Windows 11 x64 sur le même EXE publié.\n' > "$dst/README.md"
+          printf '# HDP V6.0.0\n\nRelease finale promue uniquement après qualifications réelles Windows 10 x64 et Windows 11 x64 sur le même EXE RC2 publié.\n' > "$dst/README.md"
           test "$(sha256sum "$dst/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe" | cut -d' ' -f1)" = "$RC_EXE_SHA256"
       - name: Publier le dossier final dans main
         shell: bash
