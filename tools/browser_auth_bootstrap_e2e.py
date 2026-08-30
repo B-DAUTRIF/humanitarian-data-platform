@@ -20,14 +20,21 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
-def navigation_counter(page):
+def document_navigation_counter(page):
+    """Collect only real main-document navigation requests.
+
+    Same-document hash changes such as ``/#home`` are deliberately ignored: they do
+    not issue a network navigation request and therefore are not reloads. The original
+    regression (``location.assign('/')`` after a 401) does issue another document
+    request and is still detected.
+    """
     events: list[str] = []
 
-    def record(frame):
-        if frame == page.main_frame:
-            events.append(frame.url)
+    def record(request):
+        if request.is_navigation_request() and request.frame == page.main_frame:
+            events.append(request.url)
 
-    page.on("framenavigated", record)
+    page.on("request", record)
     return events
 
 
@@ -104,7 +111,7 @@ def main() -> int:
         # UC-AUTH-BOOT-01: no session. Root must remain on the stable login page.
         anonymous = browser.new_context()
         page = anonymous.new_page()
-        navigations = navigation_counter(page)
+        navigations = document_navigation_counter(page)
         response = page.goto(base + "/", wait_until="networkidle", timeout=30_000)
         require(response is not None and response.status == 200, "Anonymous root did not return HTTP 200")
         page.wait_for_selector("#authenticate, #register", timeout=10_000)
@@ -116,8 +123,8 @@ def main() -> int:
         protected = anonymous.request.get(base + "/api/projects")
         require(protected.status == 401, f"Protected API should be 401 anonymously, got {protected.status}")
         time.sleep(1)
-        require(len(navigations) == 1, "Protected API 401 triggered browser navigation")
-        report["anonymous_navigation_count"] = len(navigations)
+        require(len(navigations) == 1, "Protected API 401 triggered browser document navigation")
+        report["anonymous_document_navigation_count"] = len(navigations)
         anonymous.close()
 
         # UC-AUTH-BOOT-02: valid synthetic server-side session. The real V6 UI must load once.
@@ -138,17 +145,18 @@ def main() -> int:
             ]
         )
         page = authenticated.new_page()
-        auth_navigations = navigation_counter(page)
+        auth_navigations = document_navigation_counter(page)
         response = page.goto(base + "/", wait_until="domcontentloaded", timeout=30_000)
         require(response is not None and response.status == 200, "Authenticated root did not return HTTP 200")
         page.wait_for_selector("[data-view]", timeout=20_000)
         page.wait_for_timeout(2500)
         require(page.title() == "Humanitarian Data Platform 6.0.0", f"Authenticated UI title incorrect: {page.title()}")
-        require(len(auth_navigations) == 1, f"Unexpected navigation while authenticated: {auth_navigations}")
+        require(len(auth_navigations) == 1, f"Unexpected document reload while authenticated: {auth_navigations}")
         page.locator('[data-view="source-settings"]').click()
         page.locator("#native-api-inventory-panel").wait_for(state="visible", timeout=20_000)
         require(page.locator("#inv-source option").count() == 10, "Authenticated inventory bootstrap failed")
-        report["authenticated_navigation_count"] = len(auth_navigations)
+        require(len(auth_navigations) == 1, f"Source settings caused a document reload: {auth_navigations}")
+        report["authenticated_document_navigation_count"] = len(auth_navigations)
 
         # UC-AUTH-BOOT-03: expire the same server-side session. A fresh root request must
         # transition to login exactly once and remain stable, never reload recursively.
@@ -168,14 +176,14 @@ def main() -> int:
             ]
         )
         page = expired.new_page()
-        expired_navigations = navigation_counter(page)
+        expired_navigations = document_navigation_counter(page)
         response = page.goto(base + "/", wait_until="networkidle", timeout=30_000)
         require(response is not None and response.status == 200, "Expired-session root did not return HTTP 200")
         page.wait_for_selector("#authenticate", timeout=10_000)
         page.wait_for_timeout(2500)
         require(page.title().startswith("Connexion"), "Expired session did not return to login")
         require(len(expired_navigations) == 1, f"Reload loop detected after session expiry: {expired_navigations}")
-        report["expired_navigation_count"] = len(expired_navigations)
+        report["expired_document_navigation_count"] = len(expired_navigations)
         expired.close()
         authenticated.close()
         browser.close()
