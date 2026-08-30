@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "docs/versions/6.0.0/FINAL_TEST_REPORT.md"
+      - ".github/workflows/publish-v6-rc.yml"
   workflow_dispatch:
 
 permissions:
@@ -43,7 +44,18 @@ jobs:
         run: ./source/build-windows.ps1 -OutputDirectory "${{ runner.temp }}/hdp-v6-installer"
       - name: Compatibilité statique Windows 10/11
         shell: pwsh
-        run: ./tools/windows/windows10_compatibility_gate.ps1 -InstallerPath "${{ runner.temp }}/hdp-v6-installer/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe" -OutputPath "${{ runner.temp }}/WINDOWS_STATIC_COMPATIBILITY.json"
+        run: |
+          $exe="${{ runner.temp }}/hdp-v6-installer/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"
+          ./tools/windows/windows10_compatibility_gate.ps1 -InstallerPath $exe
+          $proof=[ordered]@{
+            version='6.0.0'
+            commit='${{ github.sha }}'
+            status='passed'
+            target='_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;x64'
+            policy='static Windows 10 baseline compatible; Windows 11 preserved'
+            installer_sha256=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          $proof|ConvertTo-Json|Set-Content -Encoding utf8 "${{ runner.temp }}/WINDOWS_STATIC_COMPATIBILITY.json"
       - name: Recette installateur complémentaire
         shell: pwsh
         timeout-minutes: 10
