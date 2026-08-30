@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Idempotent V7 semantic/provenance schema, isolated from legacy migrations."""
+"""Idempotent V7 semantic/provenance/job schema, isolated from legacy migrations."""
 
 
 def apply_v7_migrations() -> None:
@@ -60,6 +60,23 @@ def apply_v7_migrations() -> None:
             UNIQUE(source_id, concept, canonical_value, provider_value, contract_version)
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS semantic_jobs (
+            id UUID PRIMARY KEY,
+            project_id UUID NOT NULL,
+            request_json JSONB NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('queued','running','completed','partial','failed','cancelled')),
+            progress SMALLINT NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
+            cancel_requested BOOLEAN NOT NULL DEFAULT FALSE,
+            result_json JSONB,
+            error TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            started_at TIMESTAMPTZ,
+            finished_at TIMESTAMPTZ
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_semantic_jobs_project_created ON semantic_jobs(project_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_semantic_jobs_status ON semantic_jobs(status, created_at)",
     ]
     with database_connection() as connection:
         for statement in statements:
