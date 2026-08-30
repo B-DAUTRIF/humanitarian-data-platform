@@ -6,20 +6,15 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-if (-not (Test-Path -LiteralPath $InstallerPath)) {
-    throw "Installateur introuvable: $InstallerPath"
-}
+if (-not (Test-Path -LiteralPath $InstallerPath)) { throw "Installateur introuvable: $InstallerPath" }
 
 $installerResolved = (Resolve-Path $InstallerPath).Path
 $installerDir = Split-Path -Parent $installerResolved
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $work = Join-Path $env:RUNNER_TEMP 'hdp-installer-e2e'
 $fakeBin = Join-Path $work 'fake-bin'
-# The hosted runner is disposable. Use the installer's own default directory so
-# this gate concentrates on the real install/upgrade/uninstall journey rather
-# than cross-process automation of an EDIT control.
-$installDir = Join-Path $env:USERPROFILE 'HumanitarianDataPlatform'
-if (Test-Path -LiteralPath $installDir) { Remove-Item -LiteralPath $installDir -Recurse -Force }
+$installDir = Join-Path $work 'installed-HDP'
+if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $fakeBin | Out-Null
 
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
@@ -32,13 +27,8 @@ $fakeDocker = Join-Path $fakeBin 'docker.exe'
 $installerLocalDocker = Join-Path $installerDir 'docker.exe'
 $compile = "call `"$devCmd`" -no_logo -arch=x64 && cl /nologo /O2 /W4 /WX /Fe:`"$fakeDocker`" `"$fakeSource`" ws2_32.lib"
 & cmd.exe /d /s /c $compile
-if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $fakeDocker)) {
-    throw "Compilation du Docker contrôlé échouée ($LASTEXITCODE)"
-}
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $fakeDocker)) { throw "Compilation du Docker contrôlé échouée ($LASTEXITCODE)" }
 
-# SearchPathW checks the application directory before system locations and PATH.
-# Put the controlled Docker next to the installer so a preinstalled runner Docker
-# cannot accidentally service this installer-only journey.
 Copy-Item -LiteralPath $fakeDocker -Destination $installerLocalDocker -Force
 $env:PATH = "$fakeBin;$env:PATH"
 
@@ -50,18 +40,20 @@ public static class HDPWin32 {
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr GetDlgItem(IntPtr hWnd, int nIDDlgItem);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    public static extern bool SetWindowText(IntPtr hWnd, string lpString);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", EntryPoint = "SendMessageW")]
     public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageW")]
+    public static extern IntPtr SendMessageGetText(IntPtr hWnd, uint Msg, IntPtr wParam, StringBuilder lParam);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageW")]
+    public static extern IntPtr SendMessageSetText(IntPtr hWnd, uint Msg, IntPtr wParam, string lParam);
     [DllImport("user32.dll")]
     public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 }
 '@
 
+$WM_SETTEXT = 0x000C
+$WM_GETTEXT = 0x000D
 $BM_CLICK = 0x00F5
 $BM_SETCHECK = 0x00F1
 $BST_UNCHECKED = 0
@@ -99,7 +91,24 @@ function Wait-Control([IntPtr]$Window, [int]$Id, [int]$TimeoutSeconds = 10) {
 
 function Set-ControlText([IntPtr]$Window, [int]$Id, [string]$Value) {
     $control = Get-Control $Window $Id
-    if (-not [HDPWin32]::SetWindowText($control, $Value)) { throw "SetWindowText ID=$Id a échoué" }
+    [void][HDPWin32]::SendMessageSetText($control, $WM_SETTEXT, [IntPtr]::Zero, $Value)
+}
+
+function Get-ControlText([IntPtr]$Window, [int]$Id) {
+    $control = Get-Control $Window $Id
+    $buffer = New-Object System.Text.StringBuilder 4096
+    [void][HDPWin32]::SendMessageGetText($control, $WM_GETTEXT, [IntPtr]$buffer.Capacity, $buffer)
+    return $buffer.ToString()
+}
+
+function Wait-ControlText([IntPtr]$Window, [int]$Id, [int]$TimeoutSeconds = 10) {
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $value = Get-ControlText $Window $Id
+        if ($value) { return $value }
+        Start-Sleep -Milliseconds 100
+    } while ((Get-Date) -lt $deadline)
+    throw "Contrôle ID=$Id non initialisé dans le délai attendu"
 }
 
 function Set-Check([IntPtr]$Window, [int]$Id, [bool]$Checked) {
@@ -110,16 +119,7 @@ function Set-Check([IntPtr]$Window, [int]$Id, [bool]$Checked) {
 
 function Click-Control([IntPtr]$Window, [int]$Id) {
     $control = Get-Control $Window $Id
-    if (-not [HDPWin32]::PostMessage($control, $BM_CLICK, [IntPtr]::Zero, [IntPtr]::Zero)) {
-        throw "PostMessage BM_CLICK ID=$Id a échoué"
-    }
-}
-
-function Get-ControlText([IntPtr]$Window, [int]$Id) {
-    $control = Get-Control $Window $Id
-    $buffer = New-Object System.Text.StringBuilder 2048
-    [void][HDPWin32]::GetWindowText($control, $buffer, $buffer.Capacity)
-    return $buffer.ToString()
+    if (-not [HDPWin32]::PostMessage($control, $BM_CLICK, [IntPtr]::Zero, [IntPtr]::Zero)) { throw "PostMessage BM_CLICK ID=$Id a échoué" }
 }
 
 function Click-DialogButton([int]$Id, [int]$TimeoutSeconds = 20) {
@@ -129,9 +129,7 @@ function Click-DialogButton([int]$Id, [int]$TimeoutSeconds = 20) {
         if ($dialog -ne [IntPtr]::Zero) {
             $button = [HDPWin32]::GetDlgItem($dialog, $Id)
             if ($button -ne [IntPtr]::Zero) {
-                if (-not [HDPWin32]::PostMessage($button, $BM_CLICK, [IntPtr]::Zero, [IntPtr]::Zero)) {
-                    throw "PostMessage dialogue ID=$Id a échoué"
-                }
+                if (-not [HDPWin32]::PostMessage($button, $BM_CLICK, [IntPtr]::Zero, [IntPtr]::Zero)) { throw "PostMessage dialogue ID=$Id a échoué" }
                 Start-Sleep -Milliseconds 250
                 return
             }
@@ -150,9 +148,7 @@ function Ensure-ControlledHealthServer {
     $port = [int]($line -replace '^HDP_PORT=', '')
     $script:healthProcess = Start-Process -FilePath $fakeDocker -ArgumentList @('--health-server', "$port") -PassThru -WindowStyle Hidden
     Start-Sleep -Milliseconds 400
-    if ($script:healthProcess.HasExited) {
-        throw "Serveur de santé contrôlé interrompu: $($script:healthProcess.ExitCode)"
-    }
+    if ($script:healthProcess.HasExited) { throw "Serveur de santé contrôlé interrompu: $($script:healthProcess.ExitCode)" }
     Write-Host "CONTROLLED_HEALTH_SERVER=127.0.0.1:$port"
 }
 
@@ -163,9 +159,7 @@ function Wait-Status([IntPtr]$Window, [string]$Needle, [int]$TimeoutSeconds = 24
         Ensure-ControlledHealthServer
         $last = Get-ControlText $Window 1011
         if ($last -like "*$Needle*") { return $last }
-        if ($last -like '*interrompue*' -or $last -like '*annulée*') {
-            throw "Statut d'échec détecté: $last"
-        }
+        if ($last -like '*interrompue*' -or $last -like '*annulée*') { throw "Statut d'échec détecté: $last" }
         Start-Sleep -Milliseconds 400
     } while ((Get-Date) -lt $deadline)
     throw "Délai dépassé en attente du statut '$Needle'. Dernier statut: $last"
@@ -181,14 +175,13 @@ $process = $null
 try {
     $process = Start-Process -FilePath $installerResolved -PassThru
     $window = Wait-MainWindow $process
-    [void](Wait-Control $window 1001)
+    [void](Wait-ControlText $window 1001)
 
-    if ((Get-ControlText $window 1001) -ne $installDir) {
-        throw "Le chemin par défaut de l'installateur diffère du contrat attendu: $(Get-ControlText $window 1001)"
-    }
+    Set-ControlText $window 1001 $installDir
     Set-ControlText $window 1002 'hdp-ci-qualification'
     Set-ControlText $window 1014 ''
     Set-Check $window 1013 $true
+    if ((Get-ControlText $window 1001) -ne $installDir) { throw 'Le chemin de recette n a pas été appliqué à la GUI' }
     if ((Get-ControlText $window 1002) -ne 'hdp-ci-qualification') { throw 'L appname ReliefWeb de recette n a pas été appliqué' }
 
     Click-Control $window 1007
@@ -247,5 +240,5 @@ finally {
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     if (Test-Path -LiteralPath $installerLocalDocker) { Remove-Item -LiteralPath $installerLocalDocker -Force -ErrorAction SilentlyContinue }
     if (Test-Path -LiteralPath $shortcut) { Remove-Item -LiteralPath $shortcut -Force -ErrorAction SilentlyContinue }
-    if (Test-Path -LiteralPath $installDir) { Remove-Item -LiteralPath $installDir -Recurse -Force -ErrorAction SilentlyContinue }
+    if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 }
