@@ -12,11 +12,11 @@ class HDPClientError(RuntimeError):
 
 @dataclass(slots=True)
 class HDPClient:
-    """Small typed client for the local HDP V6 HTTP API.
+    """Typed client for the local HDP V7 HTTP API.
 
-    The client deliberately talks to HDP rather than bypassing it. This keeps
-    project preferences, authentication, provenance, safety limits and the
-    per-source parameter validation enforced by the server.
+    The client talks to HDP rather than bypassing it so authentication,
+    project preferences, semantic mappings, provenance and provider safety
+    rules remain enforced by the server.
     """
 
     base_url: str = "http://localhost:8080"
@@ -24,7 +24,7 @@ class HDPClient:
     timeout: float = 60.0
 
     def _headers(self, *, mutation: bool = False) -> dict[str, str]:
-        headers = {"Accept": "application/json", "User-Agent": "HDPClientsPython/6.0.0"}
+        headers = {"Accept": "application/json", "User-Agent": "HDPClientsPython/7.0.0"}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
             if mutation:
@@ -56,8 +56,9 @@ class HDPClient:
         if response.is_error:
             detail: Any
             try:
-                detail = response.json().get("detail", response.text)
-            except (ValueError, AttributeError):
+                payload = response.json()
+                detail = payload.get("detail", payload) if isinstance(payload, dict) else payload
+            except ValueError:
                 detail = response.text
             raise HDPClientError(f"HDP HTTP {response.status_code}: {detail}")
         if response.status_code == 204 or not response.content:
@@ -109,6 +110,80 @@ class HDPClient:
     def source_settings(self, source_id: str) -> dict[str, Any]:
         return self._request("GET", f"/api/source-settings/{source_id}")
 
+    def semantic_contracts(self) -> dict[str, Any]:
+        """Return the versioned semantic-router contract and invariants."""
+        return self._request("GET", "/api/semantic/contracts")
+
+    def semantic_capabilities(self) -> dict[str, Any]:
+        """Return source-by-source semantic capabilities and executability."""
+        return self._request("GET", "/api/semantic/capabilities")
+
+    @staticmethod
+    def _semantic_body(
+        *,
+        sources: Iterable[str],
+        query: str = "",
+        location: str = "",
+        date_from: str = "",
+        date_to: str = "",
+        result_limit: int = 25,
+    ) -> dict[str, Any]:
+        selected = list(dict.fromkeys(str(source).strip() for source in sources if str(source).strip()))
+        if not selected:
+            raise ValueError("sources must contain at least one source")
+        if not 1 <= int(result_limit) <= 100:
+            raise ValueError("result_limit must be between 1 and 100")
+        return {
+            "sources": selected,
+            "query": query,
+            "location": location,
+            "date_from": date_from,
+            "date_to": date_to,
+            "result_limit": int(result_limit),
+        }
+
+    def semantic_plan(
+        self,
+        *,
+        sources: Iterable[str],
+        query: str = "",
+        location: str = "",
+        date_from: str = "",
+        date_to: str = "",
+        result_limit: int = 25,
+    ) -> dict[str, Any]:
+        """Build an auditable semantic Query Plan without contacting providers."""
+        body = self._semantic_body(
+            sources=sources,
+            query=query,
+            location=location,
+            date_from=date_from,
+            date_to=date_to,
+            result_limit=result_limit,
+        )
+        return self._request("POST", "/api/semantic/plan", json=body)
+
+    def semantic_search(
+        self,
+        *,
+        sources: Iterable[str],
+        query: str = "",
+        location: str = "",
+        date_from: str = "",
+        date_to: str = "",
+        result_limit: int = 25,
+    ) -> dict[str, Any]:
+        """Execute the V7 semantic router and preserve per-source statuses/provenance."""
+        body = self._semantic_body(
+            sources=sources,
+            query=query,
+            location=location,
+            date_from=date_from,
+            date_to=date_to,
+            result_limit=result_limit,
+        )
+        return self._request("POST", "/api/semantic/search", json=body)
+
     def search(
         self,
         *,
@@ -119,6 +194,7 @@ class HDPClient:
         auto_download: bool = False,
         parameters: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
+        """Compatibility wrapper for the legacy per-source V6 search endpoint."""
         body = {
             "project_id": project_id,
             "source": source,
@@ -139,11 +215,7 @@ class HDPClient:
         auto_download: bool = False,
         parameters_by_source: Mapping[str, Mapping[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
-        """Execute the same validated search against several HDP connectors.
-
-        Individual provider errors are returned alongside successes so a caller
-        can keep partial results and provenance instead of losing the whole batch.
-        """
+        """Compatibility federated search through validated V6 per-source calls."""
         results: list[dict[str, Any]] = []
         for source in sources:
             try:
