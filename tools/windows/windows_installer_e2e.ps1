@@ -10,6 +10,8 @@ if (-not (Test-Path -LiteralPath $InstallerPath)) {
     throw "Installateur introuvable: $InstallerPath"
 }
 
+$installerResolved = (Resolve-Path $InstallerPath).Path
+$installerDir = Split-Path -Parent $installerResolved
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $work = Join-Path $env:RUNNER_TEMP 'hdp-installer-e2e'
 $fakeBin = Join-Path $work 'fake-bin'
@@ -24,12 +26,17 @@ if (-not $vs) { throw 'MSVC x64 introuvable' }
 $devCmd = Join-Path $vs 'Common7\Tools\VsDevCmd.bat'
 $fakeSource = Join-Path $root 'tools\windows\fake_docker.c'
 $fakeDocker = Join-Path $fakeBin 'docker.exe'
+$installerLocalDocker = Join-Path $installerDir 'docker.exe'
 $compile = "call `"$devCmd`" -no_logo -arch=x64 && cl /nologo /O2 /W4 /WX /Fe:`"$fakeDocker`" `"$fakeSource`" ws2_32.lib"
 & cmd.exe /d /s /c $compile
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $fakeDocker)) {
     throw "Compilation du Docker contrôlé échouée ($LASTEXITCODE)"
 }
 
+# SearchPathW checks the application directory before system locations and PATH.
+# Put the controlled Docker next to the installer so a preinstalled runner Docker
+# cannot accidentally service this installer-only journey.
+Copy-Item -LiteralPath $fakeDocker -Destination $installerLocalDocker -Force
 $env:PATH = "$fakeBin;$env:PATH"
 
 Add-Type @'
@@ -142,7 +149,7 @@ $desktop = [Environment]::GetFolderPath('Desktop')
 $shortcut = Join-Path $desktop 'Humanitarian Data Platform.lnk'
 $process = $null
 try {
-    $process = Start-Process -FilePath (Resolve-Path $InstallerPath).Path -PassThru
+    $process = Start-Process -FilePath $installerResolved -PassThru
     $window = Wait-MainWindow $process
 
     Set-ControlText $window 1001 $installDir
@@ -199,7 +206,8 @@ try {
 finally {
     if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-        Where-Object { $_.ExecutablePath -and $_.ExecutablePath -eq $fakeDocker } |
+        Where-Object { $_.ExecutablePath -and ($_.ExecutablePath -eq $fakeDocker -or $_.ExecutablePath -eq $installerLocalDocker) } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    if (Test-Path -LiteralPath $installerLocalDocker) { Remove-Item -LiteralPath $installerLocalDocker -Force -ErrorAction SilentlyContinue }
     if (Test-Path -LiteralPath $shortcut) { Remove-Item -LiteralPath $shortcut -Force -ErrorAction SilentlyContinue }
 }
