@@ -1,0 +1,47 @@
+name: HDP V6 Windows 11 x64 qualification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows11-real-e2e:
+    runs-on: [self-hosted, Windows, X64, windows-11, hdp-v6]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Confirmer Windows 11 x64
+        shell: pwsh
+        run: |
+          $os=Get-CimInstance Win32_OperatingSystem
+          Write-Host "$($os.Caption) build $($os.BuildNumber) $($os.OSArchitecture)"
+          if($os.Caption -notmatch 'Windows 11'){throw 'Runner Windows 11 réel obligatoire'}
+          if($os.OSArchitecture -notmatch '64'){throw 'Runner x64 obligatoire'}
+          $b=[int]$os.BuildNumber
+          if($b -lt 22000){throw "Build Windows 11 non qualifié: $b"}
+      - name: Construire installateur Windows 10+ x64
+        shell: pwsh
+        run: ./source/build-windows.ps1 -OutputDirectory "${{ runner.temp }}/hdp-v6-win11"
+      - name: Recette Windows 11 réelle complète
+        shell: pwsh
+        timeout-minutes: 12
+        run: ./tools/windows/windows11_full_e2e.ps1 -InstallerPath "${{ runner.temp }}/hdp-v6-win11/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"
+      - name: Produire preuve Windows 11
+        shell: pwsh
+        run: |
+          $os=Get-CimInstance Win32_OperatingSystem
+          $exe="${{ runner.temp }}/hdp-v6-win11/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"
+          $proof=[ordered]@{version='6.0.0';commit='${{ github.sha }}';status='passed';os=$os.Caption;build=$os.BuildNumber;architecture=$os.OSArchitecture;installer_sha256=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()}
+          $proof|ConvertTo-Json|Set-Content -Encoding utf8 "${{ runner.temp }}/WINDOWS11_QUALIFICATION.json"
+          Get-Content "${{ runner.temp }}/WINDOWS11_QUALIFICATION.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HDP-V6-Windows11-qualification-${{ github.sha }}
+          path: ${{ runner.temp }}/WINDOWS11_QUALIFICATION.json
+          retention-days: 90
+          if-no-files-found: error
