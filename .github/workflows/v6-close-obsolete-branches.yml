@@ -1,0 +1,40 @@
+name: HDP V6 close obsolete branches
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/v6-close-obsolete-branches.yml"]
+permissions:
+  contents: write
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Supprimer les branches consolidées
+        shell: bash
+        run: |
+          set -euo pipefail
+          branches=(
+            'agent/finalize-hdp-v4-main'
+            'codex/finalize-hdp-v4'
+            'codex/hdp-v5-0-1-install-fix'
+            'codex/hdp-v5-archive'
+            'codex/hdp-v5-delivery-proof'
+            'codex/hdp-v5-wiki-link'
+            'codex/hdp-v5'
+            'codex/v6-build-20260821'
+            'codex/v6-consolidation-final'
+            'codex/v6-installer-fix-20260829'
+            'develop/5.2'
+            'feature/github-api-v2.4.1'
+            'feature/simplify-v2.4.2'
+            'fix/hdp-v5-0-1-install'
+            'fix/hdp-v5-0-2-csrf'
+          )
+          git fetch origin --prune
+          for branch in "${branches[@]}"; do
+            if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+              git push origin --delete "$branch"
+            fi
+          done
