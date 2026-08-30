@@ -58,6 +58,7 @@ CASES = {
             "source/tests/test_request_security.py",
             "source/tests/test_migrations.py",
             "tools/browser_ui_e2e.py",
+            "tools/browser_auth_bootstrap_e2e.py",
             "tools/security_static_checks.py",
         ],
     },
