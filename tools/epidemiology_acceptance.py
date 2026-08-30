@@ -47,18 +47,18 @@ def main() -> None:
     check("ten searchable sources", summary["sources"] == len(CONNECTORS) == 10, str(summary["sources"]))
     check("all sources represented", {r["source_slug"] for r in rows} == set(CONNECTORS), "inventory/registry mismatch")
 
-    # Every configurable registry field must have a visible inventory row.
     for source_id in CONNECTORS:
         definition = connector_definition(source_id)
         schema_fields = set(definition["global_settings_schema"]["properties"]) | set(definition["project_schema"]["properties"])
-        visible = {str(r["Paramètre"]) for r in rows if r["source_slug"] == source_id}
+        source_items = [r for r in rows if r["source_slug"] == source_id]
+        visible = {str(r["Paramètre"]) for r in source_items}
         missing = sorted(schema_fields - visible)
         check(f"{source_id}: configurable fields visible", not missing, ", ".join(missing))
 
-        # A supported inventory field must be backed by the registry schema: UI -> validation -> request layer.
-        supported = {str(r["Paramètre"]) for r in rows if r["source_slug"] == source_id and r.get("supported")}
-        orphan_supported = sorted(supported - schema_fields)
-        check(f"{source_id}: supported fields are mapped", not orphan_supported, ", ".join(orphan_supported[:20]))
+        editable = {str(r["Paramètre"]) for r in source_items if r.get("ui_editable")}
+        orphan_editable = sorted(editable - schema_fields)
+        check(f"{source_id}: editable fields are canonical HDP fields", not orphan_editable, ", ".join(orphan_editable))
+        check(f"{source_id}: provider parameters are never fake editable", all(not r.get("ui_editable") for r in source_items if not str(r.get("origin", "")).startswith("source_registry:")), "provider-native row marked editable")
 
         schema = source_schema(source_id)
         check(f"{source_id}: provenance visible", bool(schema["origins"]), str(schema["origins"]))
@@ -71,7 +71,10 @@ def main() -> None:
         check(f"{source_id}: reproducible Python example", "python" in preview["code_examples"], "missing Python example")
         check(f"{source_id}: reproducible R example", "r" in preview["code_examples"], "missing R example")
 
-    # Epidemiology-oriented parameter transmission checks.
+    hdx = request_preview("hdx", project_values("hdx"))
+    check("HDX keyword reaches provider request", hdx["query_parameters"].get("q") == "cholera", str(hdx["query_parameters"]))
+    check("HDX result limit reaches provider request", hdx["query_parameters"].get("rows") == 25, str(hdx["query_parameters"]))
+
     hapi = request_preview("hdx-hapi", project_values("hdx-hapi"))
     check("HAPI location reaches provider request", hapi["query_parameters"].get("location_code") == "FRA", str(hapi["query_parameters"]))
     check("HAPI result limit reaches provider request", hapi["query_parameters"].get("limit") == 25, str(hapi["query_parameters"]))
@@ -91,10 +94,9 @@ def main() -> None:
     who = request_preview("who-gho", project_values("who-gho"))
     check("WHO keyword reaches provider request", "cholera" in str(who["query_parameters"].get("$filter", "")).casefold(), str(who["query_parameters"]))
 
-    # Native user-interface contract. Unsupported/read-only fields must stay visible but disabled.
-    for marker in ("native-api-inventory-panel", "view-source-settings", "data-api-param", "data-api-endpoint", "data-api-location", "machine_verified", "Documentation officielle"):
+    for marker in ("native-api-inventory-panel", "view-source-settings", "data-api-param", "data-api-endpoint", "data-api-location", "machine_verified", "Documentation officielle", "mapping_mode", "Configurer ce paramètre"):
         check(f"native UI marker: {marker}", marker in NATIVE_JS, marker)
-    check("unsupported fields remain non-executable", "!!p.supported&&!p.readonly&&!p.sensitive" in NATIVE_JS, "editable predicate missing")
+    check("provider-native controls are display-only", "const editable=!!p.ui_editable" in NATIVE_JS and " disabled`" in NATIVE_JS, "native inventory must not create unbound executable controls")
 
     main_v6 = (API_ROOT / "app" / "main_v6.py").read_text(encoding="utf-8")
     check("main UI injects native inventory script", "/api-inventory/native.js" in main_v6 and "INDEX_PATH.read_text" in main_v6, "server-side injection missing")
@@ -109,7 +111,7 @@ def main() -> None:
         "checks": CHECKS,
         "summary": {"checks": len(CHECKS), "passed": passed, "failed": len(CHECKS) - passed},
         "limitations": [
-            "Deterministic acceptance verifies UI-to-registry-to-request mapping without downloading live provider data.",
+            "Deterministic acceptance verifies source-selection, parameter visibility, registry validation and provider request construction without downloading live datasets.",
             "A hosted CI runner is not a persistent interactive Windows desktop and does not replace hands-on visual usability testing.",
         ],
     }
