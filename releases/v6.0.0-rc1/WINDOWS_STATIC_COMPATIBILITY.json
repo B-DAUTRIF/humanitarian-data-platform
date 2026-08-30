@@ -1,0 +1,8 @@
+{
+  "version": "6.0.0",
+  "commit": "7b06db056237fae69f5d41507e65ec9db809e20d",
+  "status": "passed",
+  "target": "_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;x64",
+  "policy": "static Windows 10 baseline compatible; Windows 11 preserved",
+  "installer_sha256": "559b2ad3491e491b7b3a67d8eebbed76bbaf3c81d9e534e398d8e9bbbfb10df5"
+}
