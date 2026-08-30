@@ -8,12 +8,14 @@ isolés afin de préserver la compatibilité avec la ligne qualifiée précéden
 
 from .main import app
 from .github_sync import router as github_sync_router
+from .v6_inventory_ui import router as v6_inventory_router
 
-# La V6 étend le socle V5, mais doit exposer sa propre identité de release.
 app.version = "6.0.0"
 app.description = (
     "Humanitarian Data Platform V6 : acquisition, recherche fédérée, gestion locale, "
     "traitements R/Python, synchronisation GitHub et exploitation de sources "
-    "humanitaires et sanitaires par projets."
+    "humanitaires et sanitaires par projets. Inventaire API exhaustif accessible "
+    "depuis /api-inventory."
 )
 app.include_router(github_sync_router)
+app.include_router(v6_inventory_router)
