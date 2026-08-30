@@ -1,6 +1,14 @@
-# Humanitarian Data Platform 5.0.2
+# Humanitarian Data Platform 6.0.0-dev
 
-## Version 5.0.2
+## Version de développement 6.0.0
+
+Cette ligne ajoute le moteur de règles ET/OU et ses corrélations temporelles,
+le catalogue V6 et l'import de contrats OpenAPI, les caches publics
+adressés par contenu, les sauvegardes par périmètre, l'authentification passkey,
+la passerelle SPIP, les flux RSS extensibles et l'import manuel d'EML publics.
+Les inventaires officiels complets, les exécuteurs asynchrones d'actions, la
+réception réseau des mails et les recettes Windows/Docker/SPIP restent des
+travaux de qualification ou d'implémentation explicitement suivis.
 
 Chaque source possède désormais ses propres réglages globaux et projet, sa
 fiche technique, ses liens officiels et une prévisualisation cURL/Python/R sans
@@ -85,6 +93,19 @@ Le schéma est migré au démarrage par migrations idempotentes. Les acquisition
 
 Exécutez `stop-hdp.cmd`. Les volumes et fichiers locaux restent intacts.
 
+## Désinstallation Windows
+
+Relancez l'installateur V6, sélectionnez le dossier HDP puis utilisez
+**Désinstaller HDP**. Le bouton n'est disponible que si ce dossier possède le
+marqueur écrit par l'installateur ; une ancienne installation doit donc d'abord
+être mise à niveau.
+
+La procédure arrête Docker Compose sans supprimer les volumes, vérifie la cible
+du raccourci Bureau puis retire seulement les fichiers applicatifs exacts du
+payload. Elle conserve `.env`, `data`, les sauvegardes, les journaux et les
+volumes PostgreSQL. Docker Desktop, Git et Visual Studio Code ne sont pas
+désinstallés. Cette fonction reste à qualifier sur Windows 10/11 réel.
+
 ## Module géographique officiel
 
 HDP interroge les identifiants canoniques `cod-ab-*` et `cod-ps-*`, puis vérifie
@@ -96,7 +117,7 @@ métadonnées sont archivés avec chaque ressource.
 
 ## Limite de sécurité
 
-HDP 5.0.2 est une application locale, non un serveur Internet durci. Seuls les
+HDP 6.0.0-dev n'est pas encore un serveur Internet qualifié. Seuls les
 scripts Python/R locaux et de confiance doivent être exécutés. Les runners sont
 non privilégiés, sans réseau et bornés, mais ne constituent pas une isolation
 multi-utilisateur.

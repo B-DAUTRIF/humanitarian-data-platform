@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Humanitarian Data Platform 5.0.2</title>
+  <title>Humanitarian Data Platform 6.0.0-dev</title>
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
   <style>
     :root {
@@ -23,6 +23,7 @@
     .brand a:hover,.brand a:focus { color:var(--accent); }
     .context { display:flex; align-items:center; gap:10px; min-width:380px; }
     .context select { flex:1; }
+    .context button { width:auto; white-space:nowrap; }
     .badge { border:1px solid var(--line); border-radius:999px; padding:8px 11px; color:var(--ok); background:#0b1828; white-space:nowrap; font-size:12px; }
     main { width:min(1320px,calc(100% - 32px)); margin:0 auto; padding:26px 0 64px; }
     nav { display:flex; gap:8px; overflow:auto; margin-bottom:20px; padding-bottom:4px; }
@@ -96,6 +97,30 @@
     .schema-grid .wide { grid-column:1 / -1; }
     .schema-help { margin:4px 0 0; color:var(--muted); font-size:11px; line-height:1.35; }
     .request-preview { margin:14px 0 0; padding:12px; min-height:90px; overflow:auto; white-space:pre-wrap; border:1px solid var(--line); border-radius:9px; background:#06101d; color:#bae6fd; }
+    .rule-builder { display:grid; gap:10px; margin:8px 0 14px; }
+    .rule-node { border:1px solid var(--line); border-left:3px solid var(--accent2); border-radius:10px; padding:11px; background:#09172a; }
+    .rule-node[data-node-type="condition"] { border-left-color:var(--accent); }
+    .rule-node[data-node-type="correlation"] { border-left-color:var(--warn); }
+    .rule-node.locked { border-left-color:var(--danger); color:var(--muted); }
+    .rule-node-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+    .rule-node-title { color:#dbeafe; font-size:12px; font-weight:750; }
+    .rule-node-children { display:grid; gap:9px; margin:10px 0 0 12px; }
+    .rule-node-controls { display:flex; gap:6px; flex-wrap:wrap; }
+    .rule-node-controls button { width:auto; margin:0; padding:6px 8px; border-radius:7px; border:1px solid var(--line); color:var(--text); background:#172c47; font-size:11px; }
+    .rule-node-controls button.danger { color:#fecdd3; background:#3b1d2a; }
+    .rule-node-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0 8px; }
+    .rule-node-fields label { margin-top:7px; }
+    .rule-formula { display:block; min-height:48px; margin:7px 0 14px; padding:11px; border:1px solid var(--line); border-radius:9px; background:#06101d; color:#bae6fd; font:12px ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .rule-formula.unsynced { color:var(--warn); }
+    .rule-advanced { border:1px solid var(--line); border-radius:9px; padding:10px; background:#081421; }
+    .rule-advanced summary { cursor:pointer; color:#bae6fd; font-size:12px; }
+    .contract-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:14px 0; }
+    .contract-section { border:1px solid var(--line); border-radius:10px; padding:12px; background:#081421; min-width:0; }
+    .contract-section h4,.contract-section h5 { margin:0 0 8px; color:#bae6fd; }
+    .contract-section p { margin:4px 0; font-size:12px; overflow-wrap:anywhere; }
+    .contract-section .item { margin-top:7px; padding:9px; }
+    .endpoint-dossier { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; margin-top:11px; }
+    .endpoint-dossier .wide { grid-column:1 / -1; }
     .filters { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin:12px 0 16px; }
     #map-canvas { height:560px; border:1px solid var(--line); border-radius:12px; background:#081421; color:#111; }
     .map-fallback { height:100%; display:grid; place-items:center; color:var(--muted); padding:20px; text-align:center; }
@@ -118,35 +143,39 @@
     .sql-table th,.sql-table td { border:1px solid var(--line); padding:8px; text-align:left; vertical-align:top; max-width:420px; overflow-wrap:anywhere; }
     .sql-table th { background:#13243a; position:sticky; top:0; }
     .table-wrap { overflow:auto; max-height:520px; }
-    @media(max-width:900px) { .grid,.grid.equal { grid-template-columns:1fr; } .header-inner { align-items:flex-start; padding:15px 0; flex-direction:column; } .context { min-width:0; width:100%; } header { position:static; } .metrics { grid-template-columns:1fr 1fr; } .filters { grid-template-columns:1fr 1fr; } .link-grid { grid-template-columns:1fr 1fr; } }
+    @media(max-width:900px) { .grid,.grid.equal { grid-template-columns:1fr; } .header-inner { align-items:flex-start; padding:15px 0; flex-direction:column; } .context { min-width:0; width:100%; } header { position:static; } .metrics { grid-template-columns:1fr 1fr; } .filters { grid-template-columns:1fr 1fr; } .link-grid { grid-template-columns:1fr 1fr; } .rule-node-fields { grid-template-columns:1fr 1fr; } .contract-grid,.endpoint-dossier { grid-template-columns:1fr; } .endpoint-dossier .wide { grid-column:auto; } }
     @media(max-width:680px) { .source-grid { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
 <header>
   <div class="header-inner">
-    <div class="brand"><h1><a id="brand-home" href="#home" aria-label="Revenir à l’accueil de Humanitarian Data Platform">Humanitarian Data Platform</a></h1><p>Données humanitaires, épidémiologiques et sanitaires mondiales · version 5.0.2</p></div>
+    <div class="brand"><h1><a id="brand-home" href="#home" aria-label="Revenir à l’accueil de Humanitarian Data Platform">Humanitarian Data Platform</a></h1><p>Données humanitaires, épidémiologiques et sanitaires mondiales · développement 6.0.0 · dernière livraison qualifiée : version 6.0.0</p></div>
     <div class="context">
       <select id="project-select" aria-label="Projet actif"></select>
       <span id="health" class="badge">Vérification…</span>
+      <button id="logout" class="secondary" type="button">Déconnexion</button>
     </div>
   </div>
 </header>
 <main>
   <nav aria-label="Rubriques">
     <button data-view="search">Recherche</button>
-    <button data-view="intelligence">Data Grid & SIGNALS</button>
+    <button data-view="intelligence">Règles & Data Grid</button>
+    <button data-view="actions">Actions & travaux</button>
     <button data-view="sources">Sources sanitaires</button>
-    <button data-view="source-settings">Paramètres des sources</button>
     <button data-view="projects">Projets & préférences</button>
     <button data-view="data">Données locales</button>
     <button data-view="rss">Flux RSS</button>
+    <button data-view="spip">Publication SPIP</button>
+    <button data-view="mail">Courriels publics</button>
     <button data-view="timeline">Chronologie</button>
     <button data-view="map">Carte</button>
     <button data-view="scripts">Scripts</button>
     <button data-view="notebooks">Notebooks</button>
     <button data-view="schedules">Planifications</button>
     <button data-view="sql">Base SQL</button>
+    <button data-view="backups">Sauvegardes</button>
     <button data-view="technologies">USER · Technologies & code</button>
   </nav>
 
@@ -188,6 +217,79 @@
         <form id="signal-form"><label for="signal-title">Titre</label><input id="signal-title" required minlength="2" maxlength="300"><label for="signal-summary">Résumé factuel</label><textarea id="signal-summary" maxlength="5000"></textarea><div class="schema-grid"><div><label for="signal-themes">Thèmes</label><input id="signal-themes" maxlength="300"></div><div><label for="signal-locations">Zones</label><input id="signal-locations" maxlength="300"></div><div><label for="signal-event-severity">Gravité</label><input id="signal-event-severity" type="number" min="0" max="1" step="0.1" value="0.5"></div><div><label for="signal-event-confidence">Confiance</label><input id="signal-event-confidence" type="number" min="0" max="1" step="0.1" value="0.7"></div></div><div class="actions"><button type="submit">Ingérer et évaluer</button><button id="syndromic-run" class="secondary" type="button">Vue syndromique 7 jours</button></div></form>
         <div id="signal-status" class="status"></div><div id="signal-results" class="list"></div>
       </div>
+    </div>
+    <div class="grid equal">
+      <div class="card">
+        <h2>Constructeur de règles ET/OU — V6</h2>
+        <p class="intro">Composez les groupes ET/OU et les corrélations visuellement. La formule et l'arbre JSON restent synchronisés ; validation et simulation n'exécutent aucune action.</p>
+        <form id="v6-rule-form">
+          <label for="v6-rule-name">Nom de la règle</label><input id="v6-rule-name" required minlength="2" maxlength="120" value="Vigilance sanitaire combinée">
+          <div class="item-head"><label>Construction visuelle — cinq niveaux maximum</label><div class="rule-node-controls"><button id="v6-rule-reset" type="button">Nouvel arbre ET</button></div></div>
+          <div id="v6-rule-builder" class="rule-builder" aria-label="Constructeur visuel de règle"></div>
+          <label for="v6-rule-formula">Formule textuelle synchronisée</label>
+          <output id="v6-rule-formula" class="rule-formula" aria-live="polite"></output>
+          <details id="v6-rule-advanced" class="rule-advanced">
+            <summary>Mode JSON avancé — moteur limité à douze niveaux</summary>
+            <label for="v6-rule-tree">Arbre de conditions</label>
+            <textarea id="v6-rule-tree" maxlength="200000" spellcheck="false">{
+  "type": "group",
+  "operator": "AND",
+  "children": [
+    {"type": "condition", "field": "locations", "op": "contains", "value": "France"},
+    {"type": "group", "operator": "OR", "children": [
+      {"type": "condition", "field": "themes", "op": "contains", "value": "cholera"},
+      {"type": "condition", "field": "themes", "op": "contains", "value": "dengue"}
+    ]},
+    {"type": "correlation", "mode": "count", "window_hours": 168, "comparator": "gte", "threshold": 3}
+  ]
+}</textarea>
+            <p class="schema-help">Une modification JSON n'altère pas le constructeur tant que vous ne la chargez pas. Un arbre dépassant cinq niveaux reste validable et enregistrable ici, mais son édition visuelle est verrouillée.</p>
+            <div class="actions"><button id="v6-rule-load-json" class="secondary" type="button">Charger le JSON dans le constructeur</button></div>
+          </details>
+          <label>Actions proposées</label>
+          <div class="source-picker" id="v6-rule-actions">
+            <label class="check"><input class="v6-action" type="checkbox" value="notification" checked> Notification</label>
+            <label class="check"><input class="v6-action" type="checkbox" value="hdp_task"> Tâche HDP</label>
+            <label class="check"><input class="v6-action" type="checkbox" value="data_search" disabled> Recherche de données (configuration API requise)</label>
+            <label class="check"><input class="v6-action" type="checkbox" value="email_draft"> Brouillon de mail</label>
+            <label class="check"><input class="v6-action" type="checkbox" value="spip_draft"> Brouillon SPIP</label>
+            <label class="check"><input class="v6-action" type="checkbox" value="python_script"> Script Python</label>
+            <label class="check"><input class="v6-action" type="checkbox" value="r_script"> Script R</label>
+            <label class="check"><input class="v6-action" type="checkbox" value="webhook"> Webhook</label>
+          </div>
+          <label for="v6-rule-event">Événement de simulation</label>
+          <textarea id="v6-rule-event" maxlength="100000" spellcheck="false">{"id":"simulation","occurred_at":"2026-08-21T10:00:00Z","locations":["France"],"themes":["cholera"],"severity":0.7,"confidence":0.8}</textarea>
+          <div class="actions"><button id="v6-rule-validate" class="secondary" type="button">Valider l'arbre</button><button id="v6-rule-simulate" class="secondary" type="button">Simuler</button><button type="submit">Enregistrer dans le projet</button></div>
+        </form>
+        <pre id="v6-rule-proof" class="request-preview">Aucune simulation.</pre>
+        <div id="v6-rule-status" class="status"></div>
+      </div>
+      <div>
+        <div class="card"><h2>Règles versionnées du projet</h2><div id="v6-rule-list" class="list"><div class="empty">Aucune règle V6.</div></div></div>
+        <div class="card">
+          <h2>Politique de données périmées</h2>
+          <p class="intro">Une politique unique s'applique à tout le projet. <code>stale_if_error</code> actualise d'abord puis n'utilise l'ancienne version qu'après échec.</p>
+          <form id="v6-policy-form">
+            <label for="v6-stale-policy">Comportement du projet</label><select id="v6-stale-policy"><option value="stale_if_error">Ancienne version seulement en cas d'échec</option><option value="block">Toujours bloquer</option><option value="allow_stale">Autoriser si admissible</option><option value="manual">Toujours demander</option></select>
+            <label for="v6-stale-mode">Calcul de l'ancienneté maximale</label><select id="v6-stale-mode"><option value="frequency_with_project_cap">Fréquence × 3, plafond 7 jours — recommandé</option><option value="fixed_duration">Durée fixe du projet</option><option value="frequency_multiple">Multiple de la fréquence source</option><option value="manual">Arbitrage manuel</option></select>
+            <div class="schema-grid"><div><label for="v6-stale-fixed">Durée fixe (secondes)</label><input id="v6-stale-fixed" type="number" min="1" placeholder="172800"></div><div><label for="v6-stale-multiple">Multiple de fréquence</label><input id="v6-stale-multiple" type="number" min="0.1" step="0.1" placeholder="3"></div><div class="wide"><label for="v6-stale-cap">Plafond projet (secondes)</label><input id="v6-stale-cap" type="number" min="1" placeholder="604800"></div></div>
+            <div class="actions"><button type="submit">Enregistrer la politique</button></div>
+          </form>
+          <div id="v6-policy-status" class="status"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-actions" class="view">
+    <div class="card">
+      <div class="item-head"><div><h2>Suivi opérateur des actions</h2><p class="intro">Chaque décision, tentative et effet interne reste visible. Une approbation ou une annulation exige toujours une confirmation manuelle.</p></div><div class="actions"><button id="action-operations-refresh" class="secondary" type="button">Actualiser</button></div></div>
+      <div class="schema-grid"><div><label for="action-status-filter">Statut des demandes</label><select id="action-status-filter"><option value="">Tous</option><option value="pending_approval">En attente d’approbation</option><option value="queued">En file</option><option value="approved">Approuvée</option><option value="running">En cours</option><option value="cancel_requested">Annulation demandée</option><option value="completed">Terminée</option><option value="failed">Échec</option><option value="blocked">Bloquée</option><option value="rejected">Rejetée</option><option value="cancelled">Annulée</option></select></div><div><label for="data-job-status-filter">Statut des travaux de données</label><select id="data-job-status-filter"><option value="">Tous</option><option value="queued">En file</option><option value="running">En cours</option><option value="partial">Partiel</option><option value="completed">Terminé</option><option value="failed">Échec</option><option value="cancelled">Annulé</option></select></div></div>
+      <div id="action-operations-status" class="status"></div>
+    </div>
+    <div class="grid equal">
+      <div class="card"><h2>Demandes, décisions et brouillons</h2><div id="action-operation-list" class="list"><div class="empty">Aucune demande d’action.</div></div></div>
+      <div class="card"><h2>Travaux et résultats par source</h2><div id="data-job-operation-list" class="list"><div class="empty">Aucun travail de données.</div></div></div>
     </div>
   </section>
 
@@ -266,6 +368,20 @@
         <div id="project-source-status" class="status"></div>
       </div>
     </div>
+    <div class="card">
+      <h2>Inventaire des endpoints et capacités V6</h2>
+      <p class="intro">L'inventaire documentaire est distinct de l'activation. Un endpoint inventorié n'est exécutable qu'après import du contrat, implémentation de l'adaptateur et validation des tests.</p>
+      <div class="actions"><a id="source-configuration-link" class="button secondary" href="#" target="_blank" rel="noopener">Configuration du connecteur en lecture</a><button id="source-endpoint-refresh" class="secondary" type="button">Actualiser l'inventaire</button></div>
+      <div class="metrics" style="margin-top:14px">
+        <div class="metric"><strong id="source-endpoint-count">0</strong><span>endpoints inventoriés</span></div>
+        <div class="metric"><strong id="source-parameter-count">0</strong><span>paramètres d'entrée</span></div>
+        <div class="metric"><strong id="source-response-field-count">0</strong><span>champs de réponse</span></div>
+        <div class="metric"><strong id="source-active-endpoint-count">0</strong><span>endpoints activés</span></div>
+      </div>
+      <div id="source-contract-overview" class="contract-grid" aria-label="Métadonnées et technique de la source"></div>
+      <div id="source-endpoint-status" class="status"></div>
+      <div id="source-endpoint-list" class="list"><div class="empty">Sélectionnez une source.</div></div>
+    </div>
   </section>
 
   <section id="view-sources" class="view">
@@ -289,7 +405,7 @@
         <div class="metric"><strong id="tech-resource-count">0</strong><span>technologies et ressources</span></div>
         <div class="metric"><strong id="tech-link-count">0</strong><span>liens documentés</span></div>
         <div class="metric"><strong id="tech-category-count">0</strong><span>catégories</span></div>
-        <div class="metric"><strong>5.0.0</strong><span>contrat du catalogue</span></div>
+        <div class="metric"><strong>6.0.0-dev</strong><span>contrat du catalogue</span></div>
       </div>
       <div class="actions">
         <a id="technology-drive-link" class="button" href="https://drive.google.com/drive/folders/15rAjpoEWVnZfUzdmBaBOnO3sUeVZX7C0" target="_blank" rel="noopener">Code et livrables sur Google Drive</a>
@@ -429,11 +545,11 @@
     <div class="grid">
       <div class="card">
         <h2>Nouvel abonnement RSS</h2>
-        <p class="intro">Le registre ne contient que des points d’entrée ReliefWeb officiels vérifiés. Chaque abonnement appartient au projet actif.</p>
+        <p class="intro">Le registre versionné contient des flux officiels ReliefWeb, OMS, ECDC et CDC. Chaque abonnement appartient au projet actif ; de nouveaux flux peuvent être testés puis approuvés séparément.</p>
         <form id="rss-form">
           <label for="rss-registry">Flux officiel</label><select id="rss-registry"></select>
           <label for="rss-name">Nom dans le projet</label><input id="rss-name" minlength="2" maxlength="120" required>
-          <label for="rss-query">Recherche ReliefWeb facultative</label><input id="rss-query" maxlength="200" placeholder="Ex. cholera Mozambique">
+          <label for="rss-query">Recherche facultative si le flux l’accepte</label><input id="rss-query" maxlength="200" placeholder="Ex. cholera Mozambique">
           <label for="rss-language">Langue</label><select id="rss-language"><option value="en">Anglais</option><option value="fr">Français</option><option value="es">Espagnol</option></select>
           <label for="rss-interval">Intervalle en minutes</label><input id="rss-interval" type="number" min="15" max="43200" value="360">
           <label class="check"><input id="rss-enabled" type="checkbox" checked> Activer immédiatement</label>
@@ -441,19 +557,86 @@
         </form>
         <div class="notice">Flux XML limité à 2 Mio, DTD et entités interdites, redirections bornées et hôtes limités au registre.</div>
         <div id="rss-status" class="status"></div>
+        <details class="source-parameters">
+          <summary>Proposer un nouveau flux RSS officiel</summary>
+          <form id="rss-candidate-form">
+            <div class="schema-grid"><div><label for="rss-candidate-key">Identifiant</label><input id="rss-candidate-key" required pattern="[a-z0-9][a-z0-9-]{1,79}" placeholder="ministere-sante-pays"></div><div><label for="rss-candidate-name">Nom</label><input id="rss-candidate-name" required minlength="2" maxlength="200"></div><div><label for="rss-candidate-org">Organisation</label><input id="rss-candidate-org" required minlength="2" maxlength="200"></div><div><label for="rss-candidate-region">Région</label><input id="rss-candidate-region" required minlength="2" maxlength="200"></div><div><label for="rss-candidate-themes">Thèmes</label><input id="rss-candidate-themes" required placeholder="épidémiologie, alertes"></div><div><label for="rss-candidate-languages">Langues</label><input id="rss-candidate-languages" required value="fr"></div></div>
+            <label for="rss-candidate-url">URL HTTPS du flux</label><input id="rss-candidate-url" type="url" required pattern="https://.*">
+            <label for="rss-candidate-portal">Portail officiel HTTPS</label><input id="rss-candidate-portal" type="url" required pattern="https://.*">
+            <label for="rss-candidate-evidence">Page officielle attestant le flux</label><input id="rss-candidate-evidence" type="url" required pattern="https://.*">
+            <div class="schema-grid"><div><label for="rss-candidate-license">Licence</label><input id="rss-candidate-license" required value="Voir conditions de la source"></div><div><label for="rss-candidate-frequency">Fréquence déclarée</label><input id="rss-candidate-frequency" required value="À publication"></div></div>
+            <div class="actions"><button type="submit">Créer le candidat sans l’activer</button></div>
+          </form>
+          <div id="rss-candidate-status" class="status"></div>
+        </details>
       </div>
       <div>
         <div class="card"><h2>Abonnements du projet</h2><div id="rss-subscription-list" class="list"></div></div>
         <div class="card"><h2>Éléments récents</h2><div id="rss-item-list" class="list"></div></div>
+        <div class="card"><h2>Flux proposés et contrôlés</h2><div id="rss-candidate-list" class="list"></div></div>
       </div>
+    </div>
+  </section>
+
+  <section id="view-spip" class="view">
+    <div class="grid">
+      <div class="card">
+        <h2>Nouveau brouillon SPIP</h2>
+        <p class="intro">Seules des données publiques sont admises. La création reste un brouillon : une seconde action manuelle est obligatoire avant que le plugin SPIP puisse le récupérer.</p>
+        <form id="spip-draft-form">
+          <label for="spip-kind">Type éditorial</label>
+          <select id="spip-kind"><option value="documentation">Documentation</option><option value="news">Actualité</option><option value="feed_curation">Curation de flux</option><option value="alert_curation">Curation d’alerte</option><option value="project_share">Partage de projet</option></select>
+          <label for="spip-title">Titre</label><input id="spip-title" required minlength="2" maxlength="240">
+          <label for="spip-summary">Résumé</label><textarea id="spip-summary" maxlength="2000"></textarea>
+          <label for="spip-body">Contenu public</label><textarea id="spip-body" maxlength="500000"></textarea>
+          <label for="spip-snapshot">Instantané source public (JSON)</label><textarea id="spip-snapshot" spellcheck="false" maxlength="1500000">{}</textarea>
+          <div class="actions"><button type="submit">Créer le brouillon</button></div>
+        </form>
+        <div id="spip-draft-status" class="status"></div>
+      </div>
+      <div>
+        <div class="card">
+          <h2>Passerelle SPIP</h2>
+          <p class="intro">Le jeton limité à la lecture et aux accusés de réception n’est affiché qu’une fois. Copiez-le directement dans la variable d’environnement du serveur SPIP.</p>
+          <form id="spip-connection-form"><label for="spip-connection-name">Nom</label><input id="spip-connection-name" required minlength="2" maxlength="120" value="Site SPIP principal"><label for="spip-base-url">Origine HTTPS</label><input id="spip-base-url" type="url" required placeholder="https://publications.example.org"><div class="actions"><button type="submit">Créer la connexion</button></div></form>
+          <pre id="spip-one-time-token" class="request-preview">Aucun jeton créé dans cette session.</pre>
+          <div id="spip-connection-status" class="status"></div><div id="spip-connection-list" class="list"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card"><div class="item-head"><div><h2>Publications du projet</h2><p class="intro">Approbation, rejet et retrait sont audités. Après approbation, SPIP publie le contenu dans son espace réservé aux comptes nominatifs.</p></div><div class="actions"><button id="spip-refresh" class="secondary" type="button">Actualiser</button></div></div><div id="spip-publication-list" class="list"></div></div>
+  </section>
+
+  <section id="view-mail" class="view">
+    <div class="grid">
+      <div class="card">
+        <h2>Importer un message public</h2>
+        <p class="intro">Ce premier connecteur lit un fichier EML sans se connecter à une boîte mail. Les adresses sont hachées ou masquées, les paramètres des URL sont retirés et les exécutables sont refusés.</p>
+        <form id="mail-import-form">
+          <label for="mail-eml">Fichier .eml (30 Mio maximum)</label><input id="mail-eml" name="file" type="file" accept=".eml,message/rfc822" required>
+          <label for="mail-public-url">Page HTTPS prouvant le caractère public de la source</label><input id="mail-public-url" name="public_source_url" type="url" required pattern="https://[^?#]+" placeholder="https://organisation.example.org/alertes">
+          <label class="check"><input id="mail-public-confirmed" name="public_source_confirmed" type="checkbox" required> Je confirme que le message et toutes ses pièces jointes sont publics.</label>
+          <div class="actions"><button type="submit">Importer sans rattacher</button></div>
+        </form>
+        <div class="notice warn">Aucun moteur antimalware n’est encore intégré. Les pièces jointes restent confinées et chaque téléchargement non analysé exige une confirmation.</div>
+        <div id="mail-status" class="status"></div>
+      </div>
+      <div class="card"><div class="item-head"><div><h2>Messages importés</h2><p class="intro">Le rattachement manuel crée un signal public et l’évalue contre les règles V6 du projet.</p></div><div class="actions"><button id="mail-refresh" class="secondary" type="button">Actualiser</button></div></div><div id="mail-list" class="list"></div></div>
     </div>
   </section>
 
   <section id="view-timeline" class="view">
     <div class="card">
-      <div class="item-head"><div><h2>Chronologie / Gantt</h2><p class="intro">Acquisitions, traitements Python/R, exécutions planifiées et prochaines échéances.</p></div><div class="actions"><select id="timeline-days" aria-label="Fenêtre temporelle"><option value="7">7 jours</option><option value="30" selected>30 jours</option><option value="90">90 jours</option></select><button id="timeline-refresh" class="secondary">Actualiser</button></div></div>
+      <div class="item-head"><div><h2>Chronologie / Gantt</h2><p class="intro">La portée globale réunit migrations, contrats et activations ; la portée projet réunit recherches, acquisitions, cache, scripts, règles, signaux et mises à jour.</p></div><div class="actions"><select id="timeline-scope" aria-label="Portée de l’audit"><option value="project">Audit du projet</option><option value="global">Audit global</option></select><select id="timeline-days" aria-label="Fenêtre temporelle"><option value="7">7 jours</option><option value="30" selected>30 jours</option><option value="90">90 jours</option></select><button id="timeline-refresh" class="secondary">Actualiser</button></div></div>
+      <div class="metrics">
+        <div class="metric"><strong id="timeline-event-count">0</strong><span>traces d'audit</span></div>
+        <div class="metric"><strong id="timeline-category-count">0</strong><span>catégories</span></div>
+        <div class="metric"><strong id="timeline-failure-count">0</strong><span>échecs ou blocages</span></div>
+        <div class="metric"><strong id="timeline-scope-label">projet</strong><span>portée active</span></div>
+      </div>
       <div id="timeline-status" class="status"></div>
       <div id="timeline-gantt" class="gantt"></div>
+      <h3 style="margin-top:22px">Journal d’audit V6</h3><div id="timeline-audit" class="list"></div>
     </div>
   </section>
 
@@ -555,25 +738,46 @@
       </div>
     </div>
   </section>
+
+  <section id="view-backups" class="view">
+    <div class="grid">
+      <div class="card">
+        <h2>Créer une sauvegarde SQL</h2>
+        <p class="intro">La sauvegarde globale utilise le format natif PostgreSQL. Les périmètres projet et signaux produisent un paquet JSONL cohérent avec manifeste, empreintes et versions de schéma.</p>
+        <form id="backup-form">
+          <label for="backup-scope">Périmètre</label><select id="backup-scope"><option value="project">Projet actif</option><option value="signals">Signaux</option><option value="global">Instance globale</option></select>
+          <label for="backup-signal-mode">Sélection des signaux</label><select id="backup-signal-mode"><option value="explicit_ids">UUID sélectionnés dans le projet actif</option><option value="project">Tous les signaux du projet actif</option><option value="global">Tous les projets</option></select>
+          <label for="backup-signal-ids">UUID des signaux, séparés par des virgules</label><textarea id="backup-signal-ids" placeholder="Requis pour la sélection par UUID"></textarea>
+          <label for="backup-signal-from">Début inclus (optionnel)</label><input id="backup-signal-from" type="datetime-local">
+          <label for="backup-signal-to">Fin exclue (optionnelle)</label><input id="backup-signal-to" type="datetime-local">
+          <div class="actions"><button type="submit">Créer et vérifier la sauvegarde</button></div>
+        </form>
+        <div class="notice warn">Une restauration n’est jamais lancée automatiquement. Elle nécessite une procédure de recette distincte et une validation explicite.</div>
+        <div id="backup-status" class="status"></div>
+      </div>
+      <div class="card"><div class="item-head"><h2>Sauvegardes disponibles</h2><div class="actions"><button id="backup-refresh" class="secondary" type="button">Actualiser</button></div></div><div id="backup-list" class="list"></div></div>
+    </div>
+  </section>
 </main>
 <script src="/static/vendor/leaflet/leaflet.js"></script>
 <script>
-  const state={projects:[],projectId:null,editingScriptId:null,codFamilies:[],codAvailability:null,sources:[],sourceSettings:[],resources:[],rssCatalog:[],processingOperations:null,technologies:null,leafletMap:null,leafletLayers:new Map(),tileLayer:null,mapConfig:null};
+  const state={projects:[],projectId:null,editingScriptId:null,codFamilies:[],codAvailability:null,sources:[],sourceSettings:[],resources:[],rssCatalog:[],processingOperations:null,technologies:null,v6Rules:[],v6Policy:null,leafletMap:null,leafletLayers:new Map(),tileLayer:null,mapConfig:null};
   const q=selector=>document.querySelector(selector);
   const els={project:q('#project-select'),health:q('#health')};
   const escapeText=value=>String(value??'');
   function setStatus(selector,message,error=false){const el=q(selector);el.textContent=message||'';el.className=`status${error?' error':''}`;}
   function cookieValue(name){const prefix=`${encodeURIComponent(name)}=`;const item=document.cookie.split(';').map(value=>value.trim()).find(value=>value.startsWith(prefix));return item?decodeURIComponent(item.slice(prefix.length)):'';}
-  async function api(path,options={}){const isForm=options.body instanceof FormData;const method=String(options.method||'GET').toUpperCase();const mutation=!['GET','HEAD','OPTIONS'].includes(method);const headers=isForm?{...(options.headers||{})}:{'Content-Type':'application/json',...(options.headers||{})};if(mutation)headers['X-HDP-CSRF']=cookieValue('hdp_csrf')||'1';const response=await fetch(path,{...options,headers,credentials:'same-origin'});if(response.status===204)return null;const data=await response.json().catch(()=>({detail:`Erreur HTTP ${response.status}`}));if(response.status===401){throw new Error('Session HDP expirée : rouvrez l’application depuis son raccourci.');}if(response.status===403&&data.detail==='Origine ou jeton CSRF refusé'){throw new Error('Session de sécurité à renouveler : rechargez HDP avec Ctrl+F5 ou rouvrez le lien sécurisé de l’installateur.');}if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail));return data;}
+  async function api(path,options={}){const isForm=options.body instanceof FormData;const method=String(options.method||'GET').toUpperCase();const mutation=!['GET','HEAD','OPTIONS'].includes(method);const headers=isForm?{...(options.headers||{})}:{'Content-Type':'application/json',...(options.headers||{})};if(mutation)headers['X-HDP-CSRF']=cookieValue('hdp_csrf');const response=await fetch(path,{...options,headers,credentials:'same-origin'});if(response.status===204)return null;const data=await response.json().catch(()=>({detail:`Erreur HTTP ${response.status}`}));if(response.status===401){location.assign('/');throw new Error('Session HDP expirée : authentifiez-vous de nouveau avec votre passkey.');}if(response.status===403&&data.detail==='Origine ou jeton CSRF refusé'){throw new Error('Session de sécurité à renouveler : rechargez HDP puis réessayez.');}if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail));return data;}
   function bytes(value){const units=['o','Kio','Mio','Gio'];let n=Number(value||0),i=0;while(n>=1024&&i<units.length-1){n/=1024;i++;}return `${n.toLocaleString('fr-FR',{maximumFractionDigits:i?1:0})} ${units[i]}`;}
   function date(value){return value?new Date(value).toLocaleString('fr-FR'):'—';}
   function button(label,handler,className=''){const b=document.createElement('button');b.type='button';b.textContent=label;b.className=className;b.addEventListener('click',handler);return b;}
   function empty(container,message){container.innerHTML='';const div=document.createElement('div');div.className='empty';div.textContent=message;container.appendChild(div);}
 
-  function activateView(name){document.querySelectorAll('nav button').forEach(item=>item.classList.toggle('active',item.dataset.view===name));document.querySelectorAll('.view').forEach(view=>view.classList.toggle('active',view.id===`view-${name}`));if(name==='data')loadResources();if(name==='scripts'){loadScripts();loadProcessingWorkspace();}if(name==='notebooks')loadNotebooks();if(name==='intelligence')loadIntelligence();if(name==='schedules')loadSchedules();if(name==='projects')loadProjectSettings();if(name==='sources')renderSources();if(name==='source-settings')loadSourceSettings();if(name==='rss')loadRss();if(name==='timeline')loadTimeline();if(name==='map')loadMapLayers();if(name==='sql')loadSqlSchema();if(name==='technologies')loadTechnologies();window.location.hash=name;}
+  function activateView(name){document.querySelectorAll('nav button').forEach(item=>item.classList.toggle('active',item.dataset.view===name));document.querySelectorAll('.view').forEach(view=>view.classList.toggle('active',view.id===`view-${name}`));if(name==='data')loadResources();if(name==='scripts'){loadScripts();loadProcessingWorkspace();}if(name==='notebooks')loadNotebooks();if(name==='intelligence')loadIntelligence();if(name==='actions')loadActionOperations();if(name==='schedules')loadSchedules();if(name==='projects')loadProjectSettings();if(name==='sources')renderSources();if(name==='source-settings')loadSourceSettings();if(name==='rss')loadRss();if(name==='spip')loadSpip();if(name==='mail')loadMail();if(name==='timeline')loadTimeline();if(name==='map')loadMapLayers();if(name==='sql')loadSqlSchema();if(name==='backups')loadBackups();if(name==='technologies')loadTechnologies();window.location.hash=name;}
   document.querySelectorAll('nav button').forEach(tab=>tab.addEventListener('click',()=>activateView(tab.dataset.view)));
   q('#brand-home').addEventListener('click',event=>{event.preventDefault();activateView('home');});
   document.querySelectorAll('[data-go-view]').forEach(button=>button.addEventListener('click',()=>activateView(button.dataset.goView)));
+  q('#logout').addEventListener('click',async()=>{try{await api('/api/auth/logout',{method:'POST',body:'{}'});}finally{location.assign('/');}});
 
   async function loadHealth(){try{const data=await api('/api/health');const python=data.runners?.python?.available?'Python prêt':'Python en attente';els.health.textContent=`Opérationnel · v${data.version} · ${python} · planificateur ${data.scheduler==='running'?'actif':'arrêté'}`;}catch(error){els.health.textContent='Service indisponible';els.health.style.color='var(--danger)';}}
   async function loadSources(){
@@ -587,8 +791,18 @@
   function sourceLink(label,url){const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener';link.textContent=label;return link;}
   function renderSources(){
     const items=state.sources,container=q('#source-catalog');container.innerHTML='';q('#sources-total').textContent=items.length;q('#sources-live').textContent=items.filter(item=>item.mode==='live_api').length;q('#sources-reference').textContent=items.filter(item=>item.mode==='reference_portal').length;q('#sources-auth').textContent=items.filter(item=>item.requires_auth).length;
-    if(!items.length)return empty(container,'Catalogue indisponible.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=item.mode==='live_api'?'API active':'Référence';head.append(title,pill);const organization=document.createElement('small');organization.textContent=`${item.organization} · ${item.geographic_scope} · ${item.category}`;const domains=document.createElement('small');domains.textContent=`Domaines : ${(item.domains||[]).join(', ')}`;const access=document.createElement('small');access.textContent=`Accès : ${item.access}${item.requires_auth?' · compte/identifiant requis pour tout ou partie':''}`;const profile=document.createElement('small');profile.textContent=item.technical_profile?`${item.technical_profile.protocol} · formats : ${item.technical_profile.formats.join(', ')} · actualisation : ${item.technical_profile.freshness}`:'';const tools=document.createElement('small');tools.textContent=item.technical_profile?`Python : ${item.technical_profile.python_tools.join(', ')} · R : ${item.technical_profile.r_tools.join(', ')}`:'';const note=document.createElement('small');note.textContent=item.notes||'';const links=document.createElement('div');links.className='source-links';const seen=new Set();const candidates=[{label:'Portail',url:item.portal_url},{label:'Documentation',url:item.documentation_url},{label:'API',url:item.api_url},...(item.official_links||[])];candidates.forEach(entry=>{if(entry.url&&!seen.has(entry.url)){seen.add(entry.url);links.append(sourceLink(entry.label,entry.url));}});card.append(head,organization,domains,access,profile,tools,note,links);container.appendChild(card);});const linkCount=items.reduce((total,item)=>total+(item.official_links||[]).length,0);setStatus('#source-catalog-status',`${items.length} sources documentées · ${items.filter(item=>item.searchable).length} interrogeables et planifiables · ${linkCount} liens officiels spécialisés.`);
+    if(!items.length)return empty(container,'Catalogue indisponible.');
+    items.forEach(item=>{
+      const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=item.mode==='live_api'?'API active':'Référence';head.append(title,pill);
+      const organization=document.createElement('small');organization.textContent=`${item.organization} · ${item.geographic_scope} · ${item.category}`;const domains=document.createElement('small');domains.textContent=`Domaines : ${(item.domains||[]).join(', ')}`;const access=document.createElement('small');access.textContent=`Accès : ${item.access}${item.requires_auth?' · compte/identifiant requis pour tout ou partie':''}`;const profile=document.createElement('small');profile.textContent=item.technical_profile?`${item.technical_profile.protocol} · formats : ${item.technical_profile.formats.join(', ')} · actualisation : ${item.technical_profile.freshness}`:'';const tools=document.createElement('small');tools.textContent=item.technical_profile?`Python : ${item.technical_profile.python_tools.join(', ')} · R : ${item.technical_profile.r_tools.join(', ')}`:'';const note=document.createElement('small');note.textContent=item.notes||'';
+      const links=document.createElement('div');links.className='source-links';const seen=new Set();const candidates=[{label:'Portail',url:item.portal_url},{label:'Documentation',url:item.documentation_url},{label:'API',url:item.api_url},...(item.official_links||[])];candidates.forEach(entry=>{if(entry.url&&!seen.has(entry.url)){seen.add(entry.url);links.append(sourceLink(entry.label,entry.url));}});
+      const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Paramétrages',()=>openSourceSettings(item.id)));const configuration=document.createElement('a');configuration.href=`/api/v6/sources/${encodeURIComponent(item.id)}/configuration`;configuration.target='_blank';configuration.rel='noopener';configuration.textContent='Configuration en lecture';actions.append(configuration);
+      card.append(head,organization,domains,access,profile,tools,note,links,actions);container.appendChild(card);
+    });
+    const linkCount=items.reduce((total,item)=>total+(item.official_links||[]).length,0);setStatus('#source-catalog-status',`${items.length} sources documentées · ${items.filter(item=>item.searchable).length} interrogeables et planifiables · ${linkCount} liens officiels spécialisés.`);
   }
+
+  async function openSourceSettings(sourceId){activateView('source-settings');if([...q('#global-source-select').options].some(option=>option.value===sourceId))q('#global-source-select').value=sourceId;if([...q('#project-source-select').options].some(option=>option.value===sourceId))q('#project-source-select').value=sourceId;await Promise.all([loadGlobalSourceForm(),loadProjectSourceForm(),loadSourceEndpoints(sourceId)]);}
 
   function renderTechnologyItem(item){const card=document.createElement('article');card.className='link-card';const title=document.createElement('h4');title.textContent=item.name;const status=document.createElement('span');status.className='pill';status.textContent=item.status==='used'?'utilisé par HDP':'conseillé';const purpose=document.createElement('p');purpose.textContent=item.purpose;const links=document.createElement('div');links.className='source-links';(item.links||[]).forEach(entry=>links.append(sourceLink(entry.label,entry.url)));card.append(title,status,purpose,links);return card;}
   async function loadTechnologies(){if(state.technologies){renderTechnologies();return;}setStatus('#technology-status','Chargement du catalogue vérifié…');try{state.technologies=await api('/api/technologies');renderTechnologies();}catch(error){setStatus('#technology-status',error.message,true);}}
@@ -622,7 +836,7 @@
     const values={};container.querySelectorAll('[data-schema-name]').forEach(input=>{const name=input.dataset.schemaName,type=input.dataset.schemaType;if(type==='boolean')values[name]=input.checked;else if(type==='integer')values[name]=Number(input.value);else if(type==='array')values[name]=input.value.split(',').map(value=>value.trim()).filter(Boolean).map(value=>/^\d{4}$/.test(value)?Number(value):value);else values[name]=input.value;});return values;
   }
   async function loadSourceSettings(){
-    if(!state.sources.length)return;setStatus('#global-source-status','Chargement…');try{state.sourceSettings=await api('/api/source-settings');await Promise.all([loadGlobalSourceForm(),loadProjectSourceForm()]);setStatus('#global-source-status','');}catch(error){setStatus('#global-source-status',error.message,true);}
+    if(!state.sources.length)return;setStatus('#global-source-status','Chargement…');try{state.sourceSettings=await api('/api/source-settings');await Promise.all([loadGlobalSourceForm(),loadProjectSourceForm(),loadSourceEndpoints()]);setStatus('#global-source-status','');}catch(error){setStatus('#global-source-status',error.message,true);}
   }
   async function loadGlobalSourceForm(){
     const sourceId=q('#global-source-select').value;if(!sourceId)return;const source=state.sourceSettings.find(item=>item.id===sourceId)||await api(`/api/source-settings/${sourceId}`);renderSourceContext(source,'#global-source-context');renderSchemaFields(source.global_settings_schema,q('#global-source-fields'),source.configuration.settings,'global-source');const secret=source.configuration.secret_environment_variable;q('#global-source-secret').textContent=secret?`${secret} : ${source.configuration.secret_configured?'configuré':'absent'} — sa valeur n’est jamais affichée.`:'Ce connecteur ne nécessite aucun secret.';
@@ -630,7 +844,37 @@
   async function loadProjectSourceForm(){
     if(!state.projectId)return;const sourceId=q('#project-source-select').value;if(!sourceId)return;setStatus('#project-source-status','Chargement…');try{const [settings]=await Promise.all([api(`/api/projects/${state.projectId}/sources/${sourceId}`)]);const source=state.sources.find(item=>item.id===sourceId);renderSourceContext(source,'#project-source-context');q('#project-source-enabled').checked=settings.enabled;renderSchemaFields(source.project_schema,q('#project-source-fields'),settings.parameters,'project-source');q('#project-source-interval').value=settings.schedule_defaults.interval_minutes;q('#project-source-schedule-enabled').checked=settings.schedule_defaults.enabled;q('#project-source-schedule-download').checked=settings.schedule_defaults.auto_download;q('#project-source-request').textContent='Aucune prévisualisation.';setStatus('#project-source-status','');}catch(error){setStatus('#project-source-status',error.message,true);}
   }
-  q('#global-source-select').addEventListener('change',loadGlobalSourceForm);q('#project-source-select').addEventListener('change',loadProjectSourceForm);
+  function sourceContractText(value){if(value===null||value===undefined||value==='')return 'non renseigné';if(Array.isArray(value))return value.every(item=>['string','number','boolean'].includes(typeof item))?(value.join(', ')||'aucun'):JSON.stringify(value,null,2);if(typeof value==='object')return JSON.stringify(value,null,2);return String(value);}
+  function sourceContractSection(title,lines=[],wide=false){const section=document.createElement('section');section.className=`contract-section${wide?' wide':''}`;const heading=document.createElement('h5');heading.textContent=title;section.appendChild(heading);lines.forEach(([label,value])=>{const row=document.createElement('p');const strong=document.createElement('strong');strong.textContent=`${label} : `;row.append(strong,document.createTextNode(sourceContractText(value)));section.appendChild(row);});return section;}
+  function renderSourceContractOverview(configuration,items){
+    const container=q('#source-contract-overview');container.innerHTML='';const profile=configuration.technical_profile||{};const globalFields=Object.entries(configuration.global_settings_schema?.properties||{}).map(([name,schema])=>`${name} (${schema.type||'type inconnu'})`);const projectFields=Object.entries(configuration.project_schema?.properties||{}).map(([name,schema])=>`${name} (${schema.type||'type inconnu'})`);const states=items.reduce((result,item)=>{result[item.state]=(result[item.state]||0)+1;return result;},{});
+    container.append(
+      sourceContractSection('Métadonnées du registre',[["Fichier",configuration.configuration_file],["Version",configuration.registry_version],["Vérifié le",date(configuration.verified_at)],["Preuves documentaires",configuration.documentation_evidence]]),
+      sourceContractSection('Technique',[["URL de base",configuration.base_url],["Protocole",profile.protocol],["Authentification",profile.authentication],["Formats",profile.formats],["Actualisation",profile.freshness],["Outils Python",profile.python_tools],["Outils R",profile.r_tools]]),
+      sourceContractSection("Paramètres d'entrée",[["Portée globale",globalFields],["Portée projet",projectFields],["Secret",configuration.secret_environment_variable?'variable d’environnement, valeur jamais exposée':'aucun']]),
+      sourceContractSection("État d'activation",[["États des endpoints",states],["Activés",items.filter(item=>String(item.state).startsWith('active_')).length],["Inventaire distinct de l’exécution",'oui']])
+    );
+  }
+  function renderSourceEndpointDetail(card,full){
+    let dossier=card.querySelector('.endpoint-dossier');if(!dossier){dossier=document.createElement('div');dossier.className='endpoint-dossier';card.appendChild(dossier);}dossier.innerHTML='';const endpoint=full.endpoint;
+    dossier.appendChild(sourceContractSection('Endpoint',[["Identifiant",endpoint.endpoint_id],["Opération",`${endpoint.method} ${endpoint.path}`],["Résumé",endpoint.summary],["Version API",endpoint.api_version]]));
+    const parameters=sourceContractSection("Paramètres d'entrée",[["Total",full.parameters.length]]);full.parameters.forEach(parameter=>{const item=document.createElement('div');item.className='item';const title=document.createElement('strong');title.textContent=`${parameter.location} · ${parameter.name}`;const detail=document.createElement('small');detail.textContent=`${parameter.required?'obligatoire':'facultatif'} · ${parameter.supported?'actif HDP':'inventorié seulement'} · ${parameter.sensitive?'sensible, valeur masquée':'public'} · schéma ${sourceContractText(parameter.schema)}`;const description=document.createElement('small');description.textContent=parameter.description||'Sans description officielle.';item.append(title,detail,description);parameters.appendChild(item);});dossier.appendChild(parameters);
+    const responses=sourceContractSection('Champs de réponse',[["Total",full.response_fields.length]]);full.response_fields.forEach(field=>{const item=document.createElement('div');item.className='item';const title=document.createElement('strong');title.textContent=field.path;const detail=document.createElement('small');detail.textContent=`${field.documented?'documenté':'non documenté'} · ${field.observed?'observé':'non observé'} · ${field.nullable?'nullable':'non nullable'} · cardinalité ${field.cardinality||'inconnue'} · schéma ${sourceContractText(field.schema)}`;item.append(title,detail);responses.appendChild(item);});dossier.appendChild(responses);
+    dossier.appendChild(sourceContractSection('Métadonnées',[["Contrat SHA-256",endpoint.contract_sha256],["Documentation SHA-256",endpoint.documentation_sha256],["Document vérifié",date(endpoint.verified_at)],["Valide depuis",date(endpoint.valid_from)],["Valide jusqu’au",date(endpoint.valid_until)]]));
+    dossier.appendChild(sourceContractSection('Technique',[["Authentification",endpoint.authentication],["Formats",endpoint.formats],["Hôtes autorisés",endpoint.allowed_hosts],["Limites",endpoint.limits],["Cache",endpoint.cache],["Adaptateur",endpoint.adapter_version],["Preuves de tests",endpoint.test_evidence]]));
+    const history=sourceContractSection("Historique",[["Transitions",full.activation_history.length]]);full.activation_history.forEach(change=>{const item=document.createElement('div');item.className='item';const title=document.createElement('strong');title.textContent=`${change.previous_state||'création'} → ${change.new_state}`;const detail=document.createElement('small');detail.textContent=`${date(change.occurred_at)} · ${change.actor||'acteur non renseigné'} · ${sourceContractText(change.evidence)}`;item.append(title,detail);history.appendChild(item);});dossier.appendChild(history);
+    dossier.appendChild(sourceContractSection("État d'activation",[["État courant",endpoint.state],["Activé le",date(endpoint.activated_at)],["Suspendu le",date(endpoint.suspended_at)],["État mis à jour",date(endpoint.state_updated_at)],["Exécutable",String(endpoint.state).startsWith('active_')?'oui, sous réserve du projet et de l’adaptateur':'non']]),true);
+  }
+  async function loadSourceEndpoints(explicitSourceId=null){
+    const sourceId=explicitSourceId||q('#global-source-select').value||q('#project-source-select').value;if(!sourceId)return;const container=q('#source-endpoint-list');q('#source-configuration-link').href=`/api/v6/sources/${encodeURIComponent(sourceId)}/configuration`;setStatus('#source-endpoint-status','Chargement de l’inventaire versionné…');
+    try{
+      const [configuration,items]=await Promise.all([api(`/api/v6/sources/${encodeURIComponent(sourceId)}/configuration`),api(`/api/v6/sources/${encodeURIComponent(sourceId)}/endpoints`)]);renderSourceContractOverview(configuration,items);q('#source-endpoint-count').textContent=items.length;q('#source-parameter-count').textContent=items.reduce((total,item)=>total+Number(item.parameter_count||0),0);q('#source-response-field-count').textContent=items.reduce((total,item)=>total+Number(item.response_field_count||0),0);q('#source-active-endpoint-count').textContent=items.filter(item=>String(item.state).startsWith('active_')).length;container.innerHTML='';
+      if(!items.length){empty(container,'Aucun contrat V6 importé pour cette source. Le connecteur 5.x reste disponible, mais son inventaire officiel complet n’est pas encore qualifié.');setStatus('#source-endpoint-status','0 endpoint V6 inventorié · activation inchangée.');return;}
+      items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=`${item.method} ${item.path}`;const pill=document.createElement('span');pill.className='pill';pill.textContent=item.state;head.append(title,pill);const detail=document.createElement('small');detail.textContent=`API ${item.api_version} · ${item.parameter_count} entrée(s) · ${item.response_field_count} champ(s) de réponse · contrat ${item.contract_sha256}`;const summary=document.createElement('small');summary.textContent=item.summary||'Description officielle non importée';const actions=document.createElement('div');actions.className='mini-actions';const contract=document.createElement('a');contract.href=item.documentation_url;contract.target='_blank';contract.rel='noopener';contract.textContent='Documentation officielle';actions.append(contract);actions.append(button('Ouvrir le dossier contractuel',async event=>{event.target.disabled=true;try{const full=await api(`/api/v6/sources/${encodeURIComponent(sourceId)}/endpoints/${item.id}`);renderSourceEndpointDetail(card,full);event.target.textContent='Actualiser le dossier contractuel';}catch(error){setStatus('#source-endpoint-status',error.message,true);}finally{event.target.disabled=false;}}));card.append(head,detail,summary,actions);container.appendChild(card);});setStatus('#source-endpoint-status',`${items.length} endpoint(s) inventorié(s). Les entrées, réponses, métadonnées, éléments techniques, historique et états d’activation sont disponibles sans exposer de secret.`);
+    }catch(error){q('#source-contract-overview').innerHTML='';empty(container,'Inventaire indisponible.');setStatus('#source-endpoint-status',error.message,true);}
+  }
+  q('#source-endpoint-refresh').addEventListener('click',()=>loadSourceEndpoints());
+  q('#global-source-select').addEventListener('change',()=>{loadGlobalSourceForm();loadSourceEndpoints();});q('#project-source-select').addEventListener('change',()=>{loadProjectSourceForm();loadSourceEndpoints(q('#project-source-select').value);});
   q('#global-source-form').addEventListener('submit',async event=>{event.preventDefault();const sourceId=q('#global-source-select').value;try{await api(`/api/source-settings/${sourceId}`,{method:'PUT',body:JSON.stringify({settings:readSchemaFields(q('#global-source-fields'))})});setStatus('#global-source-status','Paramètres globaux enregistrés.');state.sourceSettings=await api('/api/source-settings');await loadGlobalSourceForm();}catch(error){setStatus('#global-source-status',error.message,true);}});
   function projectSourcePayload(){return {enabled:q('#project-source-enabled').checked,parameters:readSchemaFields(q('#project-source-fields')),schedule_defaults:{interval_minutes:Number(q('#project-source-interval').value),enabled:q('#project-source-schedule-enabled').checked,auto_download:q('#project-source-schedule-download').checked}};}
   q('#project-source-form').addEventListener('submit',async event=>{event.preventDefault();const sourceId=q('#project-source-select').value;try{await api(`/api/projects/${state.projectId}/sources/${sourceId}`,{method:'PUT',body:JSON.stringify(projectSourcePayload())});setStatus('#project-source-status','Paramètres du projet enregistrés.');await loadProjectSourceForm();}catch(error){setStatus('#project-source-status',error.message,true);}});
@@ -640,7 +884,7 @@
     state.projects.forEach(project=>{const option=document.createElement('option');option.value=project.id;option.textContent=project.name;els.project.appendChild(option);});
     state.projectId=state.projects.some(p=>p.id===previous)?previous:state.projects[0]?.id;els.project.value=state.projectId||'';if(state.projectId)localStorage.setItem('hdp-project',state.projectId);renderProjectList();await loadProjectSettings();
   }
-  els.project.addEventListener('change',async()=>{if(state.leafletMap)state.leafletLayers.forEach(layer=>state.leafletMap.removeLayer(layer));state.leafletLayers.clear();state.projectId=els.project.value;localStorage.setItem('hdp-project',state.projectId);renderProjectList();await Promise.all([loadProjectSettings(),loadResources(),loadScripts(),loadProcessingWorkspace(),loadSchedules(),loadRss(),loadTimeline(),loadMapLayers(),renderSearchSourceFields()]);});
+  els.project.addEventListener('change',async()=>{if(state.leafletMap)state.leafletLayers.forEach(layer=>state.leafletMap.removeLayer(layer));state.leafletLayers.clear();state.projectId=els.project.value;localStorage.setItem('hdp-project',state.projectId);renderProjectList();await Promise.all([loadProjectSettings(),loadResources(),loadScripts(),loadProcessingWorkspace(),loadSchedules(),loadRss(),loadSpip(),loadTimeline(),loadMapLayers(),renderSearchSourceFields(),loadV6Workspace(),loadActionOperations()]);});
 
   q('#search-form').addEventListener('submit',async event=>{
     event.preventDefault();const submit=q('#search-submit');submit.disabled=true;setStatus('#search-status','Acquisition en cours…');empty(q('#search-results'),'Interrogation et archivage en cours…');
@@ -682,7 +926,7 @@
   function renderResources(items){
     const container=q('#resource-list');container.innerHTML='';if(!items.length)return empty(container,'Aucune ressource locale ne correspond aux filtres.');
     items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.filename||item.title;const pill=document.createElement('span');pill.className=`pill ${item.status}`;pill.textContent=item.status;head.append(title,pill);const official=item.m49_code?` · ${(item.cod_family||'COD').toUpperCase()} · ONU M49 ${item.m49_code}${item.iso3_code?' / '+item.iso3_code:''} · ${item.cod_level||'officiel'}${item.publisher?' · '+item.publisher:''}`:'';const library=[item.subject,item.organization,item.geographic_scope,item.published_at?date(item.published_at):null].filter(Boolean).join(' · ');const refresh=item.refresh_schedule?` · mise à jour ${item.refresh_schedule.enabled?'active':'suspendue'} toutes les ${item.refresh_schedule.interval_minutes} min · prochain passage ${date(item.refresh_schedule.next_run_at)} · ${item.refresh_schedule.last_status||'jamais exécutée'}`:item.update_frequency?` · périodicité déclarée : ${item.update_frequency}`:' · périodicité non renseignée';const details=document.createElement('small');details.textContent=`${item.source} · ${item.origin_kind||'download'} · ${item.format||'format inconnu'} · ${bytes(item.size_bytes)} · ${date(item.updated_at)}${library?' · '+library:''}${official}${refresh}${item.error?' · '+item.error:''}`;const actions=document.createElement('div');actions.className='mini-actions';
-      if(item.status==='completed'){const download=document.createElement('a');download.href=`/api/resources/${item.id}/file`;download.textContent='Télécharger';actions.append(download);actions.append(button('Vérifier SHA-256',async()=>{try{const result=await api(`/api/resources/${item.id}/verify`,{method:'POST'});alert(result.valid?'Empreinte valide.':`Empreinte invalide.\nAttendue: ${result.expected}\nCalculée: ${result.actual}`);}catch(error){alert(error.message);}}));const format=String(item.format||'').toLowerCase();const name=String(item.filename||'').toLowerCase();if(format.includes('geojson')||name.endsWith('.geojson'))actions.append(button('Importer dans PostGIS',async event=>{event.target.disabled=true;try{const layer=await api(`/api/resources/${item.id}/map/import`,{method:'POST'});setStatus('#resource-status',`Couche ${layer.name} importée : ${layer.feature_count} entité(s).`);await loadMapLayers();}catch(error){setStatus('#resource-status',error.message,true);}finally{event.target.disabled=false;}}));}
+      if(item.status==='completed'){const download=document.createElement('a');download.href=`/api/resources/${item.id}/file`;download.textContent='Télécharger';actions.append(download);actions.append(button('Ouvrir le dossier contenant',async()=>{try{const folder=await api(`/api/resources/${item.id}/containing-folder`);const listing=folder.files.map(file=>`${file.selected?'→':' '} ${file.name} · ${bytes(file.size_bytes)}`).join('\n');alert(`${folder.folder_label}\n${folder.reason}\n\n${listing||'Aucun autre fichier accessible.'}`);}catch(error){alert(error.message);}}));actions.append(button('Vérifier SHA-256',async()=>{try{const result=await api(`/api/resources/${item.id}/verify`,{method:'POST'});alert(result.valid?'Empreinte valide.':`Empreinte invalide.\nAttendue: ${result.expected}\nCalculée: ${result.actual}`);}catch(error){alert(error.message);}}));const format=String(item.format||'').toLowerCase();const name=String(item.filename||'').toLowerCase();if(format.includes('geojson')||name.endsWith('.geojson'))actions.append(button('Importer dans PostGIS',async event=>{event.target.disabled=true;try{const layer=await api(`/api/resources/${item.id}/map/import`,{method:'POST'});setStatus('#resource-status',`Couche ${layer.name} importée : ${layer.feature_count} entité(s).`);await loadMapLayers();}catch(error){setStatus('#resource-status',error.message,true);}finally{event.target.disabled=false;}}));}
       actions.append(button(item.refresh_schedule?'Modifier la périodicité':'Planifier la mise à jour',()=>configureResourceSchedule(item)));if(item.refresh_schedule)actions.append(button(item.refresh_schedule.enabled?'Suspendre la mise à jour':'Réactiver la mise à jour',async()=>{try{await api(`/api/resources/${item.id}/refresh-schedule`,{method:'PATCH',body:JSON.stringify({enabled:!item.refresh_schedule.enabled})});await loadResources();}catch(error){setStatus('#resource-status',error.message,true);}}));
       actions.append(button('Supprimer localement',async()=>{if(confirm(`Supprimer le fichier local « ${item.filename||item.title} » ? La trace d'acquisition sera conservée.`)){await api(`/api/resources/${item.id}`,{method:'DELETE'});await loadResources();}},'danger'));card.append(head,details,actions);container.appendChild(card);
     });
@@ -713,12 +957,31 @@
   }
 
   q('#rss-form').addEventListener('submit',async event=>{event.preventDefault();const payload={registry_id:q('#rss-registry').value,name:q('#rss-name').value,query:q('#rss-query').value,language:q('#rss-language').value,interval_minutes:Number(q('#rss-interval').value),enabled:q('#rss-enabled').checked};try{await api(`/api/projects/${state.projectId}/rss/subscriptions`,{method:'POST',body:JSON.stringify(payload)});event.target.reset();q('#rss-language').value='en';q('#rss-interval').value=360;q('#rss-enabled').checked=true;setStatus('#rss-status','Abonnement créé.');await loadRss();}catch(error){setStatus('#rss-status',error.message,true);}});
-  async function loadRss(){if(!state.projectId||!q('#rss-registry'))return;try{if(!state.rssCatalog.length){state.rssCatalog=await api('/api/rss/catalog');q('#rss-registry').innerHTML='';state.rssCatalog.forEach(feed=>{const option=document.createElement('option');option.value=feed.id;option.textContent=feed.name;q('#rss-registry').appendChild(option);});}const [subscriptions,items]=await Promise.all([api(`/api/projects/${state.projectId}/rss/subscriptions`),api(`/api/projects/${state.projectId}/rss/items?limit=100`)]);renderRssSubscriptions(subscriptions);renderRssItems(items);setStatus('#rss-status',`${subscriptions.length} abonnement(s) · ${items.length} élément(s) récent(s).`);}catch(error){setStatus('#rss-status',error.message,true);}}
+  async function loadRss(){if(!state.projectId||!q('#rss-registry'))return;try{if(!state.rssCatalog.length){state.rssCatalog=await api('/api/rss/catalog');q('#rss-registry').innerHTML='';state.rssCatalog.forEach(feed=>{const option=document.createElement('option');option.value=feed.id;option.textContent=feed.name;q('#rss-registry').appendChild(option);});}const [subscriptions,items,candidates]=await Promise.all([api(`/api/projects/${state.projectId}/rss/subscriptions`),api(`/api/projects/${state.projectId}/rss/items?limit=100`),api('/api/v6/rss/candidates')]);renderRssSubscriptions(subscriptions);renderRssItems(items);renderRssCandidates(candidates);setStatus('#rss-status',`${subscriptions.length} abonnement(s) · ${items.length} élément(s) récent(s) · ${candidates.length} flux proposé(s).`);}catch(error){setStatus('#rss-status',error.message,true);}}
   function renderRssSubscriptions(items){const container=q('#rss-subscription-list');container.innerHTML='';if(!items.length)return empty(container,'Aucun abonnement RSS.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className=`pill ${item.last_status||''}`;pill.textContent=item.enabled?'actif':'suspendu';head.append(title,pill);const details=document.createElement('small');details.textContent=`${item.feed.name} · ${item.language} · toutes les ${item.interval_minutes} min · prochain passage ${date(item.next_fetch_at)} · ${item.last_status||'jamais lu'}${item.last_error?' · '+item.last_error:''}`;const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Lire maintenant',async event=>{event.target.disabled=true;try{const result=await api(`/api/rss/subscriptions/${item.id}/fetch`,{method:'POST'});setStatus('#rss-status',`Flux lu · ${result.new_items||0} nouvel élément.`);await loadRss();}catch(error){setStatus('#rss-status',error.message,true);}finally{event.target.disabled=false;}}));actions.append(button(item.enabled?'Suspendre':'Réactiver',async()=>{await api(`/api/rss/subscriptions/${item.id}`,{method:'PATCH',body:JSON.stringify({enabled:!item.enabled})});await loadRss();}));actions.append(button('Archiver',async()=>{if(confirm(`Archiver l’abonnement « ${item.name} » ?`)){await api(`/api/rss/subscriptions/${item.id}`,{method:'DELETE'});await loadRss();}},'danger'));card.append(head,details,actions);container.appendChild(card);});}
   function renderRssItems(items){const container=q('#rss-item-list');container.innerHTML='';if(!items.length)return empty(container,'Aucun élément RSS archivé.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const link=document.createElement('a');link.href=item.url||'#';link.target='_blank';link.rel='noopener';link.textContent=item.title;const details=document.createElement('small');details.textContent=`${item.subscription_name} · ${date(item.published_at||item.first_seen_at)}`;const summary=document.createElement('small');summary.textContent=item.summary||'';card.append(link,details,summary);container.appendChild(card);});}
+  q('#rss-candidate-form').addEventListener('submit',async event=>{event.preventDefault();const values=selector=>q(selector).value.split(',').map(value=>value.trim()).filter(Boolean);const payload={source_key:q('#rss-candidate-key').value,name:q('#rss-candidate-name').value,organization:q('#rss-candidate-org').value,region:q('#rss-candidate-region').value,themes:values('#rss-candidate-themes'),languages:values('#rss-candidate-languages'),feed_url:q('#rss-candidate-url').value,portal_url:q('#rss-candidate-portal').value,evidence_url:q('#rss-candidate-evidence').value,license:q('#rss-candidate-license').value,declared_frequency:q('#rss-candidate-frequency').value};try{await api('/api/v6/rss/candidates',{method:'POST',body:JSON.stringify(payload)});setStatus('#rss-candidate-status','Candidat créé sans activation. Lancez maintenant le contrôle réseau et du parseur.');await loadRssCandidates();}catch(error){setStatus('#rss-candidate-status',error.message,true);}});
+  async function loadRssCandidates(){try{renderRssCandidates(await api('/api/v6/rss/candidates'));}catch(error){setStatus('#rss-candidate-status',error.message,true);}}
+  function renderRssCandidates(items){const container=q('#rss-candidate-list');container.innerHTML='';if(!items.length)return empty(container,'Aucun flux proposé.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=item.state;head.append(title,pill);const detail=document.createElement('small');detail.textContent=`${item.organization} · ${item.region} · version ${item.version_number} · ${(item.themes||[]).join(', ')} · ${item.base_url}`;const actions=document.createElement('div');actions.className='mini-actions';if(['draft','approved'].includes(item.state))actions.append(button('Tester le flux',async event=>{event.target.disabled=true;try{const result=await api(`/api/v6/rss/candidates/${item.feed_source_id}/preview`,{method:'POST',body:'{}'});setStatus('#rss-candidate-status',`Contrôle réussi : ${result.item_count} élément(s), schéma ${result.schema_sha256}${result.schema_changed?' · schéma modifié':''}.`);await loadRssCandidates();}catch(error){setStatus('#rss-candidate-status',error.message,true);}finally{event.target.disabled=false;}}));if(['validated','suspended'].includes(item.state))actions.append(button('Approuver manuellement',async()=>{if(!confirm(`Approuver le flux officiel « ${item.name} » après contrôle ?`))return;await api(`/api/v6/rss/candidates/${item.feed_source_id}/decision`,{method:'POST',body:JSON.stringify({decision:'approve',reason:'Validation manuelle opérateur'})});await loadRssCandidates();}));if(item.state==='approved')actions.append(button('Abonner ce projet',async()=>{await api(`/api/v6/projects/${state.projectId}/rss/sources/${item.feed_source_id}/subscriptions`,{method:'POST',body:JSON.stringify({name:item.name,interval_minutes:360,enabled:true})});await Promise.all([loadRss(),loadRssCandidates()]);}));if(['approved','validated'].includes(item.state))actions.append(button('Suspendre',async()=>{await api(`/api/v6/rss/candidates/${item.feed_source_id}/decision`,{method:'POST',body:JSON.stringify({decision:'suspend',reason:'Suspension manuelle opérateur'})});await loadRssCandidates();},'danger'));card.append(head,detail,actions);container.appendChild(card);});}
 
-  q('#timeline-refresh').addEventListener('click',loadTimeline);q('#timeline-days').addEventListener('change',loadTimeline);
-  async function loadTimeline(){if(!state.projectId||!q('#timeline-gantt'))return;setStatus('#timeline-status','Chargement…');try{const data=await api(`/api/projects/${state.projectId}/timeline?days=${q('#timeline-days').value}`);renderTimeline(data);setStatus('#timeline-status',`${data.events.length} événement(s) sur la fenêtre.`);}catch(error){setStatus('#timeline-status',error.message,true);}}
+  q('#spip-draft-form').addEventListener('submit',async event=>{event.preventDefault();let snapshot;try{snapshot=JSON.parse(q('#spip-snapshot').value||'{}');}catch(error){setStatus('#spip-draft-status',`Instantané JSON invalide : ${error.message}`,true);return;}const payload={project_id:state.projectId,kind:q('#spip-kind').value,title:q('#spip-title').value,summary:q('#spip-summary').value,body_text:q('#spip-body').value,source_snapshot:snapshot,data_classification:'public'};try{const result=await api('/api/v6/spip/publications',{method:'POST',body:JSON.stringify(payload)});event.target.reset();q('#spip-snapshot').value='{}';setStatus('#spip-draft-status',`Brouillon créé · révision ${result.revision} · approbation manuelle obligatoire.`);await loadSpipPublications();}catch(error){setStatus('#spip-draft-status',error.message,true);}});
+  q('#spip-connection-form').addEventListener('submit',async event=>{event.preventDefault();try{const result=await api('/api/v6/spip/connections',{method:'POST',body:JSON.stringify({name:q('#spip-connection-name').value,base_url:q('#spip-base-url').value})});q('#spip-one-time-token').textContent=`HDP_BRIDGE_URL=${result.base_url}\nHDP_BRIDGE_TOKEN=${result.token}\n\nCe jeton ne sera plus affiché.`;setStatus('#spip-connection-status','Connexion créée. Copiez le jeton maintenant puis protégez la variable d’environnement SPIP.');await loadSpipConnections();}catch(error){setStatus('#spip-connection-status',error.message,true);}});
+  q('#spip-refresh').addEventListener('click',loadSpip);
+  async function loadSpip(){if(!state.projectId||!q('#spip-publication-list'))return;await Promise.all([loadSpipPublications(),loadSpipConnections()]);}
+  async function loadSpipConnections(){try{const data=await api('/api/v6/spip/connections');const container=q('#spip-connection-list');container.innerHTML='';if(!data.items.length)return empty(container,'Aucune connexion SPIP.');data.items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=item.enabled?'active':'révoquée';head.append(title,pill);const detail=document.createElement('small');detail.textContent=`${item.base_url} · droits ${(item.scopes||[]).join(', ')} · dernier accès ${date(item.last_used_at)}`;const actions=document.createElement('div');actions.className='mini-actions';if(item.enabled)actions.append(button('Révoquer',async()=>{if(!confirm(`Révoquer définitivement la connexion « ${item.name} » ?`))return;await api(`/api/v6/spip/connections/${item.id}/revoke`,{method:'POST',body:'{}'});await loadSpipConnections();},'danger'));card.append(head,detail,actions);container.appendChild(card);});}catch(error){setStatus('#spip-connection-status',error.message,true);}}
+  async function loadSpipPublications(){try{const data=await api(`/api/v6/spip/publications?project_id=${encodeURIComponent(state.projectId)}`);renderSpipPublications(data.items);}catch(error){setStatus('#spip-draft-status',error.message,true);}}
+  function renderSpipPublications(items){const container=q('#spip-publication-list');container.innerHTML='';if(!items.length)return empty(container,'Aucun brouillon SPIP pour ce projet.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.title;const pill=document.createElement('span');pill.className=`pill ${item.status}`;pill.textContent=item.status;head.append(title,pill);const detail=document.createElement('small');detail.textContent=`${item.kind} · série ${item.series_id} · révision ${item.revision} · ${date(item.updated_at)} · SHA-256 ${item.content_sha256}`;const actions=document.createElement('div');actions.className='mini-actions';if(item.status==='draft'){actions.append(button('Examiner',async()=>{const full=await api(`/api/v6/spip/publications/${item.id}`);alert(`${full.document.title}\n\n${full.document.summary}\n\n${full.document.body_text}\n\nEmpreinte : ${full.content_sha256}`);}));actions.append(button('Approuver et rendre disponible à SPIP',async()=>{if(!confirm(`Approuver manuellement « ${item.title} » pour publication dans l’espace SPIP protégé ?`))return;await decideSpip(item.id,'approve');}));actions.append(button('Rejeter',async()=>decideSpip(item.id,'reject'),'danger'));}if(['approved','exported'].includes(item.status))actions.append(button('Retirer de SPIP',async()=>{if(!confirm(`Retirer « ${item.title} » du site SPIP ?`))return;await decideSpip(item.id,'withdraw');},'danger'));card.append(head,detail,actions);container.appendChild(card);});}
+  async function decideSpip(id,decision){const reason=prompt('Motif de la décision (facultatif) :','')??'';try{await api(`/api/v6/spip/publications/${id}/decision`,{method:'POST',body:JSON.stringify({decision,reason})});setStatus('#spip-draft-status',`Décision « ${decision} » enregistrée et auditée.`);await loadSpipPublications();}catch(error){setStatus('#spip-draft-status',error.message,true);}}
+
+  q('#mail-refresh').addEventListener('click',loadMail);
+  q('#mail-import-form').addEventListener('submit',async event=>{event.preventDefault();const selected=q('#mail-eml').files[0];if(!selected)return;const form=new FormData();form.append('file',selected,selected.name);form.append('public_source_url',q('#mail-public-url').value);form.append('public_source_confirmed',q('#mail-public-confirmed').checked?'true':'false');const submit=event.target.querySelector('button[type="submit"]');submit.disabled=true;setStatus('#mail-status','Lecture, masquage des données de contact et calcul des empreintes…');try{const result=await api('/api/v6/mail/import-eml',{method:'POST',body:form});event.target.reset();setStatus('#mail-status',`Message importé sans rattachement · ${result.attachment_count} pièce(s) jointe(s) · analyse antimalware ${result.malware_scan_status}.`,result.malware_scan_status!=='passed');await loadMail();}catch(error){setStatus('#mail-status',error.message,true);}finally{submit.disabled=false;}});
+  async function loadMail(){if(!q('#mail-list')||!state.projectId)return;try{renderMail(await api(`/api/v6/mail/messages?project_id=${encodeURIComponent(state.projectId)}`));}catch(error){setStatus('#mail-status',error.message,true);}}
+  function renderMail(items){const container=q('#mail-list');container.innerHTML='';if(!items.length)return empty(container,'Aucun message EML public importé.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.subject;const pill=document.createElement('span');pill.className='pill';pill.textContent=item.linked_to_selected_project?'rattaché':'à classer';head.append(title,pill);const detail=document.createElement('small');detail.textContent=`${item.sender_domain||'domaine masqué'} · ${date(item.sent_at||item.received_at)} · ${item.attachment_count} pièce(s) jointe(s) · antimalware ${item.malware_scan_status} · SHA-256 ${item.body_sha256}`;const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Lire',async()=>{try{const full=await api(`/api/v6/mail/messages/${item.id}`);const attachments=full.attachments.map(part=>`${part.filename} · ${bytes(part.size_bytes)} · ${part.sha256}`).join('\n');alert(`${full.subject}\n\n${full.body_text}\n\nPIÈCES JOINTES\n${attachments||'Aucune'}`);if(full.attachments.length&&confirm('Afficher les liens de téléchargement des pièces jointes non analysées ?')){const links=full.attachments.map(part=>`${location.origin}/api/v6/mail/attachments/${part.id}/download?acknowledge_unscanned=true`).join('\n');prompt('Liens temporaires protégés par votre session HDP :',links);}}catch(error){setStatus('#mail-status',error.message,true);}}));actions.append(button('Rattacher au projet actif',async()=>{if(!confirm(`Rattacher ce message public au projet actif et l’exposer aux règles ?`))return;try{const result=await api(`/api/v6/mail/messages/${item.id}/projects/${state.projectId}`,{method:'POST',body:'{}'});setStatus('#mail-status',`Signal ${result.signal_event_id} créé · ${result.rule_evaluations.length} règle(s) V6 évaluée(s).`);await Promise.all([loadMail(),loadTimeline()]);}catch(error){setStatus('#mail-status',error.message,true);}}));card.append(head,detail,actions);container.appendChild(card);});}
+
+  q('#timeline-refresh').addEventListener('click',loadTimeline);q('#timeline-days').addEventListener('change',loadTimeline);q('#timeline-scope').addEventListener('change',loadTimeline);
+  function timelineCategory(eventType){const prefix=String(eventType||'other').split('.')[0];return {migration:'migrations',connector:'contrats et activations',application:'application',auth:'authentification',search:'recherches',acquisition:'acquisitions',cache:'cache',script:'scripts',resource:'mises à jour',rule:'règles',signal:'signaux et alertes',action:'actions',data_job:'travaux de données',catalog:'catalogue',rss:'RSS',spip:'SPIP',mail:'courriels',backup:'sauvegardes'}[prefix]||prefix;}
+  async function loadTimeline(){if(!state.projectId||!q('#timeline-gantt'))return;setStatus('#timeline-status','Chargement…');try{const scope=q('#timeline-scope').value;const auditPath=scope==='global'?'/api/v6/timeline?limit=200':`/api/v6/projects/${state.projectId}/timeline?limit=200`;const auditPromise=api(auditPath);if(scope==='global'){const audit=await auditPromise;empty(q('#timeline-gantt'),'Le Gantt opérationnel est propre au projet. Le journal global ci-dessous retrace migrations, contrats, activations et opérations globales.');renderAuditTimeline(audit);setStatus('#timeline-status',`${audit.length} trace(s) globales issues des tables de migrations, contrats, activations et audit.`);return;}const [data,audit]=await Promise.all([api(`/api/projects/${state.projectId}/timeline?days=${q('#timeline-days').value}`),auditPromise]);renderTimeline(data);renderAuditTimeline(audit);setStatus('#timeline-status',`${data.events.length} événement(s) opérationnel(s) · ${audit.length} trace(s) du projet, y compris les tables historiques 5.x.`);}catch(error){setStatus('#timeline-status',error.message,true);}}
+  function renderAuditTimeline(items){const container=q('#timeline-audit');container.innerHTML='';const categories=new Set(items.map(item=>timelineCategory(item.event_type)));q('#timeline-event-count').textContent=items.length;q('#timeline-category-count').textContent=categories.size;q('#timeline-failure-count').textContent=items.filter(item=>['failed','blocked','cancelled','rejected'].includes(item.status)).length;q('#timeline-scope-label').textContent=q('#timeline-scope').value==='global'?'global':'projet';if(!items.length)return empty(container,'Aucune trace d’audit pour cette portée.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.summary;const pill=document.createElement('span');pill.className=`pill ${item.status}`;pill.textContent=`${timelineCategory(item.event_type)} · ${item.event_type}`;head.append(title,pill);const detail=document.createElement('small');detail.textContent=`${date(item.occurred_at)} · ${item.actor} · ${item.object_type}${item.object_id?' '+item.object_id:''} · ${JSON.stringify(item.details||{})}`;card.append(head,detail);container.appendChild(card);});}
   function renderTimeline(data){const container=q('#timeline-gantt');container.innerHTML='';if(!data.events.length)return empty(container,'Aucun événement sur cette période.');const starts=data.events.map(item=>new Date(item.start).getTime());const ends=data.events.map(item=>new Date(item.end||item.start).getTime());const minimum=new Date(data.window_start).getTime();const maximum=Math.max(new Date(data.window_end).getTime(),...ends);const span=Math.max(1,maximum-minimum);data.events.sort((a,b)=>new Date(a.start)-new Date(b.start)).forEach(item=>{const row=document.createElement('div');row.className='gantt-row';const label=document.createElement('div');label.className='gantt-label';label.textContent=`${item.kind} · ${item.title}`;label.title=`${date(item.start)} → ${date(item.end)} · ${item.status}`;const track=document.createElement('div');track.className='gantt-track';const bar=document.createElement('div');bar.className=`gantt-bar ${item.kind==='script'?'script':item.kind==='scheduled'?'scheduled':''} ${item.status||''}`;const start=Math.max(minimum,new Date(item.start).getTime());const end=Math.max(start,new Date(item.end||item.start).getTime());bar.style.left=`${Math.max(0,(start-minimum)/span*100)}%`;bar.style.width=`${Math.max(.7,(end-start)/span*100)}%`;bar.title=label.title;track.appendChild(bar);row.append(label,track);container.appendChild(row);});}
 
   async function initLeaflet(){if(state.leafletMap)return true;if(typeof window.L==='undefined'){q('#map-canvas').innerHTML='<div class="map-fallback">Leaflet n’a pas pu être chargé. La gestion PostGIS et les exports restent disponibles.</div>';return false;}q('#map-canvas').innerHTML='';state.leafletMap=L.map('map-canvas',{worldCopyJump:true}).setView([15,0],2);state.mapConfig=await api('/api/map/config');return true;}
@@ -734,22 +997,232 @@
   q('#sql-form').addEventListener('submit',async event=>{event.preventDefault();const submit=event.target.querySelector('button[type="submit"]');submit.disabled=true;setStatus('#sql-status','Exécution en lecture seule…');try{const data=await api(`/api/projects/${state.projectId}/sql/query`,{method:'POST',body:JSON.stringify({query:q('#sql-query').value,max_rows:Number(q('#sql-limit').value)})});renderSqlResults(data);setStatus('#sql-status',`${data.row_count} ligne(s) · ${data.duration_ms} ms${data.truncated?' · résultat tronqué':''}.`);}catch(error){empty(q('#sql-results'),'Requête refusée ou invalide.');setStatus('#sql-status',error.message,true);}finally{submit.disabled=false;}});
   function renderSqlResults(data){const container=q('#sql-results');container.innerHTML='';if(!data.rows.length)return empty(container,'La requête ne retourne aucune ligne.');const table=document.createElement('table');table.className='sql-table';const thead=document.createElement('thead');const head=document.createElement('tr');data.columns.forEach(name=>{const th=document.createElement('th');th.textContent=name;head.appendChild(th);});thead.appendChild(head);const tbody=document.createElement('tbody');data.rows.forEach(row=>{const tr=document.createElement('tr');row.forEach(value=>{const td=document.createElement('td');td.textContent=value===null?'NULL':typeof value==='object'?JSON.stringify(value):String(value);tr.appendChild(td);});tbody.appendChild(tr);});table.append(thead,tbody);container.appendChild(table);}
 
+  q('#backup-refresh').addEventListener('click',loadBackups);
+  function updateBackupSignalFields(){const signals=q('#backup-scope').value==='signals';const explicit=signals&&q('#backup-signal-mode').value==='explicit_ids';q('#backup-signal-mode').disabled=!signals;q('#backup-signal-ids').disabled=!explicit;q('#backup-signal-from').disabled=!signals;q('#backup-signal-to').disabled=!signals;}
+  q('#backup-scope').addEventListener('change',updateBackupSignalFields);q('#backup-signal-mode').addEventListener('change',updateBackupSignalFields);updateBackupSignalFields();
+  q('#backup-form').addEventListener('submit',async event=>{event.preventDefault();const scope=q('#backup-scope').value;const mode=q('#backup-signal-mode').value;const signal_ids=q('#backup-signal-ids').value.split(',').map(value=>value.trim()).filter(Boolean);const asIso=selector=>q(selector).value?new Date(q(selector).value).toISOString():null;const payload={scope,project_id:scope==='project'||(scope==='signals'&&mode!=='global')?state.projectId:null,signal_ids:scope==='signals'&&mode==='explicit_ids'?signal_ids:[],signal_from:scope==='signals'?asIso('#backup-signal-from'):null,signal_to:scope==='signals'?asIso('#backup-signal-to'):null};const submit=event.target.querySelector('button[type="submit"]');submit.disabled=true;setStatus('#backup-status','Création de la sauvegarde et calcul des empreintes…');try{const result=await api('/api/v6/backups',{method:'POST',body:JSON.stringify(payload)});setStatus('#backup-status',`Sauvegarde ${result.status} · ${result.manifest.selector.selected_signal_count??'—'} signal(aux) · ${bytes(result.size_bytes)} · SHA-256 ${result.bundle_sha256}`);await loadBackups();}catch(error){setStatus('#backup-status',error.message,true);}finally{submit.disabled=false;}});
+  async function loadBackups(){if(!state.projectId||!q('#backup-list'))return;try{const global=await api('/api/v6/backups?limit=100');renderBackups(global);}catch(error){setStatus('#backup-status',error.message,true);}}
+  function renderBackups(items){const container=q('#backup-list');container.innerHTML='';if(!items.length)return empty(container,'Aucune sauvegarde.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=`${item.scope} · ${date(item.created_at)}`;const pill=document.createElement('span');pill.className=`pill ${item.status}`;pill.textContent=item.status;head.append(title,pill);const perimeter=item.project_id?'projet '+item.project_id:item.scope==='signals'?'signaux multiprojets':'instance complète';const detail=document.createElement('small');detail.textContent=`${perimeter} · ${bytes(item.size_bytes)} · SHA-256 ${item.bundle_sha256||'en attente'}${item.error?' · '+item.error:''}`;const actions=document.createElement('div');actions.className='mini-actions';if(item.status==='completed'){const link=document.createElement('a');link.href=`/api/v6/backups/${item.id}/download`;link.textContent='Télécharger le paquet vérifié';actions.append(link);}card.append(head,detail,actions);container.appendChild(card);});}
+
   q('#schedule-form').addEventListener('submit',async event=>{event.preventDefault();const payload={name:q('#schedule-name').value,source:q('#schedule-source').value,query:q('#schedule-query').value,result_limit:Number(q('#schedule-limit').value),auto_download:q('#schedule-download').checked,interval_minutes:Number(q('#schedule-interval').value),enabled:q('#schedule-enabled').checked};try{await api(`/api/projects/${state.projectId}/schedules`,{method:'POST',body:JSON.stringify(payload)});event.target.reset();q('#schedule-limit').value=25;q('#schedule-interval').value=1440;q('#schedule-enabled').checked=true;setStatus('#schedule-status','Planification créée. Une planification active est prise en charge au prochain passage du planificateur.');await loadSchedules();}catch(error){setStatus('#schedule-status',error.message,true);}});
   async function loadSchedules(){if(!state.projectId)return;try{renderSchedules(await api(`/api/projects/${state.projectId}/schedules`));}catch(error){setStatus('#schedule-status',error.message,true);}}
   function renderSchedules(items){const container=q('#schedule-list');container.innerHTML='';if(!items.length)return empty(container,'Aucune planification dans ce projet.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className=`pill ${item.last_status||''}`;pill.textContent=item.enabled?'active':'suspendue';head.append(title,pill);const details=document.createElement('small');details.textContent=`${item.source.toUpperCase()} · « ${item.query} » · toutes les ${item.interval_minutes} min · prochain passage ${date(item.next_run_at)} · dernier statut ${item.last_status||'jamais exécutée'}${item.last_error?' · '+item.last_error:''}`;const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Exécuter maintenant',async event=>{event.target.disabled=true;setStatus('#schedule-status',`Exécution de « ${item.name} »…`);try{const result=await api(`/api/schedules/${item.id}/run`,{method:'POST'});setStatus('#schedule-status',result.status==='completed'?`Exécution terminée · acquisition ${result.acquisition_id}`:`Échec : ${result.error}`,result.status!=='completed');await loadSchedules();}catch(error){setStatus('#schedule-status',error.message,true);}finally{event.target.disabled=false;}}));actions.append(button(item.enabled?'Suspendre':'Réactiver',async()=>{await api(`/api/schedules/${item.id}`,{method:'PATCH',body:JSON.stringify({enabled:!item.enabled})});await loadSchedules();}));actions.append(button('Archiver',async()=>{if(confirm(`Archiver la planification « ${item.name} » ?`)){await api(`/api/schedules/${item.id}`,{method:'DELETE'});await loadSchedules();}},'danger'));card.append(head,details,actions);container.appendChild(card);});}
 
   const commaValues=selector=>q(selector).value.split(',').map(value=>value.trim()).filter(Boolean);
-  async function loadIntelligence(){if(!state.projectId)return;try{const [taxonomy,rules,signals]=await Promise.all([api('/api/hdx/datagrid/taxonomy'),api(`/api/projects/${state.projectId}/signals/rules`),api(`/api/projects/${state.projectId}/signals?limit=30`)]);const dimensions=q('#datagrid-dimensions');if(!dimensions.childElementCount)taxonomy.dimensions.forEach(item=>{const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';input.value=item.id;input.className='datagrid-dimension';label.append(input,document.createTextNode(item.label));dimensions.appendChild(label);});renderSignalRules(rules);renderSignals(signals);}catch(error){setStatus('#signal-status',error.message,true);}}
+  function readV6RuleTree(){try{return JSON.parse(q('#v6-rule-tree').value);}catch(error){throw new Error(`Arbre JSON invalide : ${error.message}`);}}
+  function readV6Event(){try{return JSON.parse(q('#v6-rule-event').value);}catch(error){throw new Error(`Événement JSON invalide : ${error.message}`);}}
+  function readV6Actions(){return [...document.querySelectorAll('.v6-action:checked')].map(input=>({type:input.value,parameters:{},limits:{}}));}
+  const V6_RULE_UI_MAX_DEPTH=5;
+  const V6_RULE_OPERATORS=['eq','ne','contains','not_contains','in','not_in','gt','gte','lt','lte','exists','regex','within_hours','overlaps_text'];
+  const V6_RULE_COMPARATORS=['eq','ne','gt','gte','lt','lte'];
+  const V6_RULE_OPERATOR_LABELS={eq:'égal à',ne:'différent de',contains:'contient',not_contains:'ne contient pas',in:'appartient à',not_in:'n’appartient pas à',gt:'>',gte:'≥',lt:'<',lte:'≤',exists:'existe',regex:'expression régulière',within_hours:'dans les dernières heures',overlaps_text:'recoupe le texte'};
+  const v6RuleDefaultCondition=()=>({type:'condition',field:'severity',op:'gte',value:.5});
+  const v6RuleDefaultGroup=()=>({type:'group',operator:'AND',children:[v6RuleDefaultCondition()]});
+  function v6RuleDefaultCorrelation(mode='count'){
+    if(mode==='sequence')return {type:'correlation',mode,window_hours:168,steps:[v6RuleDefaultCondition(),{type:'condition',field:'confidence',op:'gte',value:.7}]};
+    if(mode==='absence')return {type:'correlation',mode,window_hours:24,expected:v6RuleDefaultCondition()};
+    if(mode==='trend')return {type:'correlation',mode,field:'severity',aggregation:'mean',current_window_hours:24,baseline_window_hours:168,reference:'rolling',comparator:'gte',threshold:.2};
+    return {type:'correlation',mode:'count',window_hours:168,comparator:'gte',threshold:3};
+  }
+  function replaceV6RuleNode(target,replacement){Object.keys(target).forEach(key=>delete target[key]);Object.assign(target,replacement);}
+  function v6RuleDepth(node){
+    if(!node||typeof node!=='object')return 1;
+    let nested=[];
+    if(node.type==='group')nested=node.children||[];
+    if(node.type==='correlation'){
+      if(node.filter)nested.push(node.filter);
+      if(node.expected)nested.push(node.expected);
+      if(Array.isArray(node.steps))nested.push(...node.steps);
+    }
+    return 1+(nested.length?Math.max(...nested.map(v6RuleDepth)):0);
+  }
+  function v6RuleValueText(value){return typeof value==='string'?JSON.stringify(value):JSON.stringify(value??null);}
+  function v6RuleFormula(node){
+    if(!node||typeof node!=='object')return 'NŒUD INVALIDE';
+    if(node.type==='group')return `(${(node.children||[]).map(v6RuleFormula).join(node.operator==='OR'?' OU ':' ET ')})`;
+    if(node.type==='condition')return `${node.field||'?'} ${V6_RULE_OPERATOR_LABELS[node.op]||node.op||'?'} ${v6RuleValueText(node.value)}`;
+    if(node.type==='correlation'){
+      if(node.mode==='count')return `NOMBRE SUR ${node.window_hours} h${node.filter?' DE '+v6RuleFormula(node.filter):''} ${V6_RULE_OPERATOR_LABELS[node.comparator]||node.comparator} ${node.threshold}`;
+      if(node.mode==='sequence')return `SÉQUENCE SUR ${node.window_hours} h (${(node.steps||[]).map(v6RuleFormula).join(' → ')})`;
+      if(node.mode==='absence')return `ABSENCE SUR ${node.window_hours} h DE ${v6RuleFormula(node.expected)}`;
+      if(node.mode==='trend')return `TENDANCE ${node.aggregation}(${node.field||'événements'}) ${node.comparator} ${node.threshold} · ${node.current_window_hours} h / ${node.baseline_window_hours} h`;
+      return `CORRÉLATION ${node.mode||'inconnue'}`;
+    }
+    return `NŒUD ${node.type||'inconnu'}`;
+  }
+  function v6RuleSelect(values,current,onChange,labels={}){const select=document.createElement('select');values.forEach(value=>{const option=document.createElement('option');option.value=value;option.textContent=labels[value]||value;option.selected=value===current;select.appendChild(option);});select.addEventListener('change',()=>onChange(select.value));return select;}
+  function v6RuleInput(value,onChange,{type='text',step=null,min=null}={}){const input=document.createElement('input');input.type=type;input.value=value??'';if(step!==null)input.step=step;if(min!==null)input.min=min;input.addEventListener('input',()=>onChange(type==='number'?Number(input.value):input.value));return input;}
+  function v6RuleField(container,label,control){const wrapper=document.createElement('div');const caption=document.createElement('label');caption.textContent=label;wrapper.append(caption,control);container.appendChild(wrapper);return control;}
+  function syncV6RulePresentation(){
+    q('#v6-rule-tree').value=JSON.stringify(state.v6RuleBuilderTree,null,2);
+    const formula=q('#v6-rule-formula');formula.textContent=v6RuleFormula(state.v6RuleBuilderTree);formula.classList.remove('unsynced');
+  }
+  function rerenderV6RuleBuilder(){syncV6RulePresentation();renderV6RuleBuilder();}
+  function renderV6RuleCondition(node,body){
+    const fields=document.createElement('div');fields.className='rule-node-fields';
+    v6RuleField(fields,'Champ',v6RuleInput(node.field,value=>{node.field=value;syncV6RulePresentation();}));
+    v6RuleField(fields,'Opérateur',v6RuleSelect(V6_RULE_OPERATORS,node.op,value=>{node.op=value;node.field=value==='within_hours'?'occurred_at':node.field;node.value=value==='exists'?true:['in','not_in','overlaps_text'].includes(value)?[]:['gt','gte','lt','lte','within_hours'].includes(value)?1:'';rerenderV6RuleBuilder();},V6_RULE_OPERATOR_LABELS));
+    let valueControl;
+    if(node.op==='exists')valueControl=v6RuleSelect(['true','false'],String(Boolean(node.value)),value=>{node.value=value==='true';syncV6RulePresentation();},{true:'oui',false:'non'});
+    else if(['in','not_in','overlaps_text'].includes(node.op))valueControl=v6RuleInput(Array.isArray(node.value)?node.value.join(', '):'',value=>{node.value=value.split(',').map(item=>item.trim()).filter(Boolean);syncV6RulePresentation();});
+    else if(['gt','gte','lt','lte','within_hours'].includes(node.op)||typeof node.value==='number')valueControl=v6RuleInput(node.value,value=>{node.value=value;syncV6RulePresentation();},{type:'number',step:'any'});
+    else if(typeof node.value==='boolean')valueControl=v6RuleSelect(['true','false'],String(node.value),value=>{node.value=value==='true';syncV6RulePresentation();},{true:'vrai',false:'faux'});
+    else valueControl=v6RuleInput(node.value,value=>{node.value=value;syncV6RulePresentation();});
+    v6RuleField(fields,node.op==='exists'?'Présence':'Valeur',valueControl);body.appendChild(fields);
+  }
+  function renderV6RuleCorrelation(node,body,depth){
+    const fields=document.createElement('div');fields.className='rule-node-fields';
+    const modeSelect=v6RuleSelect(['count','sequence','absence','trend'],node.mode,value=>{replaceV6RuleNode(node,v6RuleDefaultCorrelation(value));rerenderV6RuleBuilder();},{count:'comptage',sequence:'séquence',absence:'absence',trend:'tendance'});
+    [...modeSelect.options].forEach(option=>{if(depth>=V6_RULE_UI_MAX_DEPTH&&['sequence','absence'].includes(option.value))option.disabled=true;});
+    v6RuleField(fields,'Corrélation',modeSelect);
+    if(node.mode!=='trend')v6RuleField(fields,'Fenêtre (heures)',v6RuleInput(node.window_hours,value=>{node.window_hours=value;syncV6RulePresentation();},{type:'number',step:'any',min:'0.1'}));
+    if(node.mode==='count'){
+      v6RuleField(fields,'Comparateur',v6RuleSelect(V6_RULE_COMPARATORS,node.comparator,value=>{node.comparator=value;syncV6RulePresentation();},V6_RULE_OPERATOR_LABELS));
+      v6RuleField(fields,'Seuil',v6RuleInput(node.threshold,value=>{node.threshold=value;syncV6RulePresentation();},{type:'number',step:'any',min:'0.1'}));
+    }
+    if(node.mode==='trend'){
+      v6RuleField(fields,'Champ',v6RuleInput(node.field||'',value=>{node.field=value;syncV6RulePresentation();}));
+      v6RuleField(fields,'Agrégation',v6RuleSelect(['mean','sum','min','max','count'],node.aggregation,value=>{node.aggregation=value;syncV6RulePresentation();},{mean:'moyenne',sum:'somme',min:'minimum',max:'maximum',count:'nombre'}));
+      v6RuleField(fields,'Fenêtre actuelle (h)',v6RuleInput(node.current_window_hours,value=>{node.current_window_hours=value;syncV6RulePresentation();},{type:'number',step:'any',min:'0.1'}));
+      v6RuleField(fields,'Référence (h)',v6RuleInput(node.baseline_window_hours,value=>{node.baseline_window_hours=value;syncV6RulePresentation();},{type:'number',step:'any',min:'0.1'}));
+      v6RuleField(fields,'Type de référence',v6RuleSelect(['rolling','fixed'],node.reference,value=>{node.reference=value;if(value==='fixed'&&typeof node.baseline_value!=='number')node.baseline_value=0;else if(value==='rolling')delete node.baseline_value;rerenderV6RuleBuilder();},{rolling:'glissante',fixed:'fixe'}));
+      v6RuleField(fields,'Comparateur',v6RuleSelect(V6_RULE_COMPARATORS,node.comparator,value=>{node.comparator=value;syncV6RulePresentation();},V6_RULE_OPERATOR_LABELS));
+      v6RuleField(fields,'Seuil',v6RuleInput(node.threshold,value=>{node.threshold=value;syncV6RulePresentation();},{type:'number',step:'any'}));
+      if(node.reference==='fixed')v6RuleField(fields,'Valeur de référence',v6RuleInput(node.baseline_value,value=>{node.baseline_value=value;syncV6RulePresentation();},{type:'number',step:'any'}));
+    }
+    body.appendChild(fields);
+    const nested=document.createElement('div');nested.className='rule-node-children';
+    if(node.mode==='sequence'){
+      (node.steps||[]).forEach((step,index)=>nested.appendChild(renderV6RuleNode(step,depth+1,()=>{if(node.steps.length<=2)return;node.steps.splice(index,1);rerenderV6RuleBuilder();},node.steps.length<=2)));
+      if(depth<V6_RULE_UI_MAX_DEPTH){const controls=document.createElement('div');controls.className='rule-node-controls';controls.append(button('Ajouter une étape',()=>{node.steps.push(v6RuleDefaultCondition());rerenderV6RuleBuilder();}));nested.appendChild(controls);}
+    }else if(node.mode==='absence'&&node.expected)nested.appendChild(renderV6RuleNode(node.expected,depth+1,null));
+    else if(['count','trend'].includes(node.mode)){
+      if(node.filter)nested.appendChild(renderV6RuleNode(node.filter,depth+1,()=>{delete node.filter;rerenderV6RuleBuilder();}));
+      else if(depth<V6_RULE_UI_MAX_DEPTH){const controls=document.createElement('div');controls.className='rule-node-controls';controls.append(button('Ajouter un filtre',()=>{node.filter=v6RuleDefaultCondition();rerenderV6RuleBuilder();}));nested.appendChild(controls);}
+    }
+    if(nested.childElementCount)body.appendChild(nested);
+  }
+  function renderV6RuleNode(node,depth,remove,removalDisabled=false){
+    const wrapper=document.createElement('div');wrapper.className='rule-node';wrapper.dataset.nodeType=node.type||'unknown';
+    const head=document.createElement('div');head.className='rule-node-head';const title=document.createElement('span');title.className='rule-node-title';title.textContent=`Niveau ${depth} · ${node.type==='group'?'groupe':node.type==='condition'?'condition':node.type==='correlation'?'corrélation':'nœud inconnu'}`;
+    const controls=document.createElement('div');controls.className='rule-node-controls';
+    if(remove){const removeButton=button('Retirer',remove,'danger');removeButton.disabled=removalDisabled;controls.appendChild(removeButton);}
+    head.append(title,controls);wrapper.appendChild(head);const body=document.createElement('div');wrapper.appendChild(body);
+    if(node.type==='group'){
+      const fields=document.createElement('div');fields.className='rule-node-fields';v6RuleField(fields,'Opérateur du groupe',v6RuleSelect(['AND','OR'],node.operator,value=>{node.operator=value;syncV6RulePresentation();},{AND:'ET — toutes les conditions',OR:'OU — au moins une condition'}));body.appendChild(fields);
+      if(depth<V6_RULE_UI_MAX_DEPTH){controls.prepend(button('Ajouter une condition',()=>{node.children.push(v6RuleDefaultCondition());rerenderV6RuleBuilder();}));controls.prepend(button('Ajouter une corrélation',()=>{node.children.push(v6RuleDefaultCorrelation());rerenderV6RuleBuilder();}));}
+      if(depth+2<=V6_RULE_UI_MAX_DEPTH)controls.prepend(button('Ajouter un sous-groupe',()=>{node.children.push(v6RuleDefaultGroup());rerenderV6RuleBuilder();}));
+      const children=document.createElement('div');children.className='rule-node-children';(node.children||[]).forEach((child,index)=>children.appendChild(renderV6RuleNode(child,depth+1,()=>{if(node.children.length<=1)return;node.children.splice(index,1);rerenderV6RuleBuilder();},node.children.length<=1)));body.appendChild(children);
+    }else if(node.type==='condition')renderV6RuleCondition(node,body);
+    else if(node.type==='correlation')renderV6RuleCorrelation(node,body,depth);
+    else{wrapper.classList.add('locked');body.textContent='Ce type de nœud reste disponible dans le mode JSON avancé.';}
+    return wrapper;
+  }
+  function renderV6RuleBuilder(){
+    const container=q('#v6-rule-builder');container.innerHTML='';const depth=v6RuleDepth(state.v6RuleBuilderTree);state.v6RuleBuilderLocked=depth>V6_RULE_UI_MAX_DEPTH;
+    if(state.v6RuleBuilderLocked){const locked=document.createElement('div');locked.className='rule-node locked';locked.textContent=`Arbre de ${depth} niveaux : édition visuelle verrouillée au-delà de ${V6_RULE_UI_MAX_DEPTH}. Le JSON avancé reste modifiable, validable et enregistrable.`;container.appendChild(locked);return;}
+    container.appendChild(renderV6RuleNode(state.v6RuleBuilderTree,1,null));
+  }
+  function loadV6RuleBuilderFromJson(announce=true){
+    try{state.v6RuleBuilderTree=readV6RuleTree();syncV6RulePresentation();renderV6RuleBuilder();const depth=v6RuleDepth(state.v6RuleBuilderTree);if(announce)setStatus('#v6-rule-status',depth>V6_RULE_UI_MAX_DEPTH?`Arbre chargé : ${depth} niveaux. Édition JSON avancée conservée ; édition visuelle limitée à ${V6_RULE_UI_MAX_DEPTH}.`:`Arbre chargé dans le constructeur · ${depth} niveau(x).`);}
+    catch(error){setStatus('#v6-rule-status',error.message,true);}
+  }
+  loadV6RuleBuilderFromJson(false);
+  function renderV6Rules(items){state.v6Rules=items;const container=q('#v6-rule-list');container.innerHTML='';if(!items.length)return empty(container,'Aucune règle V6 dans le projet.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('h4');title.textContent=item.name;const pill=document.createElement('span');pill.className='pill';pill.textContent=`${item.scope} · v${item.version_number}`;head.append(title,pill);const detail=document.createElement('small');detail.textContent=`${item.rule_tree.operator||item.rule_tree.type} · ${(item.actions||[]).map(action=>action.type).join(', ')||'aucune action'} · SHA-256 ${item.sha256}`;card.append(head,detail);container.appendChild(card);});}
+  function renderV6Policy(policy){state.v6Policy=policy;const recommendationRequired=policy.arbitration_required||policy.max_stale_mode==='manual';q('#v6-stale-policy').value=policy.stale_policy||'stale_if_error';q('#v6-stale-mode').value=recommendationRequired?'frequency_with_project_cap':policy.max_stale_mode;q('#v6-stale-fixed').value=policy.fixed_duration_seconds||'';q('#v6-stale-multiple').value=policy.frequency_multiple||(recommendationRequired?3:'');q('#v6-stale-cap').value=policy.project_cap_seconds||(recommendationRequired?604800:'');setStatus('#v6-policy-status',recommendationRequired?'Recommandation proposée : trois fois la fréquence publiée, avec un plafond de 7 jours. Le projet reste en arbitrage manuel jusqu’à l’enregistrement.':'Politique active et applicable à tout le projet.');}
+  async function loadV6Workspace(){if(!state.projectId)return;try{const [rules,policy]=await Promise.all([api(`/api/v6/projects/${state.projectId}/rules`),api(`/api/v6/projects/${state.projectId}/data-policy`)]);renderV6Rules(rules);renderV6Policy(policy);}catch(error){setStatus('#v6-rule-status',error.message,true);}}
+  async function loadActionOperations(){
+    if(!state.projectId||!q('#action-operation-list'))return;
+    const actionParams=new URLSearchParams({limit:'100'}),jobParams=new URLSearchParams({limit:'100'});
+    if(q('#action-status-filter').value)actionParams.set('status',q('#action-status-filter').value);
+    if(q('#data-job-status-filter').value)jobParams.set('status',q('#data-job-status-filter').value);
+    setStatus('#action-operations-status','Chargement du journal opérateur…');
+    try{
+      const [actions,jobs]=await Promise.all([api(`/api/v6/projects/${state.projectId}/actions?${actionParams}`),api(`/api/v6/projects/${state.projectId}/data-jobs?${jobParams}`)]);
+      renderActionOperations(actions);renderDataJobOperations(jobs);
+      setStatus('#action-operations-status',`${actions.length} demande(s) · ${jobs.length} travail(aux) de données. Les appels Internet réels restent qualifiés séparément.`);
+    }catch(error){setStatus('#action-operations-status',error.message,true);}
+  }
+  function renderActionOperations(items){
+    const container=q('#action-operation-list');container.innerHTML='';
+    if(!items.length)return empty(container,'Aucune demande correspondant au filtre.');
+    const cancellable=new Set(['queued','pending_approval','approved','running','cancel_requested','blocked']);
+    items.forEach(item=>{
+      const card=document.createElement('div');card.className='item';
+      const head=document.createElement('div');head.className='item-head';
+      const title=document.createElement('h4');title.textContent=item.action_type;
+      const pill=document.createElement('span');pill.className=`pill ${item.status}`;pill.textContent=item.status;
+      head.append(title,pill);
+      const detail=document.createElement('small');detail.textContent=`demandée ${date(item.requested_at)} · risque ${item.risk_level} · tentatives ${item.attempt_count}/${item.max_attempts} · ${item.id}`;
+      const executions=(item.executions||[]).map(execution=>`#${execution.attempt_number} · ${execution.status} · ${date(execution.started_at)} → ${date(execution.finished_at)}${execution.worker_id?' · '+execution.worker_id:''}${execution.error?' · '+execution.error:''}`).join('\n');
+      const decision=item.decided_at?`${item.status} par ${item.decided_by||'opérateur'} le ${date(item.decided_at)} · ${item.decision_reason||'sans motif'}`:'aucune décision enregistrée';
+      const draft=item.draft_id?`${item.draft_channel} · ${item.draft_status} · ${item.draft_title||'sans titre'} · SHA-256 ${item.draft_content_sha256}`:'aucun brouillon associé';
+      const dataJob=item.data_job_id?`${item.data_job_id} · ${item.data_job_status}`:'aucun travail associé';
+      const proof=document.createElement('pre');proof.className='request-preview';proof.textContent=`DÉCISION\n${decision}\n\nTENTATIVES\n${executions||'aucune tentative'}\n\nBROUILLON\n${draft}\n\nTRAVAIL DE DONNÉES\n${dataJob}${item.last_error?'\n\nERREUR\n'+item.last_error:''}`;
+      const controls=document.createElement('div');controls.className='mini-actions';
+      if(item.status==='pending_approval'){
+        controls.append(button('Approuver',()=>decideActionOperation(item.id,'approve')));
+        controls.append(button('Rejeter',()=>decideActionOperation(item.id,'reject'),'danger'));
+      }
+      if(cancellable.has(item.status))controls.append(button('Annuler',()=>cancelActionOperation(item.id),'danger'));
+      card.append(head,detail,proof,controls);container.appendChild(card);
+    });
+  }
+  function renderDataJobOperations(items){
+    const container=q('#data-job-operation-list');container.innerHTML='';
+    if(!items.length)return empty(container,'Aucun travail correspondant au filtre.');
+    items.forEach(item=>{
+      const card=document.createElement('div');card.className='item';
+      const head=document.createElement('div');head.className='item-head';
+      const title=document.createElement('h4');title.textContent=item.job_type;
+      const pill=document.createElement('span');pill.className=`pill ${item.status}`;pill.textContent=item.status;
+      head.append(title,pill);
+      const parameters=document.createElement('small');parameters.textContent=`requête « ${item.parameters?.query||'—'} » · ${(item.parameters?.sources||[]).join(', ')||'aucune source'} · tentatives ${item.attempt_count}/${item.max_attempts} · demande ${item.request_id}`;
+      const sources=(item.source_results||[]).map(source=>`${source.source_id} · ${source.status} · ${source.attempt_count} tentative(s)${source.acquisition_id?' · acquisition '+source.acquisition_id:''}${source.error?' · '+source.error:''}`).join('\n');
+      const proof=document.createElement('pre');proof.className='request-preview';proof.textContent=`SOURCES\n${sources||'aucun résultat par source'}${item.error?'\n\nERREUR\n'+item.error:''}\n\nCréé ${date(item.created_at)} · terminé ${date(item.finished_at)}`;
+      const controls=document.createElement('div');controls.className='mini-actions';
+      if(['queued','running'].includes(item.status))controls.append(button('Annuler le travail',()=>cancelDataJobOperation(item.id),'danger'));
+      card.append(head,parameters,proof,controls);container.appendChild(card);
+    });
+  }
+  async function decideActionOperation(id,decision){
+    const reason=prompt(`Motif obligatoire pour ${decision==='approve'?'approuver':'rejeter'} cette demande :`,'Contrôle opérateur effectué');
+    if(reason===null)return;if(reason.trim().length<2)return setStatus('#action-operations-status','Le motif doit contenir au moins deux caractères.',true);
+    try{await api(`/api/v6/actions/${id}/decision`,{method:'POST',body:JSON.stringify({decision,reason:reason.trim()})});await loadActionOperations();}catch(error){setStatus('#action-operations-status',error.message,true);}
+  }
+  async function cancelActionOperation(id){
+    if(!confirm('Demander l’annulation de cette action ?'))return;
+    const reason=prompt('Motif obligatoire de l’annulation :','Annulation demandée par l’opérateur');
+    if(reason===null)return;if(reason.trim().length<2)return setStatus('#action-operations-status','Le motif doit contenir au moins deux caractères.',true);
+    try{await api(`/api/v6/actions/${id}/cancel`,{method:'POST',body:JSON.stringify({reason:reason.trim()})});await loadActionOperations();}catch(error){setStatus('#action-operations-status',error.message,true);}
+  }
+  async function cancelDataJobOperation(id){
+    if(!confirm('Demander l’annulation de ce travail entre deux sources ?'))return;
+    const reason=prompt('Motif obligatoire de l’annulation :','Annulation demandée par l’opérateur');
+    if(reason===null)return;if(reason.trim().length<2)return setStatus('#action-operations-status','Le motif doit contenir au moins deux caractères.',true);
+    try{await api(`/api/v6/data-jobs/${id}/cancel`,{method:'POST',body:JSON.stringify({reason:reason.trim()})});await loadActionOperations();}catch(error){setStatus('#action-operations-status',error.message,true);}
+  }
+  q('#action-operations-refresh').addEventListener('click',loadActionOperations);
+  q('#action-status-filter').addEventListener('change',loadActionOperations);
+  q('#data-job-status-filter').addEventListener('change',loadActionOperations);
+  q('#v6-rule-reset').addEventListener('click',()=>{if(!confirm('Remplacer le constructeur actuel par un nouvel arbre ET ?'))return;state.v6RuleBuilderTree=v6RuleDefaultGroup();rerenderV6RuleBuilder();setStatus('#v6-rule-status','Nouvel arbre ET prêt ; aucune règle enregistrée.');});
+  q('#v6-rule-load-json').addEventListener('click',()=>loadV6RuleBuilderFromJson(true));
+  q('#v6-rule-tree').addEventListener('input',()=>{q('#v6-rule-formula').classList.add('unsynced');q('#v6-rule-formula').textContent='JSON avancé modifié — chargez-le dans le constructeur pour resynchroniser la formule.';setStatus('#v6-rule-status','Le JSON avancé a changé. Validez-le directement ou chargez-le dans le constructeur visuel.');});
+  q('#v6-rule-validate').addEventListener('click',async()=>{try{const data=await api('/api/v6/rules/validate',{method:'POST',body:JSON.stringify({rule_tree:readV6RuleTree()})});q('#v6-rule-proof').textContent=JSON.stringify(data.rule_tree,null,2);setStatus('#v6-rule-status',`Arbre valide · SHA-256 ${data.sha256}`);}catch(error){setStatus('#v6-rule-status',error.message,true);}});
+  q('#v6-rule-simulate').addEventListener('click',async()=>{try{const event=readV6Event();const data=await api('/api/v6/rules/simulate',{method:'POST',body:JSON.stringify({rule_tree:readV6RuleTree(),event,events:[event],now:event.occurred_at})});q('#v6-rule-proof').textContent=JSON.stringify(data,null,2);setStatus('#v6-rule-status',data.matched?'Simulation positive ; aucune action exécutée.':'Simulation négative ; aucune action exécutée.');}catch(error){setStatus('#v6-rule-status',error.message,true);}});
+  q('#v6-rule-form').addEventListener('submit',async event=>{event.preventDefault();try{const data=await api(`/api/v6/projects/${state.projectId}/rules`,{method:'POST',body:JSON.stringify({name:q('#v6-rule-name').value,description:'Règle créée dans le constructeur HDP 6',rule_tree:readV6RuleTree(),actions:readV6Actions()})});setStatus('#v6-rule-status',`Règle versionnée créée · ${data.sha256}`);await loadV6Workspace();}catch(error){setStatus('#v6-rule-status',error.message,true);}});
+  q('#v6-policy-form').addEventListener('submit',async event=>{event.preventDefault();const numberOrNull=selector=>q(selector).value?Number(q(selector).value):null;const current=state.v6Policy||{};const payload={stale_policy:q('#v6-stale-policy').value,max_stale_mode:q('#v6-stale-mode').value,fixed_duration_seconds:numberOrNull('#v6-stale-fixed'),frequency_multiple:numberOrNull('#v6-stale-multiple'),project_cap_seconds:numberOrNull('#v6-stale-cap'),automatic_request_limit:current.automatic_request_limit||100,automatic_download_bytes:current.automatic_download_bytes||104857600,automatic_duration_seconds:current.automatic_duration_seconds||300};try{await api(`/api/v6/projects/${state.projectId}/data-policy`,{method:'PUT',body:JSON.stringify(payload)});setStatus('#v6-policy-status','Politique enregistrée pour tout le projet.');await loadV6Workspace();}catch(error){setStatus('#v6-policy-status',error.message,true);}});
+  async function loadIntelligence(){if(!state.projectId)return;try{const [taxonomy,rules,signals]=await Promise.all([api('/api/hdx/datagrid/taxonomy'),api(`/api/projects/${state.projectId}/signals/rules`),api(`/api/projects/${state.projectId}/signals?limit=30`)]);const dimensions=q('#datagrid-dimensions');if(!dimensions.childElementCount)taxonomy.dimensions.forEach(item=>{const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';input.value=item.id;input.className='datagrid-dimension';label.append(input,document.createTextNode(item.label));dimensions.appendChild(label);});renderSignalRules(rules);renderSignals(signals);}catch(error){setStatus('#signal-status',error.message,true);}await loadV6Workspace();}
   function renderSignalRules(items){const container=q('#signal-rules');container.innerHTML='';if(!items.length)return empty(container,'Aucune règle de signal.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const title=document.createElement('h4');title.textContent=item.name;const detail=document.createElement('small');detail.textContent=`${(item.themes||[]).join(', ')||'tous thèmes'} · ${(item.locations||[]).join(', ')||'toutes zones'} · gravité ≥ ${item.min_severity} · confiance ≥ ${item.min_confidence}`;card.append(title,detail);container.appendChild(card);});}
   function renderSignals(items){const container=q('#signal-results');container.innerHTML='';if(!items.length)return empty(container,'Aucun signal ingéré.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const title=document.createElement('h4');title.textContent=item.title;const detail=document.createElement('small');detail.textContent=`${item.source} · ${date(item.occurred_at)} · gravité ${item.severity} · confiance ${item.confidence} · ${(item.locations||[]).join(', ')}`;card.append(title,detail);container.appendChild(card);});}
   q('#datagrid-form').addEventListener('submit',async event=>{event.preventDefault();setStatus('#datagrid-status','Recherche HDX et indexation des métadonnées…');try{const payload={query:q('#datagrid-query').value,location:q('#datagrid-location').value,date_from:q('#datagrid-from').value,date_to:q('#datagrid-to').value,dimensions:[...document.querySelectorAll('.datagrid-dimension:checked')].map(item=>item.value),formats:[],rows:25};const data=await api(`/api/projects/${state.projectId}/hdx/datagrid/search`,{method:'POST',body:JSON.stringify(payload)});const container=q('#datagrid-results');container.innerHTML='';data.datasets.forEach(item=>{const card=document.createElement('div');card.className='item';const link=document.createElement('a');link.href=item.source_url;link.target='_blank';link.rel='noopener';link.textContent=item.title;const detail=document.createElement('small');detail.textContent=`${item.organization||'organisation non renseignée'} · ${item.resources.length} fichier(s) · ${item.periodicity||'périodicité inconnue'} · fiabilité technique ${item.reliability.score}`;const description=document.createElement('small');description.textContent=item.description||'Description absente';card.append(link,detail,description);container.appendChild(card);});setStatus('#datagrid-status',`${data.count} jeu(x) · ${data.metadata_records_updated} description(s) de jeux/fichiers mises à jour · couverture ${JSON.stringify(data.coverage)}`);}catch(error){setStatus('#datagrid-status',error.message,true);}});
   q('#signal-rule-form').addEventListener('submit',async event=>{event.preventDefault();try{await api(`/api/projects/${state.projectId}/signals/rules`,{method:'POST',body:JSON.stringify({name:q('#signal-rule-name').value,themes:commaValues('#signal-rule-themes'),locations:commaValues('#signal-rule-locations'),min_severity:Number(q('#signal-severity').value),min_confidence:Number(q('#signal-confidence').value),data_grid_dimensions:[],lookback_hours:168,query_template:'{title} {themes} {locations}',refresh_due_resources:true})});event.target.reset();q('#signal-severity').value=.4;q('#signal-confidence').value=.5;setStatus('#signal-rule-status','Règle créée.');await loadIntelligence();}catch(error){setStatus('#signal-rule-status',error.message,true);}});
-  q('#signal-form').addEventListener('submit',async event=>{event.preventDefault();setStatus('#signal-status','Évaluation et recherche Data Grid automatiques…');try{const now=new Date().toISOString();const payload={source:'manual',external_id:`manual-${Date.now()}`,title:q('#signal-title').value,summary:q('#signal-summary').value,occurred_at:now,themes:commaValues('#signal-themes'),locations:commaValues('#signal-locations'),severity:Number(q('#signal-event-severity').value),confidence:Number(q('#signal-event-confidence').value),evidence:[],raw:{entered_in:'HDP V5'}};const data=await api(`/api/projects/${state.projectId}/signals`,{method:'POST',body:JSON.stringify(payload)});setStatus('#signal-status',`Signal enregistré · ${data.actions.length} règle(s) déclenchée(s)\n${data.actions.map(item=>`${item.rule}: ${item.status} · ${JSON.stringify(item.result)}`).join('\n')}`);await loadIntelligence();}catch(error){setStatus('#signal-status',error.message,true);}});
+  q('#signal-form').addEventListener('submit',async event=>{event.preventDefault();setStatus('#signal-status','Évaluation et recherche Data Grid automatiques…');try{const now=new Date().toISOString();const payload={source:'manual',external_id:`manual-${Date.now()}`,title:q('#signal-title').value,summary:q('#signal-summary').value,occurred_at:now,themes:commaValues('#signal-themes'),locations:commaValues('#signal-locations'),severity:Number(q('#signal-event-severity').value),confidence:Number(q('#signal-event-confidence').value),evidence:[],raw:{entered_in:'HDP 6.0.0-dev'}};const data=await api(`/api/projects/${state.projectId}/signals`,{method:'POST',body:JSON.stringify(payload)});setStatus('#signal-status',`Signal enregistré · ${data.actions.length} règle(s) déclenchée(s)\n${data.actions.map(item=>`${item.rule}: ${item.status} · ${JSON.stringify(item.result)}`).join('\n')}`);await loadIntelligence();}catch(error){setStatus('#signal-status',error.message,true);}});
   q('#syndromic-run').addEventListener('click',async()=>{try{const data=await api(`/api/projects/${state.projectId}/signals/syndromic-snapshot?hours=168&scope=global`,{method:'POST'});setStatus('#signal-status',`Vue syndromique · ${data.event_count} signal(aux) · indice ${data.score}\nThèmes ${JSON.stringify(data.themes)}\n${data.interpretation}`);}catch(error){setStatus('#signal-status',error.message,true);}});
   async function loadNotebooks(){if(!state.projectId)return;try{const items=await api(`/api/projects/${state.projectId}/notebooks`);const container=q('#notebook-list');container.innerHTML='';if(!items.length)return empty(container,'Aucun notebook.');items.forEach(item=>{const card=document.createElement('div');card.className='item';const title=document.createElement('h4');title.textContent=item.name;const detail=document.createElement('small');detail.textContent=`${item.kernel} · révision ${item.current_revision} · ${date(item.updated_at)}`;const actions=document.createElement('div');actions.className='mini-actions';actions.append(button('Ouvrir et exécuter la cellule 0',()=>runNotebookCell(item.id)));card.append(title,detail,actions);container.appendChild(card);});}catch(error){setStatus('#notebook-status',error.message,true);}}
   async function sha256Text(value){const bytes=new TextEncoder().encode(value);const digest=await crypto.subtle.digest('SHA-256',bytes);return [...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');}
   async function runNotebookCell(id){try{const notebook=await api(`/api/notebooks/${id}`);const cell=notebook.document.cells[0];if(!cell||cell.cell_type!=='code')throw new Error('La cellule 0 n’est pas exécutable.');const digest=await sha256Text(cell.source);if(!confirm(`Exécuter sans réseau la cellule SHA-256 ${digest} ?`))return;const result=await api(`/api/notebooks/${id}/cells/0/executions`,{method:'POST',body:JSON.stringify({confirmed_sha256:digest,timeout_seconds:60,max_output_bytes:262144})});setStatus('#notebook-status',`Exécution ${result.execution_id} mise en file. Résultat disponible dans Scripts.`);}catch(error){setStatus('#notebook-status',error.message,true);}}
-  q('#notebook-form').addEventListener('submit',async event=>{event.preventDefault();try{const data=await api(`/api/projects/${state.projectId}/notebooks`,{method:'POST',body:JSON.stringify({name:q('#notebook-name').value,kernel:q('#notebook-kernel').value,description:'Notebook créé dans HDP V5',cells:[{cell_type:'code',source:q('#notebook-code').value,metadata:{}}]})});event.target.reset();setStatus('#notebook-status',`Notebook créé · révision ${data.revision} · SHA-256 ${data.sha256}`);await loadNotebooks();}catch(error){setStatus('#notebook-status',error.message,true);}});
+  q('#notebook-form').addEventListener('submit',async event=>{event.preventDefault();try{const data=await api(`/api/projects/${state.projectId}/notebooks`,{method:'POST',body:JSON.stringify({name:q('#notebook-name').value,kernel:q('#notebook-kernel').value,description:'Notebook créé dans HDP 6.0.0-dev',cells:[{cell_type:'code',source:q('#notebook-code').value,metadata:{}}]})});event.target.reset();setStatus('#notebook-status',`Notebook créé · révision ${data.revision} · SHA-256 ${data.sha256}`);await loadNotebooks();}catch(error){setStatus('#notebook-status',error.message,true);}});
 
   (async()=>{await loadHealth();try{await Promise.all([loadSources(),loadCodFamilies()]);await loadProjects();await Promise.all([loadResources(),loadScripts(),loadProcessingWorkspace(),loadSchedules(),loadSourceSettings(),loadRss(),loadTimeline(),loadMapLayers(),renderSearchSourceFields()]);const requested=window.location.hash.replace('#','');activateView(document.getElementById(`view-${requested}`)?requested:'home');}catch(error){setStatus('#project-status',error.message,true);setStatus('#source-catalog-status',error.message,true);}})();
 </script>

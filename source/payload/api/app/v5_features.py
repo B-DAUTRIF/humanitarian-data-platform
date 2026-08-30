@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -317,13 +318,13 @@ def hdx_metadata(project_id: uuid.UUID, limit: int = Query(default=100, ge=1, le
     ensure_project(project_id)
     with db() as connection:
         rows = connection.execute(
-            """SELECT dataset_id, resource_id, title, description, data_grid_dimensions,
+            """SELECT id, dataset_id, resource_id, title, description, data_grid_dimensions,
                       geography, temporal_coverage, structure, formats, update_periodicity,
                       expected_update_at, reliability, source_metadata, observed_at
                FROM hdx_metadata_records WHERE project_id=%s
                ORDER BY observed_at DESC LIMIT %s""", (project_id, limit),
         ).fetchall()
-    keys = ["dataset_id", "resource_id", "title", "description", "data_grid_dimensions", "geography", "temporal_coverage", "structure", "formats", "update_periodicity", "expected_update_at", "reliability", "source_metadata", "observed_at"]
+    keys = ["id", "dataset_id", "resource_id", "title", "description", "data_grid_dimensions", "geography", "temporal_coverage", "structure", "formats", "update_periodicity", "expected_update_at", "reliability", "source_metadata", "observed_at"]
     return [dict(zip(keys, row, strict=True)) for row in rows]
 
 
@@ -339,18 +340,37 @@ def aggregation_plan(project_id: uuid.UUID, payload: AggregationPlan) -> dict[st
     with db() as connection:
         rows = connection.execute(
             """SELECT id, dataset_id, resource_id, title, formats, geography,
-                      temporal_coverage, structure, reliability
+                      temporal_coverage, structure, reliability, source_metadata
                FROM hdx_metadata_records WHERE project_id=%s AND id=ANY(%s)""",
             (project_id, payload.metadata_ids),
         ).fetchall()
     if len(rows) != len(set(payload.metadata_ids)):
         raise HTTPException(status_code=404, detail="Une ou plusieurs métadonnées sont absentes du projet")
-    compatible = all(row[4] for row in rows) and all(row[5] for row in rows)
+    checks: list[dict[str, Any]] = []
+    for row in rows:
+        source_metadata = row[9] if isinstance(row[9], dict) else {}
+        temporal = row[6] if isinstance(row[6], dict) else {}
+        structure = row[7] if isinstance(row[7], dict) else {}
+        extras = extra_map(source_metadata) if source_metadata else {}
+        license_value = source_metadata.get("license_title") or source_metadata.get("license_id")
+        units = extras.get("unit") or extras.get("units") or structure.get("units")
+        join_keys = structure.get("join_keys") or structure.get("fields")
+        item_checks = {
+            "formats_present": bool(row[4]),
+            "geography_mapped": bool(row[5]),
+            "temporal_coverage_explicit": bool(temporal.get("start") and temporal.get("end")),
+            "schema_or_join_keys_explicit": bool(join_keys),
+            "units_explicit": bool(units),
+            "license_explicit": bool(license_value),
+        }
+        checks.append({"metadata_id": str(row[0]), "checks": item_checks, "ready": all(item_checks.values())})
+    compatible = bool(checks) and all(item["ready"] for item in checks)
     return {
         "status": "ready" if compatible else "mapping_required",
         "join_contract": {"geography": payload.target_granularity, "time_bucket": payload.time_bucket, "missing_values": "preserve_and_flag", "provenance": "one lineage edge per input"},
         "inputs": [{"metadata_id": str(row[0]), "dataset_id": row[1], "resource_id": row[2], "title": row[3], "formats": row[4], "geography": row[5], "temporal": row[6], "schema": row[7], "reliability": row[8]} for row in rows],
-        "blocking_checks": ["mapping géographique explicite", "unité et type compatibles", "périodes non ambiguës", "licences compatibles"],
+        "validation": checks,
+        "blocking_checks": [key for item in checks for key, value in item["checks"].items() if not value],
     }
 
 
@@ -415,17 +435,31 @@ def create_signal_rule(project_id: uuid.UUID, payload: SignalRuleCreate) -> dict
 
 async def evaluate_signal(project_id: uuid.UUID, event_id: uuid.UUID, event: SignalEventCreate) -> list[dict[str, Any]]:
     with db() as connection:
-        rules = connection.execute("SELECT id,name,locations,themes,min_severity,min_confidence,data_grid_dimensions,query_template,refresh_due_resources FROM signal_rules WHERE project_id=%s AND enabled=TRUE", (project_id,)).fetchall()
+        rules = connection.execute("SELECT id,name,locations,themes,min_severity,min_confidence,lookback_hours,data_grid_dimensions,query_template,refresh_due_resources FROM signal_rules WHERE project_id=%s AND enabled=TRUE", (project_id,)).fetchall()
     actions = []
     for rule in rules:
         if float(event.severity) < float(rule[4]) or float(event.confidence) < float(rule[5]) or not overlap(rule[2], event.locations) or not overlap(rule[3], event.themes):
             continue
-        query = rule[7].format(title=event.title, themes=" ".join(event.themes), locations=" ".join(event.locations))[:200]
+        occurred_at = event.occurred_at.replace(tzinfo=UTC) if event.occurred_at.tzinfo is None else event.occurred_at.astimezone(UTC)
+        if occurred_at < datetime.now(UTC) - timedelta(hours=int(rule[6])):
+            continue
+        query = rule[8].format(title=event.title, themes=" ".join(event.themes), locations=" ".join(event.locations))[:200]
         action_id, started = uuid.uuid4(), datetime.now(UTC)
+        with db() as connection:
+            reserved = connection.execute(
+                """INSERT INTO signal_actions
+                   (id,event_id,rule_id,action_type,status,result,started_at)
+                   VALUES (%s,%s,%s,'datagrid_search_and_due_refresh','reserved','{}'::jsonb,%s)
+                   ON CONFLICT (event_id,rule_id,action_type) DO NOTHING RETURNING id""",
+                (action_id, event_id, rule[0], started),
+            ).fetchone()
+        if not reserved:
+            actions.append({"rule_id": str(rule[0]), "rule": rule[1], "status": "deduplicated", "result": {}, "error": None})
+            continue
         try:
-            search = await perform_datagrid_search(project_id, DataGridSearch(query=query, dimensions=rule[6], location=" ".join(event.locations)[:160], rows=25))
+            search = await perform_datagrid_search(project_id, DataGridSearch(query=query, dimensions=rule[7], location=" ".join(event.locations)[:160], rows=25))
             refreshed = 0
-            if rule[8]:
+            if rule[9]:
                 with db() as connection:
                     result = connection.execute("""UPDATE resource_refresh_schedules s SET next_run_at=%s, updated_at=%s FROM local_resources r WHERE s.resource_id=r.id AND s.project_id=%s AND s.enabled=TRUE AND r.expected_update_at IS NOT NULL AND r.expected_update_at<=%s AND (r.geographic_scope IS NULL OR r.geographic_scope ILIKE ANY(%s))""", (started, started, project_id, started, [f"%{item}%" for item in event.locations] or ["%"] ))
                     refreshed = result.rowcount
@@ -434,7 +468,11 @@ async def evaluate_signal(project_id: uuid.UUID, event_id: uuid.UUID, event: Sig
         except Exception as exc:  # Action isolated: the event remains observable.
             outcome, status, error = {}, "failed", str(exc)[:1000]
         with db() as connection:
-            connection.execute("""INSERT INTO signal_actions (id,event_id,rule_id,action_type,status,result,error,started_at,finished_at) VALUES (%s,%s,%s,'datagrid_search_and_due_refresh',%s,%s,%s,%s,%s) ON CONFLICT (event_id,rule_id,action_type) DO NOTHING""", (action_id,event_id,rule[0],status,Jsonb(outcome),error,started,datetime.now(UTC)))
+            connection.execute(
+                """UPDATE signal_actions SET status=%s,result=%s,error=%s,finished_at=%s
+                   WHERE id=%s""",
+                (status, Jsonb(outcome), error, datetime.now(UTC), action_id),
+            )
         actions.append({"rule_id": str(rule[0]), "rule": rule[1], "status": status, "result": outcome, "error": error})
     return actions
 
@@ -447,7 +485,15 @@ async def ingest_signal(project_id: uuid.UUID, payload: SignalEventCreate) -> di
         row = connection.execute("""INSERT INTO signal_events (id,project_id,source,external_id,title,summary,occurred_at,received_at,locations,themes,severity,confidence,evidence,raw) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (project_id,source,external_id) DO UPDATE SET title=EXCLUDED.title,summary=EXCLUDED.summary,received_at=EXCLUDED.received_at,evidence=EXCLUDED.evidence,raw=EXCLUDED.raw RETURNING id""", (event_id,project_id,payload.source,payload.external_id,payload.title,payload.summary,payload.occurred_at,now,Jsonb(payload.locations),Jsonb(payload.themes),payload.severity,payload.confidence,Jsonb(payload.evidence),Jsonb(payload.raw))).fetchone()
     actual_id = row[0]
     actions = await evaluate_signal(project_id, actual_id, payload)
-    return {"id": str(actual_id), "deduplicated": actual_id != event_id, "actions": actions}
+    from .v6_features import dispatch_event_to_v6_rules
+
+    v6_dispatch = await asyncio.to_thread(dispatch_event_to_v6_rules, project_id, actual_id)
+    return {
+        "id": str(actual_id),
+        "deduplicated": actual_id != event_id,
+        "actions": actions,
+        "v6_dispatch": v6_dispatch,
+    }
 
 
 @router.get("/projects/{project_id}/signals")

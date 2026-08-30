@@ -128,6 +128,45 @@ class RequestSecurityTest(unittest.TestCase):
             )
         )
 
+    def test_passkey_mode_requires_exact_origin_and_disables_legacy_header(self) -> None:
+        request = make_request(
+            "POST",
+            {
+                "host": "localhost:18081",
+                "origin": "http://localhost:18081",
+                "sec-fetch-site": "same-origin",
+                "x-hdp-csrf": "1",
+            },
+        )
+        self.assertFalse(
+            csrf_is_valid(
+                request,
+                self.allowed,
+                self.local_token,
+                expected_origin="http://localhost:18081",
+                allow_legacy=False,
+            )
+        )
+        other_port = make_request(
+            "POST",
+            {
+                "host": "localhost:18081",
+                "origin": "http://localhost:9999",
+                "sec-fetch-site": "same-origin",
+                "x-hdp-csrf": self.csrf,
+                "cookie": f"{CSRF_COOKIE}={self.csrf}",
+            },
+        )
+        self.assertFalse(
+            csrf_is_valid(
+                other_port,
+                self.allowed,
+                self.local_token,
+                expected_origin="http://localhost:18081",
+                allow_legacy=False,
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

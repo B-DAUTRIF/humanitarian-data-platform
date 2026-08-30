@@ -24,6 +24,15 @@ class DownloadResult:
     size_bytes: int
 
 
+@dataclass(frozen=True)
+class FetchBytesResult:
+    content: bytes
+    final_url: str
+    headers: dict[str, str]
+    status_code: int
+    sha256: str | None
+
+
 class _PinnedHTTPConnection(http.client.HTTPConnection):
     def __init__(self, hostname: str, address: str, port: int, timeout: float) -> None:
         super().__init__(hostname, port=port, timeout=timeout)
@@ -75,7 +84,13 @@ def resolve_public_addresses(url: str) -> tuple[str, int, tuple[str, ...]]:
     return parsed.hostname, port, addresses
 
 
-def _request_once(url: str, *, timeout_seconds: float, user_agent: str) -> tuple[http.client.HTTPResponse, http.client.HTTPConnection]:
+def _request_once(
+    url: str,
+    *,
+    timeout_seconds: float,
+    user_agent: str,
+    request_headers: dict[str, str] | None = None,
+) -> tuple[http.client.HTTPResponse, http.client.HTTPConnection]:
     parsed = urlparse(url)
     hostname, port, addresses = resolve_public_addresses(url)
     target = parsed.path or "/"
@@ -92,11 +107,13 @@ def _request_once(url: str, *, timeout_seconds: float, user_agent: str) -> tuple
                 connection = _PinnedHTTPSConnection(hostname, address, port, timeout_seconds)
             else:
                 connection = _PinnedHTTPConnection(hostname, address, port, timeout_seconds)
-            connection.request(
-                "GET",
-                target,
-                headers={"Host": host_header, "User-Agent": user_agent, "Accept-Encoding": "identity"},
-            )
+            headers = {
+                "Host": host_header,
+                "User-Agent": user_agent,
+                "Accept-Encoding": "identity",
+                **(request_headers or {}),
+            }
+            connection.request("GET", target, headers=headers)
             return connection.getresponse(), connection
         except (OSError, ssl.SSLError, http.client.HTTPException) as exc:
             last_error = exc
@@ -115,10 +132,14 @@ def download_public_file(
     max_bytes: int,
     user_agent: str,
     max_redirects: int = 5,
+    allowed_hosts: set[str] | frozenset[str] | None = None,
 ) -> DownloadResult:
     destination_directory.mkdir(parents=True, exist_ok=True)
     current_url = url
     for _ in range(max_redirects + 1):
+        current_host = urlparse(current_url).hostname
+        if allowed_hosts is not None and current_host not in allowed_hosts:
+            raise ValueError("Destination ou redirection vers un hôte non autorisé")
         response, connection = _request_once(
             current_url, timeout_seconds=120.0, user_agent=user_agent
         )
@@ -166,6 +187,61 @@ def download_public_file(
             except Exception:
                 temporary_path.unlink(missing_ok=True)
                 raise
+        finally:
+            response.close()
+            connection.close()
+    raise ValueError("Trop de redirections HTTP")
+
+
+def fetch_public_bytes(
+    url: str,
+    *,
+    max_bytes: int,
+    user_agent: str,
+    request_headers: dict[str, str] | None = None,
+    max_redirects: int = 3,
+    allowed_hosts: set[str] | frozenset[str] | None = None,
+    timeout_seconds: float = 30.0,
+) -> FetchBytesResult:
+    current_url = url
+    for _ in range(max_redirects + 1):
+        current_host = urlparse(current_url).hostname
+        if allowed_hosts is not None and current_host not in allowed_hosts:
+            raise ValueError("Destination ou redirection vers un hôte non autorisé")
+        response, connection = _request_once(
+            current_url,
+            timeout_seconds=timeout_seconds,
+            user_agent=user_agent,
+            request_headers=request_headers,
+        )
+        try:
+            headers = {key.casefold(): value for key, value in response.getheaders()}
+            if response.status in REDIRECT_STATUSES:
+                location = headers.get("location")
+                if not location:
+                    raise ValueError("Redirection sans destination")
+                current_url = urljoin(current_url, location)
+                continue
+            if response.status == 304:
+                return FetchBytesResult(b"", current_url, headers, 304, None)
+            if response.status < 200 or response.status >= 300:
+                raise ValueError(f"Réponse HTTP distante inattendue : {response.status}")
+            declared = headers.get("content-length")
+            if declared and int(declared) > max_bytes:
+                raise ValueError(f"Ressource supérieure à la limite de {max_bytes} octets")
+            chunks: list[bytes] = []
+            digest = hashlib.sha256()
+            total = 0
+            while True:
+                chunk = response.read(65_536)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise ValueError(f"Ressource supérieure à la limite de {max_bytes} octets")
+                digest.update(chunk)
+                chunks.append(chunk)
+            return FetchBytesResult(b"".join(chunks), current_url, headers, response.status, digest.hexdigest())
         finally:
             response.close()
             connection.close()

@@ -46,6 +46,19 @@ from .local_library import (
 )
 from .migrations import apply_migrations
 from .map_utils import export_bundle, load_geojson, safe_layer_name
+from .mail_features import router as mail_router
+from .passkey_auth import (
+    CHALLENGE_DURATION,
+    SESSION_DURATION,
+    authentication_options,
+    credential_id_from_json,
+    expires_at,
+    opaque_token,
+    registration_options,
+    token_sha256,
+    verify_authentication,
+    verify_registration,
+)
 from .project_integrations import (
     OFFICIAL_COD_CATALOG_QUERIES,
     OFFICIAL_COD_FAMILIES,
@@ -74,7 +87,15 @@ from .processing_recipes import (
     validate_recipe,
 )
 from .scheduler_utils import MIN_INTERVAL_MINUTES, next_run_at, validate_interval
-from .rss_registry import MAX_RSS_BYTES, build_rss_url, parse_rss, rss_catalog, rss_definition
+from .rss_registry import (
+    MAX_RSS_BYTES,
+    RSS_REGISTRY_VERSION,
+    build_rss_url,
+    build_rss_url_from_definition,
+    parse_rss,
+    rss_catalog,
+    rss_definition,
+)
 from .request_security import (
     CSRF_COOKIE,
     SESSION_COOKIE,
@@ -83,6 +104,7 @@ from .request_security import (
     csrf_is_valid,
     csrf_token,
     normalized_host,
+    origin_is_local,
     valid_local_token,
 )
 from .security import (
@@ -93,7 +115,7 @@ from .security import (
     sha256_file,
     validate_public_url,
 )
-from .secure_http import download_public_file
+from .secure_http import download_public_file, fetch_public_bytes
 from .source_registry import (
     CONNECTORS,
     connector_definition,
@@ -102,8 +124,26 @@ from .source_registry import (
     validate_values,
 )
 from .sql_workspace import ALLOWED_SQL_RELATIONS, validate_readonly_sql
+from .spip_bridge import router as spip_router
 from .technology_registry import technology_catalog
-from .v5_features import router as v5_router
+from .v5_features import DataGridSearch, perform_datagrid_search, router as v5_router
+from .v6_features import (
+    dispatch_event_to_v6_rules,
+    process_next_action_request,
+    router as v6_router,
+)
+from .v6_data_jobs import (
+    DataJobError,
+    begin_data_job_source,
+    claim_next_data_job,
+    complete_data_job_attempt,
+    data_job_cancel_requested,
+    finish_data_job_source,
+    initialize_data_job_sources,
+    mark_data_job_failed,
+    validate_data_job_parameters,
+)
+from .v6_legacy_rules import LEGACY_DATAGRID_ACTION, validate_legacy_datagrid_parameters
 from .script_runtime import (
     TERMINAL_STATUSES,
     ensure_spool_layout,
@@ -118,7 +158,7 @@ from .script_runtime import (
 
 
 APP_NAME = "Humanitarian Data Platform"
-APP_VERSION = "5.0.2"
+APP_VERSION = "6.0.0-dev"
 DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
 EXECUTION_SPOOL_DIR = Path(os.getenv("EXECUTION_SPOOL_DIR", "/app/execution_spool"))
 DATABASE_URL = os.environ["DATABASE_URL"]
@@ -129,6 +169,15 @@ RELIEFWEB_APPNAME = os.getenv("RELIEFWEB_APPNAME", "").strip()
 HDX_HAPI_APP_IDENTIFIER = os.getenv("HDX_HAPI_APP_IDENTIFIER", "").strip()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
 HDP_LOCAL_TOKEN = os.getenv("HDP_LOCAL_TOKEN", "").strip()
+HDP_AUTH_MODE = os.getenv("HDP_AUTH_MODE", "passkey").strip().casefold()
+HDP_WEBAUTHN_RP_ID = os.getenv("HDP_WEBAUTHN_RP_ID", "localhost").strip().casefold()
+HDP_WEBAUTHN_ORIGIN = os.getenv(
+    "HDP_WEBAUTHN_ORIGIN", "http://localhost:8080"
+).strip().rstrip("/")
+HDP_COOKIE_SECURE = os.getenv(
+    "HDP_COOKIE_SECURE",
+    "true" if HDP_WEBAUTHN_ORIGIN.startswith("https://") else "false",
+).strip().casefold() in {"1", "true", "yes", "on"}
 HDP_ALLOWED_HOSTS = allowed_hosts(os.getenv("HDP_ALLOWED_HOSTS", "").split(","))
 HDP_TILE_URL = os.getenv(
     "HDP_TILE_URL", "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -156,8 +205,51 @@ app = FastAPI(
     description="Acquisition, téléchargement et gestion locale de ressources humanitaires par projets.",
 )
 app.include_router(v5_router)
+app.include_router(v6_router)
+app.include_router(spip_router)
+app.include_router(mail_router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 scheduler_task: asyncio.Task[None] | None = None
+
+PUBLIC_AUTH_PATHS = frozenset(
+    {
+        "/api/auth/status",
+        "/api/auth/register/options",
+        "/api/auth/register/verify",
+        "/api/auth/authenticate/options",
+        "/api/auth/authenticate/verify",
+    }
+)
+
+
+def active_passkey_session(request: Request) -> str:
+    token = request.cookies.get(SESSION_COOKIE, "")
+    if not token:
+        return ""
+    now = datetime.now(UTC)
+    try:
+        with psycopg.connect(DATABASE_URL, autocommit=True) as connection:
+            row = connection.execute(
+                """
+                SELECT 1 FROM operator_sessions s
+                JOIN operator_webauthn_credentials c ON c.id=s.credential_id
+                WHERE s.token_sha256=%s AND s.revoked_at IS NULL
+                  AND s.expires_at>%s AND c.revoked_at IS NULL
+                """,
+                (token_sha256(token), now),
+            ).fetchone()
+    except psycopg.Error:
+        return ""
+    return token if row else ""
+
+
+def public_auth_origin_is_valid(request: Request) -> bool:
+    if not request.headers.get("origin"):
+        return False
+    fetch_site = request.headers.get("sec-fetch-site", "").casefold()
+    if fetch_site and fetch_site not in {"same-origin", "same-site", "none"}:
+        return False
+    return origin_is_local(request, HDP_ALLOWED_HOSTS, HDP_WEBAUTHN_ORIGIN)
 
 
 @app.middleware("http")
@@ -168,9 +260,27 @@ async def local_request_boundary(request: Request, call_next: Any) -> Response:
     path = request.url.path
     if path.startswith("/static/") or path in {"/", "/api/health"}:
         return await call_next(request)
-    if not authenticated(request, HDP_LOCAL_TOKEN):
+    if HDP_AUTH_MODE == "passkey" and path in PUBLIC_AUTH_PATHS:
+        if request.method.upper() not in {"GET", "HEAD", "OPTIONS"} and not public_auth_origin_is_valid(request):
+            return JSONResponse(status_code=403, content={"detail": "Origine d'authentification refusée"})
+        return await call_next(request)
+    if path.startswith("/api/spip-bridge/v1/"):
+        return await call_next(request)
+    secret = (
+        active_passkey_session(request)
+        if HDP_AUTH_MODE == "passkey"
+        else HDP_LOCAL_TOKEN if authenticated(request, HDP_LOCAL_TOKEN) else ""
+    )
+    if not secret:
         return JSONResponse(status_code=401, content={"detail": "Session HDP requise"})
-    if not csrf_is_valid(request, HDP_ALLOWED_HOSTS, HDP_LOCAL_TOKEN):
+    request.state.auth_secret = secret
+    if not csrf_is_valid(
+        request,
+        HDP_ALLOWED_HOSTS,
+        secret,
+        expected_origin=HDP_WEBAUTHN_ORIGIN if HDP_AUTH_MODE == "passkey" else "",
+        allow_legacy=HDP_AUTH_MODE != "passkey",
+    ):
         return JSONResponse(status_code=403, content={"detail": "Origine ou jeton CSRF refusé"})
     return await call_next(request)
 
@@ -340,6 +450,21 @@ class SourceParametersPreview(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
 
 
+class PasskeyRegistrationStart(BaseModel):
+    bootstrap_token: str = Field(default="", max_length=256)
+
+
+class PasskeyRegistrationFinish(PasskeyRegistrationStart):
+    challenge_id: uuid.UUID
+    credential: dict[str, Any]
+    label: str = Field(default="Passkey opérateur", min_length=1, max_length=120)
+
+
+class PasskeyAuthenticationFinish(BaseModel):
+    challenge_id: uuid.UUID
+    credential: dict[str, Any]
+
+
 class SearchResponse(BaseModel):
     acquisition_id: str
     project_id: str
@@ -352,6 +477,11 @@ class SearchResponse(BaseModel):
     items: list[dict[str, Any]]
     downloads: dict[str, int]
     parameters: dict[str, Any]
+
+
+class AutomatedDataWorkerRunRequest(BaseModel):
+    worker_id: str = Field(default="manual-data-worker", min_length=2, max_length=120)
+    lease_seconds: int = Field(default=900, ge=30, le=1800)
 
 
 def database_connection(*, autocommit: bool = True) -> psycopg.Connection[Any]:
@@ -713,11 +843,49 @@ def initialize_database() -> None:
     raise RuntimeError("Database unavailable after startup retries") from last_error
 
 
+def record_application_start() -> None:
+    now = datetime.now(UTC)
+    with database_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO application_timeline
+                (id,project_id,scope,event_type,object_type,object_id,status,summary,details,actor,occurred_at)
+            VALUES (%s,NULL,'global','application.started','application',%s,'completed',
+                    'Application HDP démarrée',%s,'system',%s)
+            """,
+            (
+                uuid.uuid4(),
+                APP_VERSION,
+                Jsonb({"version": APP_VERSION, "auth_mode": HDP_AUTH_MODE}),
+                now,
+            ),
+        )
+
+
 @app.on_event("startup")
 async def startup() -> None:
     global scheduler_task
+    if HDP_AUTH_MODE not in {"passkey", "local_token"}:
+        raise RuntimeError("HDP_AUTH_MODE doit valoir passkey ou local_token")
     if len(HDP_LOCAL_TOKEN) < 32:
         raise RuntimeError("HDP_LOCAL_TOKEN doit contenir au moins 32 caractères")
+    if HDP_AUTH_MODE == "passkey":
+        origin = urlparse(HDP_WEBAUTHN_ORIGIN)
+        origin_host = normalized_host(origin.netloc)
+        if not origin.scheme or not origin.netloc or origin.path not in {"", "/"}:
+            raise RuntimeError("HDP_WEBAUTHN_ORIGIN doit être une origine sans chemin")
+        if origin_host not in HDP_ALLOWED_HOSTS:
+            raise RuntimeError("L'hôte WebAuthn doit figurer dans HDP_ALLOWED_HOSTS")
+        if not (
+            origin_host == HDP_WEBAUTHN_RP_ID
+            or origin_host.endswith(f".{HDP_WEBAUTHN_RP_ID}")
+        ):
+            raise RuntimeError("HDP_WEBAUTHN_RP_ID ne correspond pas à l'origine")
+        loopback = origin_host in {"localhost", "127.0.0.1", "::1"}
+        if origin.scheme != "https" and not loopback:
+            raise RuntimeError("WebAuthn exige HTTPS hors localhost")
+        if origin.scheme == "https" and not HDP_COOKIE_SECURE:
+            raise RuntimeError("HDP_COOKIE_SECURE doit être activé avec HTTPS")
     if len(HDP_SQL_PASSWORD) < 32:
         raise RuntimeError("HDP_SQL_PASSWORD doit contenir au moins 32 caractères")
     DATA_DIR.joinpath("raw").mkdir(parents=True, exist_ok=True)
@@ -725,6 +893,7 @@ async def startup() -> None:
     DATA_DIR.joinpath("uploads").mkdir(parents=True, exist_ok=True)
     ensure_spool_layout(EXECUTION_SPOOL_DIR)
     await asyncio.to_thread(initialize_database)
+    await asyncio.to_thread(record_application_start)
     scheduler_task = asyncio.create_task(scheduler_loop(), name="hdp-scheduler")
 
 
@@ -955,7 +1124,11 @@ def persist_raw(
     item_count: int,
     schedule_id: uuid.UUID | None,
     parameters: dict[str, Any] | None = None,
+    automated_data_job_id: uuid.UUID | None = None,
+    automated_data_job_source: str | None = None,
 ) -> dict[str, Any]:
+    if (automated_data_job_id is None) != (automated_data_job_source is None):
+        raise ValueError("Le travail automatisé et sa source doivent être fournis ensemble")
     retrieved_at = datetime.now(UTC)
     acquisition_id = uuid.uuid4()
     raw_bytes = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
@@ -975,8 +1148,8 @@ def persist_raw(
             """
             INSERT INTO acquisitions
                 (id, project_id, schedule_id, source, query, retrieved_at, sha256,
-                 item_count, raw_path, parameters)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 item_count, raw_path, parameters,automated_data_job_id,automated_data_job_source)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 acquisition_id,
@@ -989,6 +1162,8 @@ def persist_raw(
                 item_count,
                 str(relative),
                 Jsonb(parameters or {}),
+                automated_data_job_id,
+                automated_data_job_source,
             ),
         )
         connection.execute(
@@ -1530,6 +1705,8 @@ async def execute_acquisition(
     auto_download: bool,
     schedule_id: uuid.UUID | None = None,
     parameters: dict[str, Any] | None = None,
+    automated_data_job_id: uuid.UUID | None = None,
+    automated_data_job_source: str | None = None,
 ) -> SearchResponse:
     ensure_project(project_id)
     project_settings = get_project_source_settings(project_id, source)
@@ -1558,7 +1735,15 @@ async def execute_acquisition(
         raise HTTPException(status_code=502, detail=f"Source distante indisponible: {exc}") from exc
 
     provenance = persist_raw(
-        project_id, source, validated["query"], payload, len(items), schedule_id, validated
+        project_id,
+        source,
+        validated["query"],
+        payload,
+        len(items),
+        schedule_id,
+        validated,
+        automated_data_job_id,
+        automated_data_job_source,
     )
     downloads = {"queued": 0, "completed": 0, "skipped": 0, "failed": 0, "deferred": 0}
     if auto_download:
@@ -1781,7 +1966,8 @@ def _rss_subscription(subscription_id: uuid.UUID) -> dict[str, Any]:
             """
             SELECT id, project_id, registry_id, name, query, language, interval_minutes,
                    enabled, next_fetch_at, last_fetch_at, last_status, last_error,
-                   etag, last_modified, created_at, updated_at
+                   etag, last_modified, created_at, updated_at, feed_definition,
+                   feed_source_id
             FROM rss_subscriptions WHERE id = %s AND archived_at IS NULL
             """,
             (subscription_id,),
@@ -1792,12 +1978,15 @@ def _rss_subscription(subscription_id: uuid.UUID) -> dict[str, Any]:
         "id", "project_id", "registry_id", "name", "query", "language",
         "interval_minutes", "enabled", "next_fetch_at", "last_fetch_at",
         "last_status", "last_error", "etag", "last_modified", "created_at", "updated_at",
+        "feed_definition", "feed_source_id",
     ]
     result = dict(zip(keys, row))
     result["id"] = str(result["id"])
     result["project_id"] = str(result["project_id"])
-    result["feed"] = rss_definition(result["registry_id"])
-    result["feed_url"] = build_rss_url(result["registry_id"], result["query"], result["language"])
+    result["feed"] = result["feed_definition"] or rss_definition(result["registry_id"])
+    result["feed_url"] = build_rss_url_from_definition(
+        result["feed"], result["query"], result["language"]
+    )
     return result
 
 
@@ -1813,36 +2002,19 @@ async def fetch_rss_subscription(subscription_id: uuid.UUID) -> dict[str, Any]:
     now = datetime.now(UTC)
     following_fetch = next_run_at(now, int(subscription["interval_minutes"]))
     try:
-        payload = b""
-        response_headers: dict[str, str] = {}
-        status_code = 0
-        async with httpx.AsyncClient(timeout=30, follow_redirects=False) as client:
-            for redirect_count in range(4):
-                parsed = urlparse(current_url)
-                if parsed.hostname not in set(definition["allowed_hosts"]):
-                    raise ValueError("Redirection RSS vers un hôte non autorisé")
-                validate_public_url(current_url)
-                async with client.stream("GET", current_url, headers=conditional_headers) as response:
-                    status_code = response.status_code
-                    response_headers = dict(response.headers)
-                    if status_code in {301, 302, 303, 307, 308}:
-                        location = response.headers.get("location")
-                        if not location or redirect_count >= 3:
-                            raise ValueError("Chaîne de redirection RSS invalide")
-                        current_url = urljoin(current_url, location)
-                        continue
-                    if status_code == 304:
-                        break
-                    response.raise_for_status()
-                    chunks: list[bytes] = []
-                    size = 0
-                    async for chunk in response.aiter_bytes():
-                        size += len(chunk)
-                        if size > MAX_RSS_BYTES:
-                            raise ValueError("Le flux RSS dépasse la limite de 2 Mio")
-                        chunks.append(chunk)
-                    payload = b"".join(chunks)
-                    break
+        fetched = await asyncio.to_thread(
+            fetch_public_bytes,
+            current_url,
+            max_bytes=MAX_RSS_BYTES,
+            user_agent=f"HDP/{APP_VERSION} RSS",
+            request_headers={key: value for key, value in conditional_headers.items() if key != "User-Agent"},
+            max_redirects=3,
+            allowed_hosts=frozenset(definition["allowed_hosts"]),
+            timeout_seconds=30.0,
+        )
+        payload = fetched.content
+        response_headers = fetched.headers
+        status_code = fetched.status_code
         if status_code == 304:
             with database_connection() as connection:
                 connection.execute(
@@ -1853,11 +2025,25 @@ async def fetch_rss_subscription(subscription_id: uuid.UUID) -> dict[str, Any]:
                     """,
                     (now, following_fetch, now, subscription_id),
                 )
+                connection.execute(
+                    """INSERT INTO application_timeline
+                       (id,project_id,scope,event_type,object_type,object_id,status,summary,details,actor,occurred_at)
+                       VALUES (%s,%s,'project','rss.not_modified','rss_subscription',%s,'completed',%s,%s,'system',%s)""",
+                    (
+                        uuid.uuid4(), uuid.UUID(subscription["project_id"]), str(subscription_id),
+                        f"Flux RSS {subscription['name']} inchangé",
+                        Jsonb({"etag": subscription.get("etag"), "last_modified": subscription.get("last_modified")}),
+                        now,
+                    ),
+                )
             return {**_rss_subscription(subscription_id), "new_items": 0}
         items = parse_rss(payload)
         inserted = 0
+        event_ids: list[uuid.UUID] = []
+        ingestion_run_id: uuid.UUID | None = None
         with database_connection(autocommit=False) as connection:
             for item in items:
+                rss_item_id = uuid.uuid4()
                 result = connection.execute(
                     """
                     INSERT INTO rss_items
@@ -1867,12 +2053,155 @@ async def fetch_rss_subscription(subscription_id: uuid.UUID) -> dict[str, Any]:
                     ON CONFLICT (subscription_id, external_id) DO NOTHING
                     """,
                     (
-                        uuid.uuid4(), subscription_id, item["external_id"], item["title"],
+                        rss_item_id, subscription_id, item["external_id"], item["title"],
                         item["url"], item["summary"], item["published_at"],
                         Jsonb(item["raw"]), now,
                     ),
                 )
                 inserted += int(result.rowcount or 0)
+                if result.rowcount:
+                    if ingestion_run_id is None:
+                        ingestion_run_id = uuid.uuid4()
+                        connection.execute(
+                            """INSERT INTO catalog_ingestion_runs
+                               (id,project_id,source_id,api_version,endpoint_id,connector_version,
+                                transformation_version,acquisition_parameters,record_count,status,
+                                started_at,actor)
+                               VALUES (%s,%s,%s,%s,'feed','rss-6.0.0','rss-normalization-1',
+                                       %s,0,'running',%s,'system')""",
+                            (
+                                ingestion_run_id, uuid.UUID(subscription["project_id"]),
+                                f"rss:{subscription['registry_id']}",
+                                definition.get("registry_version", RSS_REGISTRY_VERSION),
+                                Jsonb({"feed_url": subscription["feed_url"]}), now,
+                            ),
+                        )
+                    raw_metadata = {
+                        "feed": definition,
+                        "item": {
+                            "external_id": item["external_id"],
+                            "title": item["title"],
+                            "url": item["url"],
+                            "summary": item["summary"],
+                            "published_at": item["published_at"].isoformat() if item["published_at"] else None,
+                            "raw": item["raw"],
+                        },
+                    }
+                    raw_sha256 = hashlib.sha256(
+                        json.dumps(raw_metadata, ensure_ascii=False, sort_keys=True).encode("utf-8")
+                    ).hexdigest()
+                    snapshot_id = uuid.uuid4()
+                    snapshot = connection.execute(
+                        """INSERT INTO raw_metadata_snapshots
+                           (id,source_id,api_version,endpoint_id,external_id,content,content_sha256,
+                            http_etag,http_last_modified,observed_at)
+                           VALUES (%s,%s,%s,'feed',%s,%s,%s,%s,%s,%s)
+                           ON CONFLICT (source_id,api_version,endpoint_id,content_sha256)
+                           DO NOTHING RETURNING id""",
+                        (
+                            snapshot_id, f"rss:{subscription['registry_id']}",
+                            definition.get("registry_version", RSS_REGISTRY_VERSION),
+                            item["external_id"], Jsonb(raw_metadata), raw_sha256,
+                            response_headers.get("etag"), response_headers.get("last-modified"), now,
+                        ),
+                    ).fetchone()
+                    if not snapshot:
+                        snapshot = connection.execute(
+                            """SELECT id FROM raw_metadata_snapshots
+                               WHERE source_id=%s AND api_version=%s AND endpoint_id='feed'
+                                 AND content_sha256=%s""",
+                            (
+                                f"rss:{subscription['registry_id']}",
+                                definition.get("registry_version", RSS_REGISTRY_VERSION),
+                                raw_sha256,
+                            ),
+                        ).fetchone()
+                    catalog_record_id = uuid.uuid4()
+                    normalized_metadata = {
+                        "title": item["title"],
+                        "url": item["url"] or None,
+                        "summary": item["summary"] or None,
+                        "published_at": item["published_at"].isoformat() if item["published_at"] else None,
+                    }
+                    confidence = {
+                        key: {
+                            "status": "observed" if value is not None else "unavailable",
+                            "score": 0.8 if value is not None else 1.0,
+                        }
+                        for key, value in normalized_metadata.items()
+                    }
+                    connection.execute(
+                        """INSERT INTO catalog_records
+                           (id,source_id,api_version,endpoint_id,external_id,record_type,title,
+                            normalized_metadata,unmapped_fields,raw_snapshot_id,connector_version,
+                            transformation_version,confidence,observed_at)
+                           VALUES (%s,%s,%s,'feed',%s,'rss_item',%s,%s,%s,%s,
+                                   'rss-6.0.0','rss-normalization-1',%s,%s)""",
+                        (
+                            catalog_record_id, f"rss:{subscription['registry_id']}",
+                            definition.get("registry_version", RSS_REGISTRY_VERSION),
+                            item["external_id"], item["title"], Jsonb(normalized_metadata),
+                            Jsonb({"feed": definition, "raw_item": item["raw"]}), snapshot[0],
+                            Jsonb(confidence), now,
+                        ),
+                    )
+                    for target_path in normalized_metadata:
+                        connection.execute(
+                            """INSERT INTO catalog_field_lineage
+                               (id,catalog_record_id,target_path,source_paths,recipe,
+                                connector_version,transformation_version,confidence)
+                               VALUES (%s,%s,%s,%s,%s,'rss-6.0.0','rss-normalization-1',%s)""",
+                            (
+                                uuid.uuid4(), catalog_record_id, target_path,
+                                Jsonb([f"item.{target_path}"]),
+                                Jsonb({"operation": "identity_or_explicit_unavailable"}),
+                                Jsonb(confidence[target_path]),
+                            ),
+                        )
+                    connection.execute(
+                        """INSERT INTO project_catalog_references
+                           (project_id,catalog_record_id,ingestion_run_id,referenced_at)
+                           VALUES (%s,%s,%s,%s)""",
+                        (
+                            uuid.UUID(subscription["project_id"]), catalog_record_id,
+                            ingestion_run_id, now,
+                        ),
+                    )
+                    event_id = uuid.uuid4()
+                    event = connection.execute(
+                        """INSERT INTO signal_events
+                           (id,project_id,source,external_id,title,summary,occurred_at,received_at,
+                            locations,themes,severity,confidence,evidence,raw)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                           ON CONFLICT (project_id,source,external_id) DO NOTHING RETURNING id""",
+                        (
+                            event_id, uuid.UUID(subscription["project_id"]),
+                            f"rss:{subscription['registry_id']}", item["external_id"],
+                            item["title"], item["summary"], item["published_at"] or now, now,
+                            Jsonb([definition.get("region", "Monde")]),
+                            Jsonb(definition.get("themes", ["veille sanitaire"])),
+                            0.3, 0.8,
+                            Jsonb(
+                                [
+                                    {
+                                        "type": "official_rss_item",
+                                        "url": item["url"],
+                                        "feed_url": subscription["feed_url"],
+                                        "rss_item_id": str(rss_item_id),
+                                    }
+                                ]
+                            ),
+                            Jsonb({**item["raw"], "url": item["url"], "feed": definition}),
+                        ),
+                    ).fetchone()
+                    if event:
+                        event_ids.append(event[0])
+            if ingestion_run_id is not None:
+                connection.execute(
+                    """UPDATE catalog_ingestion_runs
+                       SET status='completed',record_count=%s,finished_at=%s WHERE id=%s""",
+                    (inserted, now, ingestion_run_id),
+                )
             connection.execute(
                 """
                 UPDATE rss_subscriptions
@@ -1885,8 +2214,41 @@ async def fetch_rss_subscription(subscription_id: uuid.UUID) -> dict[str, Any]:
                     following_fetch, now, subscription_id,
                 ),
             )
+            connection.execute(
+                """INSERT INTO application_timeline
+                   (id,project_id,scope,event_type,object_type,object_id,status,summary,details,actor,occurred_at)
+                   VALUES (%s,%s,'project','rss.fetched','rss_subscription',%s,'completed',%s,%s,'system',%s)""",
+                (
+                    uuid.uuid4(), uuid.UUID(subscription["project_id"]), str(subscription_id),
+                    f"Flux RSS {subscription['name']} lu : {inserted} nouvel élément",
+                    Jsonb(
+                        {
+                            "item_count": len(items),
+                            "new_items": inserted,
+                            "signal_events": len(event_ids),
+                            "content_sha256": fetched.sha256,
+                            "final_url": fetched.final_url,
+                        }
+                    ),
+                    now,
+                ),
+            )
             connection.commit()
-        return {**_rss_subscription(subscription_id), "new_items": inserted, "item_count": len(items)}
+        dispatches = [
+            await asyncio.to_thread(
+                dispatch_event_to_v6_rules,
+                uuid.UUID(subscription["project_id"]),
+                event_id,
+            )
+            for event_id in event_ids
+        ]
+        return {
+            **_rss_subscription(subscription_id),
+            "new_items": inserted,
+            "item_count": len(items),
+            "signal_events": len(event_ids),
+            "v6_rule_dispatches": dispatches,
+        }
     except Exception as exc:
         with database_connection() as connection:
             connection.execute(
@@ -1932,7 +2294,40 @@ def claim_due_rss() -> uuid.UUID | None:
 
 @app.get("/api/rss/catalog")
 def rss_feed_catalog() -> list[dict[str, Any]]:
-    return rss_catalog()
+    catalog = rss_catalog()
+    with database_connection() as connection:
+        rows = connection.execute(
+            """SELECT id,source_key,version_number,name,organization,region,themes,languages,
+                      feed_url,portal_url,evidence_url,protocol,license,declared_frequency,
+                      allowed_hosts,decided_at
+               FROM rss_feed_sources WHERE state='approved'
+               ORDER BY organization,name,version_number DESC"""
+        ).fetchall()
+    catalog.extend(
+        {
+            "id": f"custom:{row[1]}:v{row[2]}",
+            "feed_source_id": str(row[0]),
+            "source_key": row[1],
+            "version_number": row[2],
+            "name": row[3],
+            "organization": row[4],
+            "region": row[5],
+            "themes": row[6],
+            "languages": row[7],
+            "base_url": row[8],
+            "portal_url": row[9],
+            "evidence_url": row[10],
+            "protocol": row[11],
+            "license": row[12],
+            "declared_frequency": row[13],
+            "allowed_hosts": row[14],
+            "state": "approved",
+            "verified_at": row[15].date().isoformat() if row[15] else None,
+            "supports_query": False,
+        }
+        for row in rows
+    )
+    return catalog
 
 
 @app.get("/api/projects/{project_id}/rss/subscriptions")
@@ -2310,6 +2705,169 @@ async def execute_claimed_resource_refresh(schedule: dict[str, Any]) -> None:
         )
 
 
+def claim_automated_data_job(
+    worker_id: str = "hdp-scheduler-data-worker",
+    lease_seconds: int = 900,
+) -> dict[str, Any] | None:
+    with database_connection(autocommit=False) as connection:
+        return claim_next_data_job(
+            connection,
+            worker_id,
+            lease_seconds=lease_seconds,
+        )
+
+
+async def execute_claimed_automated_data_job(job: dict[str, Any]) -> dict[str, Any]:
+    try:
+        legacy_datagrid = job["job_type"] == LEGACY_DATAGRID_ACTION
+        if legacy_datagrid:
+            parameters = validate_legacy_datagrid_parameters(job["parameters"])
+            sources = ["hdx"]
+        else:
+            parameters = validate_data_job_parameters(job["parameters"])
+            sources = parameters["sources"]
+            unknown_sources = sorted(set(sources) - set(CONNECTORS))
+            if unknown_sources:
+                raise DataJobError(f"Sources non interrogeables: {unknown_sources}")
+    except (DataJobError, ValueError) as exc:
+        with database_connection(autocommit=False) as connection:
+            return mark_data_job_failed(connection, job, str(exc), permanent=True)
+
+    with database_connection(autocommit=False) as connection:
+        initialize_data_job_sources(connection, job, sources)
+
+    for source in sources:
+        with database_connection(autocommit=False) as connection:
+            if data_job_cancel_requested(connection, job["id"]):
+                finish_data_job_source(
+                    connection,
+                    job,
+                    source,
+                    "cancelled",
+                    error="cancel_requested_before_source",
+                )
+                continue
+            source_state = begin_data_job_source(connection, job, source)
+        if not source_state["execute"]:
+            if source_state["status"] == "cancelled":
+                with database_connection(autocommit=False) as connection:
+                    finish_data_job_source(
+                        connection,
+                        job,
+                        source,
+                        "cancelled",
+                        error="cancel_requested_before_source",
+                    )
+            continue
+        try:
+            if legacy_datagrid:
+                search = await perform_datagrid_search(
+                    job["project_id"],
+                    DataGridSearch(
+                        query=parameters["query"],
+                        dimensions=parameters["dimensions"],
+                        location=" ".join(parameters["locations"])[:160],
+                        rows=25,
+                    ),
+                )
+                refreshed = 0
+                if parameters["refresh_due_resources"]:
+                    started = datetime.now(UTC)
+                    locations = parameters["locations"]
+                    with database_connection(autocommit=False) as connection:
+                        update = connection.execute(
+                            """UPDATE resource_refresh_schedules s
+                               SET next_run_at=%s,updated_at=%s
+                               FROM local_resources r
+                               WHERE s.resource_id=r.id AND s.project_id=%s AND s.enabled=TRUE
+                                 AND r.expected_update_at IS NOT NULL AND r.expected_update_at<=%s
+                                 AND (r.geographic_scope IS NULL OR r.geographic_scope ILIKE ANY(%s))""",
+                            (
+                                started,
+                                started,
+                                job["project_id"],
+                                started,
+                                [f"%{item}%" for item in locations] or ["%"],
+                            ),
+                        )
+                        refreshed = update.rowcount
+                result = {
+                    "source": source,
+                    "query": search["query"],
+                    "datasets_found": search["count"],
+                    "metadata_records_updated": search["metadata_records_updated"],
+                    "coverage": search["coverage"],
+                    "refreshes_queued": refreshed,
+                }
+                with database_connection(autocommit=False) as connection:
+                    finish_data_job_source(connection, job, source, "completed", result)
+            else:
+                acquisition = await execute_acquisition(
+                    job["project_id"],
+                    source,
+                    parameters["query"],
+                    parameters["result_limit"],
+                    job["job_type"] == "data_refresh",
+                    parameters=parameters["source_parameters"].get(source, {}),
+                    automated_data_job_id=job["id"],
+                    automated_data_job_source=source,
+                )
+                result = {
+                    "acquisition_id": acquisition.acquisition_id,
+                    "source": source,
+                    "query": acquisition.query,
+                    "retrieved_at": acquisition.retrieved_at.isoformat(),
+                    "sha256": acquisition.sha256,
+                    "item_count": acquisition.item_count,
+                    "raw_path": acquisition.raw_path,
+                    "downloads": acquisition.downloads,
+                }
+                with database_connection(autocommit=False) as connection:
+                    finish_data_job_source(
+                        connection,
+                        job,
+                        source,
+                        "completed",
+                        result,
+                        acquisition_id=uuid.UUID(acquisition.acquisition_id),
+                    )
+        except Exception as exc:  # Chaque source conserve son résultat et n'arrête pas les suivantes.
+            detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
+            with database_connection(autocommit=False) as connection:
+                finish_data_job_source(
+                    connection,
+                    job,
+                    source,
+                    "failed",
+                    error=str(detail)[:2000],
+                )
+
+    with database_connection(autocommit=False) as connection:
+        return complete_data_job_attempt(connection, job)
+
+
+async def process_next_automated_data_job(
+    worker_id: str = "hdp-scheduler-data-worker",
+    lease_seconds: int = 900,
+) -> dict[str, Any] | None:
+    job = await asyncio.to_thread(claim_automated_data_job, worker_id, lease_seconds)
+    if job is None:
+        return None
+    try:
+        return await execute_claimed_automated_data_job(job)
+    except Exception as exc:
+        with database_connection(autocommit=False) as connection:
+            return mark_data_job_failed(connection, job, str(exc))
+
+
+@app.post("/api/v6/data-worker/run-once")
+async def run_automated_data_worker_once(
+    payload: AutomatedDataWorkerRunRequest,
+) -> dict[str, Any]:
+    result = await process_next_automated_data_job(payload.worker_id, payload.lease_seconds)
+    return result or {"status": "idle", "worker_id": payload.worker_id}
+
+
 async def scheduler_loop() -> None:
     while True:
         try:
@@ -2333,6 +2891,12 @@ async def scheduler_loop() -> None:
                 except Exception:
                     pass
                 continue
+            action_result = await asyncio.to_thread(process_next_action_request)
+            if action_result:
+                continue
+            data_job_result = await process_next_automated_data_job()
+            if data_job_result:
+                continue
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -2341,8 +2905,314 @@ async def scheduler_loop() -> None:
         await asyncio.sleep(SCHEDULER_POLL_SECONDS)
 
 
+def require_passkey_mode() -> None:
+    if HDP_AUTH_MODE != "passkey":
+        raise HTTPException(status_code=409, detail="Le mode passkey n'est pas actif")
+
+
+def active_passkey_credentials() -> list[tuple[Any, ...]]:
+    with database_connection() as connection:
+        return connection.execute(
+            """
+            SELECT id, credential_id, public_key, sign_count
+            FROM operator_webauthn_credentials
+            WHERE revoked_at IS NULL ORDER BY created_at
+            """
+        ).fetchall()
+
+
+def require_registration_authority(request: Request, bootstrap_token: str) -> None:
+    if active_passkey_credentials():
+        if not active_passkey_session(request):
+            raise HTTPException(
+                status_code=401,
+                detail="Une session passkey active est requise pour ajouter une clé",
+            )
+        return
+    if not valid_local_token(bootstrap_token, HDP_LOCAL_TOKEN):
+        raise HTTPException(status_code=401, detail="Secret d'installation invalide")
+
+
+def issue_operator_session(
+    connection: psycopg.Connection[Any], credential_uuid: uuid.UUID, now: datetime
+) -> str:
+    token = opaque_token()
+    connection.execute(
+        """
+        INSERT INTO operator_sessions
+            (id,token_sha256,credential_id,created_at,expires_at,last_seen_at)
+        VALUES (%s,%s,%s,%s,%s,%s)
+        """,
+        (
+            uuid.uuid4(),
+            token_sha256(token),
+            credential_uuid,
+            now,
+            expires_at(SESSION_DURATION, now),
+            now,
+        ),
+    )
+    return token
+
+
+def set_operator_session_cookies(response: Response, token: str) -> None:
+    max_age = int(SESSION_DURATION.total_seconds())
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        httponly=True,
+        samesite="strict",
+        secure=HDP_COOKIE_SECURE,
+        max_age=max_age,
+        path="/",
+    )
+    response.set_cookie(
+        CSRF_COOKIE,
+        csrf_token(token),
+        httponly=False,
+        samesite="strict",
+        secure=HDP_COOKIE_SECURE,
+        max_age=max_age,
+        path="/",
+    )
+    response.headers["Cache-Control"] = "no-store"
+
+
+def consume_auth_challenge(
+    connection: psycopg.Connection[Any],
+    challenge_id: uuid.UUID,
+    kind: str,
+    now: datetime,
+) -> bytes:
+    row = connection.execute(
+        """
+        SELECT challenge FROM operator_auth_challenges
+        WHERE id=%s AND kind=%s AND used_at IS NULL AND expires_at>%s
+        FOR UPDATE
+        """,
+        (challenge_id, kind, now),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=400, detail="Défi WebAuthn absent, expiré ou déjà utilisé")
+    connection.execute(
+        "UPDATE operator_auth_challenges SET used_at=%s WHERE id=%s",
+        (now, challenge_id),
+    )
+    return bytes(row[0])
+
+
+def record_auth_timeline(
+    connection: psycopg.Connection[Any], event_type: str, summary: str, now: datetime
+) -> None:
+    connection.execute(
+        """
+        INSERT INTO application_timeline
+            (id,project_id,scope,event_type,object_type,object_id,status,summary,details,actor,occurred_at)
+        VALUES (%s,NULL,'global',%s,'operator_auth',NULL,'completed',%s,'{}'::jsonb,'operator',%s)
+        """,
+        (uuid.uuid4(), event_type, summary, now),
+    )
+
+
+@app.get("/api/auth/status")
+def auth_status() -> dict[str, Any]:
+    configured = bool(active_passkey_credentials()) if HDP_AUTH_MODE == "passkey" else True
+    return {
+        "mode": HDP_AUTH_MODE,
+        "passkey_configured": configured,
+        "rp_id": HDP_WEBAUTHN_RP_ID if HDP_AUTH_MODE == "passkey" else None,
+        "origin": HDP_WEBAUTHN_ORIGIN if HDP_AUTH_MODE == "passkey" else None,
+        "secure_cookie": HDP_COOKIE_SECURE,
+        "bootstrap_requires_installation_secret": HDP_AUTH_MODE == "passkey" and not configured,
+    }
+
+
+@app.post("/api/auth/register/options")
+def passkey_registration_options(
+    body: PasskeyRegistrationStart, request: Request
+) -> dict[str, Any]:
+    require_passkey_mode()
+    require_registration_authority(request, body.bootstrap_token)
+    credentials = active_passkey_credentials()
+    challenge, options = registration_options(
+        HDP_WEBAUTHN_RP_ID, [bytes(row[1]) for row in credentials]
+    )
+    challenge_id, now = uuid.uuid4(), datetime.now(UTC)
+    with database_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO operator_auth_challenges
+                (id,kind,challenge,expires_at,used_at,created_at)
+            VALUES (%s,'registration',%s,%s,NULL,%s)
+            """,
+            (challenge_id, challenge, expires_at(CHALLENGE_DURATION, now), now),
+        )
+    return {"challenge_id": str(challenge_id), "public_key": options}
+
+
+@app.post("/api/auth/register/verify")
+def passkey_registration_verify(
+    body: PasskeyRegistrationFinish, request: Request
+) -> Response:
+    require_passkey_mode()
+    require_registration_authority(request, body.bootstrap_token)
+    now = datetime.now(UTC)
+    try:
+        with database_connection(autocommit=False) as connection:
+            challenge = consume_auth_challenge(
+                connection, body.challenge_id, "registration", now
+            )
+            verified = verify_registration(
+                body.credential,
+                challenge,
+                HDP_WEBAUTHN_RP_ID,
+                HDP_WEBAUTHN_ORIGIN,
+            )
+            submitted_id = credential_id_from_json(body.credential)
+            if submitted_id != verified.credential_id:
+                raise ValueError("Identifiant de credential incohérent")
+            credential_uuid = uuid.uuid4()
+            response_data = body.credential.get("response", {})
+            transports = response_data.get("transports", [])
+            connection.execute(
+                """
+                INSERT INTO operator_webauthn_credentials
+                    (id,credential_id,public_key,sign_count,transports,aaguid,device_type,
+                     backed_up,label,created_at,last_used_at,revoked_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL)
+                """,
+                (
+                    credential_uuid,
+                    verified.credential_id,
+                    verified.credential_public_key,
+                    verified.sign_count,
+                    Jsonb(transports if isinstance(transports, list) else []),
+                    str(verified.aaguid),
+                    getattr(verified.credential_device_type, "value", str(verified.credential_device_type)),
+                    verified.credential_backed_up,
+                    body.label,
+                    now,
+                    now,
+                ),
+            )
+            token = issue_operator_session(connection, credential_uuid, now)
+            record_auth_timeline(
+                connection, "auth.passkey_registered", "Passkey opérateur enregistrée", now
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Enregistrement passkey refusé") from exc
+    response = JSONResponse({"status": "registered"}, status_code=201)
+    set_operator_session_cookies(response, token)
+    return response
+
+
+@app.post("/api/auth/authenticate/options")
+def passkey_authentication_options() -> dict[str, Any]:
+    require_passkey_mode()
+    credentials = active_passkey_credentials()
+    if not credentials:
+        raise HTTPException(status_code=409, detail="Aucune passkey opérateur n'est enregistrée")
+    challenge, options = authentication_options(
+        HDP_WEBAUTHN_RP_ID, [bytes(row[1]) for row in credentials]
+    )
+    challenge_id, now = uuid.uuid4(), datetime.now(UTC)
+    with database_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO operator_auth_challenges
+                (id,kind,challenge,expires_at,used_at,created_at)
+            VALUES (%s,'authentication',%s,%s,NULL,%s)
+            """,
+            (challenge_id, challenge, expires_at(CHALLENGE_DURATION, now), now),
+        )
+    return {"challenge_id": str(challenge_id), "public_key": options}
+
+
+@app.post("/api/auth/authenticate/verify")
+def passkey_authentication_verify(body: PasskeyAuthenticationFinish) -> Response:
+    require_passkey_mode()
+    now = datetime.now(UTC)
+    try:
+        submitted_id = credential_id_from_json(body.credential)
+        with database_connection(autocommit=False) as connection:
+            row = connection.execute(
+                """
+                SELECT id,public_key,sign_count FROM operator_webauthn_credentials
+                WHERE credential_id=%s AND revoked_at IS NULL FOR UPDATE
+                """,
+                (submitted_id,),
+            ).fetchone()
+            if not row:
+                raise ValueError("Credential inconnu")
+            challenge = consume_auth_challenge(
+                connection, body.challenge_id, "authentication", now
+            )
+            verified = verify_authentication(
+                body.credential,
+                challenge,
+                HDP_WEBAUTHN_RP_ID,
+                HDP_WEBAUTHN_ORIGIN,
+                bytes(row[1]),
+                int(row[2]),
+            )
+            connection.execute(
+                """
+                UPDATE operator_webauthn_credentials
+                SET sign_count=%s,device_type=%s,backed_up=%s,last_used_at=%s
+                WHERE id=%s
+                """,
+                (
+                    verified.new_sign_count,
+                    getattr(verified.credential_device_type, "value", str(verified.credential_device_type)),
+                    verified.credential_backed_up,
+                    now,
+                    row[0],
+                ),
+            )
+            token = issue_operator_session(connection, row[0], now)
+            record_auth_timeline(
+                connection, "auth.passkey_authenticated", "Authentification passkey réussie", now
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Authentification passkey refusée") from exc
+    response = JSONResponse({"status": "authenticated"})
+    set_operator_session_cookies(response, token)
+    return response
+
+
+@app.post("/api/auth/logout", status_code=204)
+def operator_logout(request: Request) -> Response:
+    token = request.cookies.get(SESSION_COOKIE, "")
+    if HDP_AUTH_MODE == "passkey" and token:
+        with database_connection() as connection:
+            connection.execute(
+                "UPDATE operator_sessions SET revoked_at=%s WHERE token_sha256=%s",
+                (datetime.now(UTC), token_sha256(token)),
+            )
+    response = Response(status_code=204)
+    response.delete_cookie(SESSION_COOKIE, path="/", secure=HDP_COOKIE_SECURE, samesite="strict")
+    response.delete_cookie(CSRF_COOKIE, path="/", secure=HDP_COOKIE_SECURE, samesite="strict")
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.get("/", include_in_schema=False)
 def home(request: Request, token: str = Query(default="", max_length=256)) -> Response:
+    if HDP_AUTH_MODE == "passkey":
+        session_secret = active_passkey_session(request)
+        if not session_secret:
+            response = FileResponse(STATIC_DIR / "login.html")
+            response.delete_cookie(SESSION_COOKIE, path="/")
+            response.delete_cookie(CSRF_COOKIE, path="/")
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        response = FileResponse(STATIC_DIR / "index.html")
+        set_operator_session_cookies(response, session_secret)
+        return response
     if token:
         if not valid_local_token(token, HDP_LOCAL_TOKEN):
             raise HTTPException(status_code=401, detail="Jeton local HDP invalide")
@@ -2718,6 +3588,25 @@ def create_project(payload: ProjectCreate) -> dict[str, Any]:
             "INSERT INTO project_execution_settings (project_id, updated_at) VALUES (%s, %s)",
             (project_id, now),
         )
+        connection.execute(
+            "INSERT INTO project_data_policies (project_id, updated_at) VALUES (%s, %s)",
+            (project_id, now),
+        )
+        global_rules = connection.execute(
+            """SELECT d.id,v.id
+               FROM rule_definitions d
+               JOIN rule_versions v ON v.definition_id=d.id
+                AND v.version_number=d.current_version_number
+               WHERE d.scope='global' AND d.enabled=TRUE"""
+        ).fetchall()
+        for global_definition_id, adopted_version_id in global_rules:
+            connection.execute(
+                """INSERT INTO rule_inheritance
+                   (id,project_id,global_definition_id,adopted_version_id,status,decided_at)
+                   VALUES (%s,%s,%s,%s,'current',%s)
+                   ON CONFLICT (project_id,global_definition_id) DO NOTHING""",
+                (uuid.uuid4(), project_id, global_definition_id, adopted_version_id, now),
+            )
         for source in source_catalog():
             if source["searchable"]:
                 connection.execute(
@@ -3624,6 +4513,70 @@ def resource_file(resource_id: uuid.UUID) -> FileResponse:
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Le fichier local a disparu")
     return FileResponse(path, filename=row[2] or path.name)
+
+
+def _confined_non_symlink_resource_path(relative_path: str) -> Path:
+    relative = Path(relative_path)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError("Chemin de ressource non relatif ou traversant")
+    current = DATA_DIR.resolve()
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError("Les liens symboliques sont interdits dans la bibliothèque")
+    return confined_path(DATA_DIR, relative_path)
+
+
+@app.get("/api/resources/{resource_id}/containing-folder")
+def resource_containing_folder(resource_id: uuid.UUID) -> dict[str, Any]:
+    row = resource_row(resource_id)
+    if row[6] != "completed" or not row[3]:
+        raise HTTPException(status_code=409, detail="Le fichier n'est pas disponible localement")
+    try:
+        selected = _confined_non_symlink_resource_path(str(row[3]))
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not selected.is_file():
+        raise HTTPException(status_code=404, detail="Le fichier local a disparu")
+    with database_connection() as connection:
+        candidates = connection.execute(
+            """SELECT id,filename,local_path,size_bytes,content_type,updated_at
+               FROM local_resources
+               WHERE project_id=%s AND status='completed' AND deleted_at IS NULL
+                 AND local_path IS NOT NULL
+               ORDER BY updated_at DESC LIMIT 2000""",
+            (row[1],),
+        ).fetchall()
+    files: list[dict[str, Any]] = []
+    for candidate in candidates:
+        try:
+            path = _confined_non_symlink_resource_path(str(candidate[2]))
+        except ValueError:
+            continue
+        if path.parent != selected.parent or not path.is_file():
+            continue
+        files.append(
+            {
+                "resource_id": str(candidate[0]),
+                "name": candidate[1] or path.name,
+                "size_bytes": candidate[3],
+                "content_type": candidate[4],
+                "updated_at": candidate[5],
+                "selected": candidate[0] == resource_id,
+                "download_url": f"/api/resources/{candidate[0]}/file",
+            }
+        )
+        if len(files) >= 200:
+            break
+    return {
+        "mode": "remote_confined_directory",
+        "native_folder_opened": False,
+        "project_id": str(row[1]),
+        "selected_resource_id": str(resource_id),
+        "folder_label": selected.parent.name,
+        "files": files,
+        "reason": "Une instance Internet n'expose ni n'ouvre le chemin du serveur.",
+    }
 
 
 @app.post("/api/resources/{resource_id}/verify")

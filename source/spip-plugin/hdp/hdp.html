@@ -1,0 +1,36 @@
+#CACHE{0}
+<!doctype html>
+<html lang="#LANG">
+<head>
+    <meta charset="#CHARSET">
+    <meta name="robots" content="noindex,nofollow">
+    <title>Publications HDP - [(#NOM_SITE_SPIP|textebrut)]</title>
+</head>
+<body>
+[(#SESSION{id_auteur}|oui)
+<main>
+    <h1>Publications humanitaires</h1>
+    <B_publications>
+    <ul>
+        <BOUCLE_publications(HDP_PUBLICATIONS){statut=publie}{!par date_publication}>
+        <li>
+            <a href="[(#URL_PAGE{hdp_publication}|parametre_url{id_hdp_publication,#ID_HDP_PUBLICATION})]">#TITRE</a>
+            <small>[(#DATE_PUBLICATION|affdate)] — #KIND</small>
+            [<p>(#DESCRIPTIF)</p>]
+        </li>
+        </BOUCLE_publications>
+    </ul>
+    </B_publications>
+    <p>Aucune publication disponible.</p>
+    <//B_publications>
+</main>
+]
+[(#SESSION{id_auteur}|non)
+<main>
+    <h1>Accès protégé</h1>
+    <p><:hdp:connexion_requise:></p>
+    #FORMULAIRE_LOGIN
+</main>
+]
+</body>
+</html>

@@ -8,8 +8,8 @@ from typing import Any
 from urllib.parse import urlencode
 
 
-REGISTRY_VERSION = "5.0.0"
-VERIFIED_AT = "2026-08-15"
+REGISTRY_VERSION = "6.0.0-dev"
+VERIFIED_AT = "2026-08-21"
 
 
 def field(
@@ -76,7 +76,7 @@ GLOBAL_BASE_SCHEMA: dict[str, Any] = {
             description="La réponse JSON est refusée au-delà de cette limite, avant décodage.",
         ),
         "user_agent": field(
-            "string", "Identifiant HTTP", default="HDP/5.0.2",
+            "string", "Identifiant HTTP", default="HDP/6.0.0-dev",
             min_length=3, max_length=160,
             description="Identifie clairement le client HDP auprès du fournisseur de données.",
         ),
@@ -767,6 +767,19 @@ def enrich_source_catalog(catalog: list[dict[str, Any]]) -> list[dict[str, Any]]
             )
         enriched.append(item)
     return enriched
+
+
+def source_configuration_definition(source_id: str) -> tuple[dict[str, Any], str]:
+    """Retourne le contrat lisible d'un connecteur ou d'un portail de référence."""
+    if source_id in CONNECTORS:
+        return connector_definition(source_id), "app/source_registry.py"
+    # Import local pour éviter le cycle health_sources -> source_registry au chargement.
+    from .health_sources import source_catalog
+
+    definition = next((item for item in source_catalog() if item["id"] == source_id), None)
+    if definition is None:
+        raise ValueError(f"Source inconnue : {source_id}")
+    return definition, "app/health_sources.py"
 
 
 def _validate_scalar(name: str, value: Any, definition: dict[str, Any]) -> Any:
