@@ -4,22 +4,50 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
-SECRET_KEYS = {"appname", "app_identifier", "authorization", "token", "password", "secret"}
+_EXACT_SECRET_KEYS = {
+    "appname",
+    "app_identifier",
+    "authorization",
+    "password",
+    "passwd",
+    "secret",
+    "token",
+    "api_key",
+    "apikey",
+    "access_token",
+    "refresh_token",
+    "client_secret",
+    "cookie",
+    "set_cookie",
+    "x_api_key",
+}
+_SECRET_SUFFIXES = ("_password", "_passwd", "_secret", "_token", "_api_key")
+
+
+def _normalized_key(value: Any) -> str:
+    key = re.sub(r"[^a-z0-9]+", "_", str(value).casefold()).strip("_")
+    return key
+
+
+def _is_secret_key(value: Any) -> bool:
+    key = _normalized_key(value)
+    if key in _EXACT_SECRET_KEYS:
+        return True
+    return any(key.endswith(suffix) for suffix in _SECRET_SUFFIXES)
 
 
 def _redact(value: Any) -> Any:
     if isinstance(value, dict):
         return {
-            str(key): (
-                "<redacted>"
-                if str(key).casefold() in SECRET_KEYS
-                else _redact(item)
-            )
-            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+            str(key): ("<redacted>" if _is_secret_key(key) else _redact(child))
+            for key, child in sorted(value.items(), key=lambda item: str(item[0]))
         }
     if isinstance(value, list):
+        return [_redact(item) for item in value]
+    if isinstance(value, tuple):
         return [_redact(item) for item in value]
     return value
 
@@ -39,7 +67,6 @@ def sha256_json(value: Any) -> str:
 
 
 def query_fingerprint(plan_without_fingerprint: dict[str, Any]) -> str:
-    """Fingerprint every execution-significant semantic input, never credentials."""
     material = {
         "schema_version": plan_without_fingerprint.get("schema_version"),
         "contract_version": plan_without_fingerprint.get("contract_version"),
@@ -61,7 +88,5 @@ def query_fingerprint(plan_without_fingerprint: dict[str, Any]) -> str:
     return sha256_json(material)
 
 
-def result_snapshot_hash(
-    executions: list[dict[str, Any]], items: list[dict[str, Any]]
-) -> str:
+def result_snapshot_hash(executions: list[dict[str, Any]], items: list[dict[str, Any]]) -> str:
     return sha256_json({"executions": executions, "items": items})
