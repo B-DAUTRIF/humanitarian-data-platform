@@ -12,7 +12,7 @@ from pathlib import Path, PurePosixPath
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "6.0.0-dev"
+VERSION = "6.0.0"
 PACKAGE_ROOT = "HumanitarianDataPlatform_V6"
 INSTALLER_NAME = f"HumanitarianDataPlatform_Setup_Native_GUI_v{VERSION}.exe"
 ARCHIVE_NAME = f"HumanitarianDataPlatform_Archive_complete_v{VERSION}.zip"
@@ -122,7 +122,7 @@ def build_archive(installer: Path, output_directory: Path) -> tuple[Path, Path, 
         "schema_version": "1.0",
         "application": "Humanitarian Data Platform",
         "version": VERSION,
-        "release_status": "development_unqualified",
+        "release_status": "qualification_candidate",
         "generated_at": generated_at,
         "installer": {
             "name": INSTALLER_NAME,
@@ -162,7 +162,7 @@ def build_archive(installer: Path, output_directory: Path) -> tuple[Path, Path, 
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Construire l'archive complète HDP 6.0.0-dev")
+    parser = argparse.ArgumentParser(description="Construire l'archive complète HDP 6.0.0")
     parser.add_argument("--installer", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     args = parser.parse_args()
