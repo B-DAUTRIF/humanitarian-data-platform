@@ -1,35 +1,30 @@
-# Todo-list active — Humanitarian Data Platform
+# Todo-list active — Humanitarian Data Platform V6.0.0
 
-Dernière mise à jour : 16 août 2026
-Branche de livraison : `main`
-Dernière livraison installable qualifiée : **5.0.2** — commit source `cfb42bbb9813f108a5087ad443c2a2d3fa561a06`
-Branche de travail : [`develop/5.2`](https://github.com/B-DAUTRIF/humanitarian-data-platform/tree/develop/5.2) — état initial `d0257a402a958439f6f28e6b3de2290112bfbbfc`
+Dernière mise à jour : 30 août 2026  
+Branche de qualification : `main`  
+Version cible : **6.0.0**  
+Statut : **candidat de qualification — ne pas déclarer qualifié avant fermeture de la matrice V6**.
 
-## Dépôt et traçabilité
+La matrice normative est `docs/V6_FUNCTIONAL_VALIDATION_MATRIX.md`. Une case n'est terminée qu'après test reproductible, correction des anomalies, retest ciblé et non-régression.
 
-- [x] placer la livraison qualifiée 5.0.2 sur `main` ;
-- [x] conserver la ligne de travail 5.2 sur une branche distincte ;
-- [x] classer la documentation technique par version ;
-- [x] archiver les états, décisions, journaux et anciennes todo-lists ;
-- [x] retirer de `source/` et de la racine les copies historiques déjà conservées dans `dist/` ;
-- [x] intégrer sur `main` l’EXE et l’archive complète issus du workflow Windows 5.0.2 ;
-- [ ] créer une release et un tag GitHub `v5.0.2` lorsque le flux de publication des releases est disponible ;
-- [ ] choisir une licence HDP avant tout passage du dépôt en public.
+## Lots V6 actifs
 
-## Qualification 5.0.2 encore externe
+- [x] **HDP6-010 — Registre et inventaire des sources** : dix connecteurs, contrats versionnés, provenance documentaire et inventaire exhaustif.
+- [x] **HDP6-020 — Paramétrage des sources** : critères communs et paramètres fournisseurs visibles ; seuls les champs effectivement câblés sont éditables.
+- [ ] **HDP6-030 — Recherche/acquisition E2E** : fermer les preuves UI → API HDP → fournisseur → ressource → provenance.
+- [ ] **HDP6-040 — Projets et bibliothèque** : terminer la recette CRUD, isolation, upload, récupération et association des ressources.
+- [ ] **HDP6-070 — Traitements scientifiques** : qualifier clients Python/R, scripts, notebooks et recettes de traitement.
+- [ ] **HDP6-080 — Épidémiologie et surveillance** : séries temporelles, taux/incidence, jobs périodiques, règles, signaux et alertes.
+- [ ] **HDP6-090 — Intégrations** : GitHub, mail/RSS et SPIP avec scénarios nominaux et négatifs reproductibles.
+- [ ] **HDP6-100 — Sécurité et exploitation** : passkey, SQL read-only, logs, provenance, intégrité, sauvegarde/restauration et timeline.
+- [ ] **HDP6-110 — Windows** : build PE x64, exécution installateur, raccourci, lancement et scénario de mise à niveau sans perte.
+- [ ] **HDP6-120 — Documentation et livrables** : USER/API/UML/reconstruction, archive complète et empreintes.
+- [ ] **HDP6-130 — Gate final V6** : Linux + PostgreSQL + Windows + E2E métier verts sur le même HEAD et matrice V6 sans `A_TESTER`, `PARTIEL` ou `BLOQUE`.
 
-- [ ] confirmer manuellement l’installation et une mutation depuis l’interface sur Windows 10/11 avec Docker Desktop ;
-- [ ] signer l’EXE avec Authenticode si un certificat éditeur est fourni ;
-- [ ] réaliser un test de charge, un test d’intrusion indépendant et une revue métier santé publique ;
-- [ ] synchroniser, si nécessaire, le dossier `wiki/` vers le Wiki GitHub séparé.
+## Règle de correction
 
-## Prochaine mission 5.2 proposée
+Pour toute anomalie : enregistrer le test en échec, classer sa gravité, corriger le produit ou le test lorsqu'il est objectivement obsolète, réexécuter le test ciblé, puis toute la non-régression concernée. Aucun contournement par suppression de test ou assertion artificielle n'est admis.
 
-- [ ] exposer les identifiants internes de métadonnées requis par les plans d’agrégation ;
-- [ ] rendre les actions SIGNALS idempotentes et appliquer réellement `lookback_hours` ;
-- [ ] corriger la sémantique de disponibilité des agrégations ;
-- [ ] ajouter les tests d’intégration de bout en bout ;
-- [ ] réconcilier README, API, UML, Wiki et todo-list avec les preuves obtenues ;
-- [ ] conserver la confirmation explicite avant toute exécution Python ou R.
+## Historique
 
-La todo-list complète antérieure est archivée sous [`docs/traceability/work/5.2/TODO_before_main_alignment.md`](docs/traceability/work/5.2/TODO_before_main_alignment.md).
+Les todo-lists des versions antérieures restent archivées sous `docs/traceability/`. La qualification 5.0.2 demeure un jalon historique ; elle ne doit plus servir de description de l'état fonctionnel de la V6.
