@@ -4,14 +4,15 @@ La branche `main` porte désormais la **V6.0.0 qualifiée par CI Windows** de HD
 
 ## Télécharger la V6
 
-Le build Windows qualifié est produit par le workflow **HDP V6 full Windows installer**. Le run de référence pour la V6.0.0 est le run GitHub Actions `33295858748`, associé au commit `3eb07a3cd0e38b20953085010228fda13afc9baf` et conclu avec succès.
+Le build Windows qualifié est produit par le workflow **HDP V6 full Windows installer**. Le run de référence final pour la V6.0.0 est le run GitHub Actions `33296150213`, associé au commit `f60effc443efa539f32ff48d0b60c8e2c4d65002` et conclu avec succès.
 
 - Artefact GitHub Actions : `HumanitarianDataPlatform-V6-complet`
 - Installateur contenu dans l’artefact : `HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe`
-- SHA-256 de l’EXE : `23efeeade2ec3050b4d9a9ee5ee786eb9022c8e942110cec6baa6c4e05826ba1`
-- Archive complète contenue dans l’artefact : `HumanitarianDataPlatform_Archive_complete_v6.0.0.zip`
+- SHA-256 de l’EXE : `18c8eaaa40608d23d3f00d06b666f2be47f7817d749906115c8ec7b414e0e256`
+- Archive complète : `HumanitarianDataPlatform_Archive_complete_v6.0.0.zip`
+- SHA-256 de l’archive complète : `597dde200a02b3e954aba696e5c95adb20c7acb92897eff20ae769048e92818c`
 
-Accès au run : https://github.com/B-DAUTRIF/humanitarian-data-platform/actions/runs/33295858748
+Accès au run : https://github.com/B-DAUTRIF/humanitarian-data-platform/actions/runs/33296150213
 
 > L’installateur est un exécutable Windows GUI x86-64 (PE32+) construit sur `windows-2025` avec MSVC. Il n’est pas signé Authenticode : Windows peut donc afficher une confirmation de sécurité.
 
