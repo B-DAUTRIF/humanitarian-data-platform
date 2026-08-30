@@ -1,4 +1,4 @@
-# Final post-cleanup V6 qualification: source-native 6.0.0, generated inventory, desktop shortcut.
+# Final V6 qualification: source-native 6.0.0, generated inventory, real installer journey.
 name: HDP V6 full Windows installer
 
 on:
@@ -55,6 +55,11 @@ jobs:
           $vi=(Get-Item $exe).VersionInfo; if($vi.FileVersion -notlike '6.0.0*' -or $vi.ProductVersion -notlike '6.0.0*'){throw 'Version PE incorrecte'}
           if(!(Get-ChildItem source/payload/api/app/api_inventory_parts -Filter 'part*.jsonl')){throw 'Inventaire JSONL absent'}
           $docker=Get-Content source/payload/api/Dockerfile -Raw; if($docker -notmatch 'app\.main_v6:app'){throw 'Backend V6 non actif'}
+      - name: Recette installateur Windows réelle
+        shell: pwsh
+        timeout-minutes: 8
+        run: |
+          ./tools/windows/windows_installer_e2e.ps1 -InstallerPath "${{ runner.temp }}/hdp-v6-installer/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"
       - name: Construire archive complète V6
         shell: pwsh
         run: |
