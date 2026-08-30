@@ -51,13 +51,13 @@ def test_search_maps_parameters_and_csrf(monkeypatch):
 def test_federated_search_preserves_partial_errors(monkeypatch):
     client = HDPClient()
 
-    def fake_search(**kwargs):
+    def fake_search(self, **kwargs):
         if kwargs["source"] == "broken":
             from hdp_clients import HDPClientError
             raise HDPClientError("unavailable")
         return {"source": kwargs["source"]}
 
-    monkeypatch.setattr(client, "search", fake_search)
+    monkeypatch.setattr(HDPClient, "search", fake_search)
     result = client.federated_search(
         project_id="p", sources=["hdx", "broken"], query="cholera"
     )
