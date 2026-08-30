@@ -17,4 +17,4 @@ RUN mkdir -p /app/data/raw /app/execution_spool /tmp \
 
 EXPOSE 8080
 USER 65532:65532
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "app.main_v6:app", "--host", "0.0.0.0", "--port", "8080"]
