@@ -41,6 +41,8 @@ jobs:
           sudo apt-get install -y postgresql-client
           python -m pip install -r source/payload/api/requirements.txt
           python -m pip install playwright
+      - name: Couverture exhaustive des cas d'usage V6
+        run: python tools/v6_use_case_gate.py
       - name: Tests Python et PostgreSQL
         run: python -m unittest discover -s source/tests -p 'test_*.py'
       - name: Recettes épidémiologiques V6
