@@ -77,6 +77,22 @@ def apply_v7_migrations() -> None:
         """,
         "CREATE INDEX IF NOT EXISTS idx_semantic_jobs_project_created ON semantic_jobs(project_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_semantic_jobs_status ON semantic_jobs(status, created_at)",
+        """
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_semantic_searches_project') THEN
+            ALTER TABLE semantic_searches ADD CONSTRAINT fk_semantic_searches_project
+              FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
+          END IF;
+        END $$
+        """,
+        """
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_semantic_jobs_project') THEN
+            ALTER TABLE semantic_jobs ADD CONSTRAINT fk_semantic_jobs_project
+              FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+          END IF;
+        END $$
+        """,
     ]
     with database_connection() as connection:
         for statement in statements:
