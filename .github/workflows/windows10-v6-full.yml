@@ -2,14 +2,17 @@ name: HDP V6 Windows 10 x64 qualification
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/windows10-v6-full.yml", ".github/workflows/windows11-v6-full.yml", "source/**", "clients-v6/**", "tools/**", "VERSION", "HDP_STATE.json"]
 
 permissions:
   contents: read
 
 jobs:
   windows10-real-e2e:
-    # GitHub n'offre pas de runner hébergé Windows 10. Ce job est volontairement
-    # réservé à un runner Windows 10 x64 réel enregistré avec ces labels.
+    # Porte de release obligatoire. GitHub n'offre pas de runner hébergé Windows 10 :
+    # ce job ne peut être validé que sur un Windows 10 x64 réel portant ces labels.
     runs-on: [self-hosted, Windows, X64, windows-10, hdp-v6]
     timeout-minutes: 60
     steps:
