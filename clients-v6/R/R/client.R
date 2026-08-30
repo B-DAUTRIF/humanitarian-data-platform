@@ -10,14 +10,17 @@
   "query"
 }
 `%||%` <- function(x,y) if (is.null(x) || !length(x)) y else x
-.hdp_required <- function(x) any(tolower(trimws(as.character(x %||% ""))) %in% c("oui","yes","true","1","required","obligatoire"))
-.hdp_has_default <- function(x) !is.null(x) && length(x) > 0 && any(nzchar(as.character(x)))
+.hdp_required <- function(x) tolower(trimws(as.character(x %||% ""))) %in% c("oui","yes","true","1","required","obligatoire")
 .hdp_scalar <- function(x) if (is.list(x)) jsonlite::toJSON(x,auto_unbox=TRUE,null="null") else x
+.hdp_has_default <- function(x) {
+  if (is.null(x) || !length(x)) return(FALSE)
+  any(nzchar(trimws(as.character(unlist(x, recursive=TRUE, use.names=FALSE)))))
+}
 
 .hdp_auth <- function(source, values) {
   if (identical(source,"ReliefWeb") && is.null(values$appname) && nzchar(Sys.getenv("RELIEFWEB_APPNAME"))) values$appname <- Sys.getenv("RELIEFWEB_APPNAME")
-  if (source %in% c("HDX HAPI", "HDX Humanitarian API (HAPI)") && is.null(values$app_identifier) && nzchar(Sys.getenv("HDX_HAPI_APP_IDENTIFIER"))) values$app_identifier <- Sys.getenv("HDX_HAPI_APP_IDENTIFIER")
-  if (source %in% c("DHS Program", "DHS Program Indicator Data") && is.null(values$apiKey) && nzchar(Sys.getenv("DHS_API_KEY"))) values$apiKey <- Sys.getenv("DHS_API_KEY")
+  if (identical(source,"HDX HAPI") && is.null(values$app_identifier) && nzchar(Sys.getenv("HDX_HAPI_APP_IDENTIFIER"))) values$app_identifier <- Sys.getenv("HDX_HAPI_APP_IDENTIFIER")
+  if (identical(source,"DHS Program") && is.null(values$apiKey) && nzchar(Sys.getenv("DHS_API_KEY"))) values$apiKey <- Sys.getenv("DHS_API_KEY")
   values
 }
 
@@ -37,7 +40,7 @@ hdp_preview <- function(operation_id, params=list(), method=NULL, extra_path=lis
   }
   path_values <- extra_path; query <- list(); body <- list(); headers <- list(Accept="application/json, text/csv;q=0.9, */*;q=0.5", `User-Agent`="HDP-Clients-R/6.0.0"); form <- list()
   for (nm in names(values)) {
-    val <- values[[nm]]; if (is.null(val) || (length(val) == 1 && identical(val,""))) next
+    val <- values[[nm]]; if (is.null(val) || identical(val,"")) next
     loc <- .hdp_loc((specs[[nm]] %||% list(location="query"))$location, method)
     if (loc=="path") path_values[[nm]] <- val else if (loc=="body") body[[nm]] <- val else if (loc=="header") headers[[nm]] <- as.character(val) else if (loc=="form") form[[nm]] <- val else query[[nm]] <- val
   }
@@ -45,15 +48,16 @@ hdp_preview <- function(operation_id, params=list(), method=NULL, extra_path=lis
   if (length(ph) && ph[[1]] != "") for (token in ph) {
     nm <- substring(token,2,nchar(token)-1); val <- path_values[[nm]] %||% values[[nm]]
     if (is.null(val)) stop("Missing path placeholder ", token, "; supply params or extra_path")
-    endpoint <- sub(token, utils::URLencode(as.character(val)[[1]], reserved=TRUE), endpoint, fixed=TRUE)
+    endpoint <- sub(token, utils::URLencode(as.character(val), reserved=TRUE), endpoint, fixed=TRUE)
   }
   if (identical(op$source,"HDX / CKAN")) { tok <- Sys.getenv("HDX_API_TOKEN"); if (!nzchar(tok)) tok <- Sys.getenv("CKAN_API_TOKEN"); if (nzchar(tok)) headers$Authorization <- tok }
   list(operation=op,method=method,url=paste0(sub("/$","",op$base_url),"/",sub("^/","",endpoint)),query=query,body=body,form=form,headers=headers)
 }
 
 hdp_request <- function(operation_id, params=list(), method=NULL, extra_path=list(), allow_unsafe=FALSE) {
-  p <- hdp_preview(operation_id,params,method,extra_path); op <- p$operation
+  op <- .hdp_operation(operation_id)
   if (!isTRUE(op$safe_read) && !isTRUE(allow_unsafe)) stop("Operation write/administration blocked. Set allow_unsafe=TRUE explicitly.")
+  p <- hdp_preview(operation_id,params,method,extra_path)
   req <- httr2::request(p$url)
   req <- httr2::req_method(req,p$method)
   req <- do.call(httr2::req_headers, c(list(req), p$headers))
