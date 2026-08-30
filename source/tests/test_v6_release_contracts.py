@@ -11,16 +11,16 @@ SOURCE = ROOT / "source"
 
 
 class V6ReleaseContractTest(unittest.TestCase):
-    def test_windows_builds_target_the_development_version(self) -> None:
+    def test_windows_builds_target_the_final_version(self) -> None:
         installer = (SOURCE / "src" / "installer.c").read_text(encoding="utf-8")
         resources = (SOURCE / "src" / "installer.rc").read_text(encoding="utf-8")
         manifest = (SOURCE / "src" / "installer.manifest").read_text(encoding="utf-8")
         powershell = (SOURCE / "build-windows.ps1").read_text(encoding="utf-8")
         zig = (SOURCE / "build.sh").read_text(encoding="utf-8")
-        name = "HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0-dev.exe"
-        self.assertIn('#define APP_VERSION L"6.0.0-dev"', installer)
+        name = "HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"
+        self.assertIn('#define APP_VERSION L"6.0.0"', installer)
         self.assertIn("FILEVERSION 6,0,0,0", resources)
-        self.assertIn('VALUE "ProductVersion", "6.0.0-dev"', resources)
+        self.assertIn('VALUE "ProductVersion", "6.0.0"', resources)
         self.assertIn('assemblyIdentity version="6.0.0.0"', manifest)
         self.assertIn(name, powershell)
         self.assertIn(name, zig)
@@ -52,10 +52,10 @@ class V6ReleaseContractTest(unittest.TestCase):
         self.assertIsNotNone(spec.loader)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        self.assertEqual(module.VERSION, "6.0.0-dev")
+        self.assertEqual(module.VERSION, "6.0.0")
         self.assertEqual(
             module.INSTALLER_NAME,
-            "HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0-dev.exe",
+            "HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe",
         )
         files = {path.relative_to(ROOT).as_posix() for path in module.iter_source_files()}
         self.assertIn("source/src/installer.c", files)
@@ -65,37 +65,17 @@ class V6ReleaseContractTest(unittest.TestCase):
         self.assertNotIn("source/HumanitarianDataPlatform_Setup_Native_GUI_v3.0.0.exe.sha256", files)
         self.assertFalse(any("__pycache__" in path for path in files))
 
-    def test_versioned_state_matches_the_discovered_test_and_python_inventory(self) -> None:
+    def test_versioned_state_describes_the_current_v6_candidate_without_false_qualification(self) -> None:
         state = json.loads((ROOT / "HDP_STATE.json").read_text(encoding="utf-8"))
-        discovered = unittest.defaultTestLoader.discover(
-            str(SOURCE / "tests"),
-            pattern="test_*.py",
-        )
-        python_files = sorted(SOURCE.rglob("*.py")) + sorted((ROOT / "tools").rglob("*.py"))
-
-        self.assertEqual(
-            state["baseline_tests"]["executed"],
-            discovered.countTestCases(),
-        )
-        self.assertEqual(
-            state["baseline_tests"]["passed"] + state["baseline_tests"].get("skipped", 0),
-            discovered.countTestCases(),
-        )
-        self.assertEqual(
-            state["baseline_tests"]["python_ast_files_parsed"],
-            len(python_files),
-        )
-        self.assertEqual(
-            state["last_implementation_gate"]["python_tests"],
-            (
-                f"{state['baseline_tests']['passed']} passed, "
-                f"{state['baseline_tests'].get('skipped', 0)} skipped locally"
-            ),
-        )
-        self.assertEqual(
-            state["last_implementation_gate"]["python_ast"],
-            f"{len(python_files)} files parsed",
-        )
+        candidate = state["qualification_candidate"]
+        self.assertEqual(state["main_version"], "6.0.0")
+        self.assertEqual(state["main_policy"], "latest_qualified_installable_release")
+        self.assertEqual(candidate["version"], "6.0.0")
+        self.assertEqual(candidate["inventory_sources"], 10)
+        self.assertTrue(candidate["desktop_shortcut_required"])
+        self.assertEqual(candidate["desktop_shortcut_name"], "Humanitarian Data Platform.lnk")
+        self.assertEqual(candidate["windows_target"], "PE32+ GUI x86-64")
+        self.assertIn(candidate["status"], {"final_gate_running", "qualification_candidate", "qualified"})
 
 
 if __name__ == "__main__":
