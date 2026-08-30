@@ -24,3 +24,5 @@ jobs:
           git diff --cached --exit-code && exit 0
           git commit -m "fix(v6): make V6 native and expose complete API inventory"
           git push origin HEAD:main
+
+# Revision 2: strict single-stream inventory decoding.
