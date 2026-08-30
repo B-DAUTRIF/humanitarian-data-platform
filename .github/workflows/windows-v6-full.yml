@@ -60,6 +60,19 @@ jobs:
         timeout-minutes: 8
         run: |
           ./tools/windows/windows_installer_e2e.ps1 -InstallerPath "${{ runner.temp }}/hdp-v6-installer/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"
+      - name: Diagnostic installateur Windows en cas d'échec
+        if: failure()
+        shell: pwsh
+        run: |
+          Write-Host '--- Trace Docker contrôlé ---'
+          $trace=Join-Path $env:RUNNER_TEMP 'hdp-fake-docker.log'
+          if(Test-Path $trace){Get-Content $trace}else{Write-Host 'Aucune trace Docker contrôlée'}
+          Write-Host '--- Journaux installateur ---'
+          $logDir=Join-Path $env:LOCALAPPDATA 'HumanitarianDataPlatform\logs'
+          if(Test-Path $logDir){Get-ChildItem $logDir -Filter 'installer-*.log' | Sort-Object LastWriteTime | ForEach-Object { Write-Host "### $($_.FullName)"; Get-Content $_.FullName }}else{Write-Host 'Répertoire de journaux absent'}
+          Write-Host '--- Installation temporaire ---'
+          $installed=Join-Path $env:RUNNER_TEMP 'hdp-installer-e2e\installed-HDP'
+          if(Test-Path $installed){Get-ChildItem $installed -Force | Format-Table Name,Length,LastWriteTime -AutoSize}else{Write-Host 'Dossier installation absent'}
       - name: Construire archive complète V6
         shell: pwsh
         run: |
