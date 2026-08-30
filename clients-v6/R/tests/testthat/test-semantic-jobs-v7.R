@@ -10,7 +10,7 @@ test_that("semantic job helpers validate export and reproducibility formats befo
 })
 
 test_that("semantic job payload preserves project context", {
-  payload <- .hdp_semantic_payload(
+  payload <- HDPClientsR:::.hdp_semantic_payload(
     c("world-bank-health", "world-bank-health"),
     "malaria", "RWA", "2020-01-01", "2025-12-31", 25L,
     "00000000-0000-4000-8000-000000000001"
