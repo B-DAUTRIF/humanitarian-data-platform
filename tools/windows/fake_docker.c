@@ -44,11 +44,21 @@ static unsigned short read_port_from_env(const wchar_t *compose_path) {
     return (unsigned short)port;
 }
 
-static int health_server(unsigned short port) {
-    WSADATA data;
-    if (WSAStartup(MAKEWORD(2, 2), &data) != 0) return 21;
+static void serve_client(SOCKET client) {
+    char request[2048];
+    recv(client, request, sizeof(request), 0);
+    const char body[] = "{\"name\":\"Humanitarian Data Platform\",\"status\":\"ok\"}";
+    char response[4096];
+    int length = _snprintf(response, sizeof(response),
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %u\r\nConnection: close\r\n\r\n%s",
+        (unsigned)strlen(body), body);
+    send(client, response, length, 0);
+    closesocket(client);
+}
+
+static SOCKET bind_ipv4(unsigned short port) {
     SOCKET server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (server == INVALID_SOCKET) return 22;
+    if (server == INVALID_SOCKET) return INVALID_SOCKET;
     BOOL exclusive = TRUE;
     setsockopt(server, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (const char *)&exclusive, sizeof(exclusive));
     struct sockaddr_in address;
@@ -56,20 +66,52 @@ static int health_server(unsigned short port) {
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     address.sin_port = htons(port);
-    if (bind(server, (struct sockaddr *)&address, sizeof(address)) != 0) return 23;
-    if (listen(server, 16) != 0) return 24;
+    if (bind(server, (struct sockaddr *)&address, sizeof(address)) != 0 || listen(server, 16) != 0) {
+        closesocket(server);
+        return INVALID_SOCKET;
+    }
+    return server;
+}
+
+static SOCKET bind_ipv6(unsigned short port) {
+    SOCKET server = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
+    if (server == INVALID_SOCKET) return INVALID_SOCKET;
+    BOOL exclusive = TRUE;
+    DWORD v6only = 1;
+    setsockopt(server, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (const char *)&exclusive, sizeof(exclusive));
+    setsockopt(server, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&v6only, sizeof(v6only));
+    struct sockaddr_in6 address;
+    ZeroMemory(&address, sizeof(address));
+    address.sin6_family = AF_INET6;
+    address.sin6_addr = in6addr_loopback;
+    address.sin6_port = htons(port);
+    if (bind(server, (struct sockaddr *)&address, sizeof(address)) != 0 || listen(server, 16) != 0) {
+        closesocket(server);
+        return INVALID_SOCKET;
+    }
+    return server;
+}
+
+static int health_server(unsigned short port) {
+    WSADATA data;
+    if (WSAStartup(MAKEWORD(2, 2), &data) != 0) return 21;
+    SOCKET ipv4 = bind_ipv4(port);
+    SOCKET ipv6 = bind_ipv6(port);
+    if (ipv4 == INVALID_SOCKET && ipv6 == INVALID_SOCKET) return 23;
     for (;;) {
-        SOCKET client = accept(server, NULL, NULL);
-        if (client == INVALID_SOCKET) continue;
-        char request[2048];
-        recv(client, request, sizeof(request), 0);
-        const char body[] = "{\"name\":\"Humanitarian Data Platform\",\"status\":\"ok\"}";
-        char response[4096];
-        int length = _snprintf(response, sizeof(response),
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %u\r\nConnection: close\r\n\r\n%s",
-            (unsigned)strlen(body), body);
-        send(client, response, length, 0);
-        closesocket(client);
+        fd_set reads;
+        FD_ZERO(&reads);
+        if (ipv4 != INVALID_SOCKET) FD_SET(ipv4, &reads);
+        if (ipv6 != INVALID_SOCKET) FD_SET(ipv6, &reads);
+        if (select(0, &reads, NULL, NULL, NULL) == SOCKET_ERROR) continue;
+        if (ipv4 != INVALID_SOCKET && FD_ISSET(ipv4, &reads)) {
+            SOCKET client = accept(ipv4, NULL, NULL);
+            if (client != INVALID_SOCKET) serve_client(client);
+        }
+        if (ipv6 != INVALID_SOCKET && FD_ISSET(ipv6, &reads)) {
+            SOCKET client = accept(ipv6, NULL, NULL);
+            if (client != INVALID_SOCKET) serve_client(client);
+        }
     }
 }
 
