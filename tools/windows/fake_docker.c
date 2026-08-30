@@ -6,6 +6,7 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <stdio.h>
+#include <string.h>
 #include <wchar.h>
 
 static unsigned short read_port_from_env(const wchar_t *compose_path) {
