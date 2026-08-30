@@ -1,0 +1,80 @@
+name: V6 contract migration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/v6-contract-migration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-final-contracts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Aligner les contrats V6 sur 6.0.0 final
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('source/tests/test_v6_contracts.py')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'def test_application_declares_v6_without_renaming_qualified_installer(self) -> None:':
+                  'def test_application_declares_final_v6_identity(self) -> None:',
+              'APP_VERSION = "6.0.0-dev"': 'APP_VERSION = "6.0.0"',
+              '#define APP_VERSION L"6.0.0-dev"': '#define APP_VERSION L"6.0.0"',
+              'développement 6.0.0': '6.0.0',
+              'version 5.0.2': '6.0.0',
+              'Compléments V6 de développement': 'Architecture HDP V6.0.0',
+              '6.0.0-dev': '6.0.0',
+          }
+          for old, new in replacements.items():
+              text = text.replace(old, new)
+          path.write_text(text, encoding='utf-8')
+
+          wiki = Path('wiki/Home.md')
+          wiki.write_text(
+              '# Humanitarian Data Platform V6.0.0\n\n'
+              'Bienvenue dans le wiki HDP V6.0.0.\n\n'
+              '- [Installation](Installation.md)\n'
+              '- [Data Grid et métadonnées](Data-Grid-et-metadonnees.md)\n'
+              '- [SIGNALS et surveillance syndromique](Signals.md)\n'
+              '- [Notebooks Jupyter](Notebooks.md)\n'
+              '- [Architecture et sécurité](Architecture-et-securite.md)\n\n'
+              'La source canonique de la documentation reste le dossier `docs/` de la version publiée. '
+              'Le wiki est fourni dans l’archive pour synchronisation vers le Wiki GitHub.\n',
+              encoding='utf-8',
+          )
+
+          api_doc = Path('docs/API_V6_DEV.md')
+          api_text = api_doc.read_text(encoding='utf-8')
+          api_text = api_text.replace('# Référence API HDP 6.0.0-dev', '# Référence API HDP 6.0.0')
+          api_text = api_text.replace(
+              'Cette référence décrit le périmètre V6 effectivement exposé au jalon du\n24 août 2026.',
+              'Cette référence décrit le périmètre API de la version finale V6.0.0.'
+          )
+          api_doc.write_text(api_text, encoding='utf-8')
+          PY
+      - name: Vérifier le patch
+        run: |
+          grep -q 'APP_VERSION = "6.0.0"' source/tests/test_v6_contracts.py
+          ! grep -q '6.0.0-dev' source/tests/test_v6_contracts.py
+          grep -q 'Humanitarian Data Platform V6.0.0' wiki/Home.md
+          grep -q 'Référence API HDP 6.0.0' docs/API_V6_DEV.md
+          git diff --check
+      - name: Publier la migration des contrats
+        run: |
+          if git diff --quiet; then
+            echo 'Aucun changement à publier.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add source/tests/test_v6_contracts.py wiki/Home.md docs/API_V6_DEV.md
+          git commit -m 'test(v6): migrate remaining contracts to final 6.0.0'
+          git push origin HEAD:main
