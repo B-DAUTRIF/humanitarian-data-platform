@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from copy import deepcopy
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -21,6 +22,10 @@ from app.source_registry import (  # noqa: E402
 
 
 class SourceRegistryContractTest(unittest.TestCase):
+    def project_defaults(self, source_id: str) -> dict:
+        """Return an isolated copy so one test can never mutate the registry contract."""
+        return deepcopy(connector_definition(source_id)["project_defaults"])
+
     def test_ten_live_connectors_have_versioned_contracts(self) -> None:
         self.assertEqual(
             set(CONNECTORS),
@@ -33,17 +38,16 @@ class SourceRegistryContractTest(unittest.TestCase):
             definition = connector_definition(source_id)
             self.assertEqual(definition["registry_version"], "6.0.0")
             self.assertTrue(definition["documentation_evidence"])
-            self.assertEqual(
-                merge_values(source_id, definition["project_defaults"], scope="project"),
-                definition["project_defaults"],
-            )
+            defaults = deepcopy(definition["project_defaults"])
+            self.assertEqual(merge_values(source_id, defaults, scope="project"), defaults)
 
     def test_empty_stored_query_is_valid_but_bounded(self) -> None:
-        values = connector_definition("hdx")["project_defaults"]
+        values = self.project_defaults("hdx")
         self.assertEqual(values["query"], "")
         values["query"] = "x" * 201
         with self.assertRaisesRegex(ValueError, "trop long"):
             validate_values("hdx", values, scope="project")
+        self.assertEqual(connector_definition("hdx")["project_defaults"]["query"], "")
 
     def test_global_settings_reject_unknown_and_invalid_values(self) -> None:
         defaults = {name: definition["default"] for name, definition in GLOBAL_SCHEMA["properties"].items()}
@@ -54,7 +58,7 @@ class SourceRegistryContractTest(unittest.TestCase):
             validate_values("hdx", {**defaults, "timeout_seconds": 999}, scope="global")
 
     def test_array_parameters_are_validated_and_deduplicated(self) -> None:
-        defaults = connector_definition("dhs")["project_defaults"]
+        defaults = self.project_defaults("dhs")
         values = validate_values(
             "dhs", {**defaults, "query": "cholera", "country_ids": ["ML", "ML", "SN"]}, scope="project"
         )
@@ -67,17 +71,17 @@ class SourceRegistryContractTest(unittest.TestCase):
     def test_preview_stays_on_allowlist_and_never_contains_a_secret(self) -> None:
         for source_id in CONNECTORS:
             definition = connector_definition(source_id)
-            values = {**definition["project_defaults"], "query": "cholera"}
+            values = {**deepcopy(definition["project_defaults"]), "query": "cholera"}
             preview = request_preview(source_id, values)
             self.assertIn(urlparse(preview["url"]).hostname, definition["allowed_hosts"])
             self.assertIn(preview["display_url"], preview["curl"])
             self.assertNotIn("real-secret", preview["curl"])
         reliefweb = request_preview(
-            "reliefweb", {**connector_definition("reliefweb")["project_defaults"], "query": "cholera"}
+            "reliefweb", {**self.project_defaults("reliefweb"), "query": "cholera"}
         )
         self.assertIn("RELIEFWEB_APPNAME", reliefweb["display_url"])
         hapi = request_preview(
-            "hdx-hapi", {**connector_definition("hdx-hapi")["project_defaults"], "query": "cholera"}
+            "hdx-hapi", {**self.project_defaults("hdx-hapi"), "query": "cholera"}
         )
         self.assertIn("HDX_HAPI_APP_IDENTIFIER", hapi["display_url"])
         self.assertNotIn("real-secret", hapi["display_url"])
@@ -98,7 +102,7 @@ class SourceRegistryContractTest(unittest.TestCase):
             self.assertEqual(definition["capabilities"]["criteria"]["location"], "normalized_post_filter")
 
     def test_invalid_common_date_range_is_rejected(self) -> None:
-        defaults = connector_definition("hdx")["project_defaults"]
+        defaults = self.project_defaults("hdx")
         with self.assertRaisesRegex(ValueError, "antérieure"):
             validate_values(
                 "hdx", {**defaults, "date_from": "2026-08-16", "date_to": "2026-08-15"}, scope="project"
