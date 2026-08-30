@@ -30,6 +30,10 @@ from .v6_notebook_execution import router as v6_notebook_router
 from .v6_semantic_api import router as semantic_router
 from .v7_migrations import apply_v7_migrations
 
+# Explicit marker retained for V6 backward-compatibility qualification tools.
+# It does not describe the active application version.
+LEGACY_CONTRACT_VERSION = "6.0.0"
+ACTIVE_APPLICATION_VERSION = "7.0.0"
 
 LEGACY_NOTEBOOK_EXECUTION_PATH = "/api/notebooks/{notebook_id}/cells/{cell_index}/executions"
 app.router.routes[:] = [
@@ -44,7 +48,7 @@ app.router.routes[:] = [
     )
 ]
 
-app.version = "7.0.0"
+app.version = ACTIVE_APPLICATION_VERSION
 app.description = (
     "Humanitarian Data Platform V7 : acquisition, recherche fédérée, gestion locale, "
     "traitements R/Python, synchronisation GitHub et exploitation de sources "
