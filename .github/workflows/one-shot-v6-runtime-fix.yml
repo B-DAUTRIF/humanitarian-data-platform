@@ -1,0 +1,35 @@
+name: One-shot V6 runtime source correction
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/one-shot-v6-runtime-fix.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-main:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Appliquer le correctif déterministe
+        run: python tools/fix_v6_runtime_queries.py
+      - name: Vérifier le correctif avant commit
+        run: |
+          python -m py_compile source/payload/api/app/v6_features.py
+          ! grep -n '6\.0\.0-dev' source/payload/api/app/v6_features.py
+          git diff --check
+          git diff --exit-code --quiet && { echo 'Aucun correctif à publier'; exit 1; } || true
+      - name: Publier le correctif sur main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source/payload/api/app/v6_features.py
+          git commit -m "fix(v6): correct optional PostgreSQL filters and final identity"
+          git push origin HEAD:main
