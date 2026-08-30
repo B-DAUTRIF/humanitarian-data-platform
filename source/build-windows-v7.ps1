@@ -63,6 +63,7 @@ $compilerCommand = 'cl.exe /nologo /O2 /W4 /WX /utf-8 /std:c17 /D_CRT_SECURE_NO_
 $commands = @(
     '@echo off',
     ('call "{0}" || exit /b 1' -f $vcvars),
+    ('cd /d "{0}" || exit /b 1' -f $work),
     ('rc.exe /nologo /c 65001 /fo "{0}" "{1}" || exit /b 1' -f $installerRes, $installerRc),
     $compilerCommand
 )
