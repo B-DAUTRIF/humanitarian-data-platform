@@ -40,6 +40,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
           python -m pip install -r source/payload/api/requirements.txt
+          python -m pip install playwright
       - name: Tests Python et PostgreSQL
         run: python -m unittest discover -s source/tests -p 'test_*.py'
       - name: Compilation Python
@@ -52,11 +53,38 @@ jobs:
           POSTGRES_PASSWORD: ci-placeholder-not-a-secret
           HDP_LOCAL_TOKEN: ci-local-token-00000000000000000000000000000000
           HDP_SQL_PASSWORD: ci-sql-token-000000000000000000000000000000000
-      - name: Images R et initialisation du spool
-        timeout-minutes: 15
+      - name: Recette navigateur UI/API réelle
+        timeout-minutes: 8
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/humanitarian
+          SQL_READER_URL: postgresql://postgres:postgres@127.0.0.1:5432/humanitarian
+          HDP_LOCAL_TOKEN: ci-browser-token-00000000000000000000000000000000
+          HDP_SQL_PASSWORD: ci-browser-sql-password-000000000000000000000000000000
+          HDP_AUTH_MODE: local_token
+          DATA_DIR: /tmp/hdp-browser-data
+          EXECUTION_SPOOL_DIR: /tmp/hdp-browser-spool
+          PYTHONPATH: source/payload/api
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE humanitarian;'
+          python -m uvicorn app.main_v6:app --host 127.0.0.1 --port 18080 >/tmp/hdp-browser-api.log 2>&1 &
+          API_PID=$!
+          cleanup(){ kill "$API_PID" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:18080/api/health >/dev/null; then break; fi
+            if ! kill -0 "$API_PID" 2>/dev/null; then cat /tmp/hdp-browser-api.log; exit 1; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:18080/api/health >/dev/null || { cat /tmp/hdp-browser-api.log; exit 1; }
+          python tools/browser_ui_e2e.py --base-url http://127.0.0.1:18080 --token "$HDP_LOCAL_TOKEN"
+          cat /tmp/hdp-browser-api.log
+      - name: Images R, client R et initialisation du spool
+        timeout-minutes: 20
         run: |
           docker compose -f source/payload/compose.yaml --profile analytics build r-service runner-python
           docker compose -f source/payload/compose.yaml --profile analytics run --rm --no-deps --entrypoint Rscript r-service -e "stopifnot(requireNamespace('plumber', quietly=TRUE), requireNamespace('jsonlite', quietly=TRUE))"
+          docker compose -f source/payload/compose.yaml --profile analytics run --rm --no-deps -v "$PWD/clients-v6/R:/pkg:ro" --entrypoint Rscript r-service -e "install.packages(c('httr2','writexl','testthat')); status <- system('R CMD INSTALL /pkg'); stopifnot(status == 0); library(testthat); library(HDPClientsR); test_dir('/pkg/tests/testthat', stop_on_failure=TRUE)"
           docker compose -f source/payload/compose.yaml up --no-build spool-init
           docker compose -f source/payload/compose.yaml down -v
         env:
