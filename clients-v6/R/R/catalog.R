@@ -2,9 +2,14 @@ hdp_catalog <- local({
   cache <- NULL
   function() {
     if (!is.null(cache)) return(cache)
-    path <- system.file("extdata", "operations.json.gz", package="HDPClientsR")
-    if (!nzchar(path)) stop("operations.json.gz introuvable")
-    con <- gzfile(path, "rt", encoding="UTF-8"); on.exit(close(con), add=TRUE)
+    plain <- system.file("extdata", "operations.json", package="HDPClientsR")
+    if (nzchar(plain)) {
+      cache <<- jsonlite::fromJSON(plain, simplifyVector=FALSE)
+      return(cache)
+    }
+    legacy <- system.file("extdata", "operations.json.gz", package="HDPClientsR")
+    if (!nzchar(legacy)) stop("Catalogue operations.json introuvable")
+    con <- gzfile(legacy, "rt", encoding="UTF-8"); on.exit(close(con), add=TRUE)
     txt <- paste(readLines(con, warn=FALSE), collapse="\n")
     cache <<- jsonlite::fromJSON(txt, simplifyVector=FALSE)
     cache
