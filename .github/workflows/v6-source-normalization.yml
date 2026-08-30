@@ -13,6 +13,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Inspect executable V6 operation catalog
+        shell: bash
+        run: |
+          python - <<'PY'
+          import gzip, json, pprint
+          p='clients-v6/R/inst/extdata/operations.json.gz'
+          with gzip.open(p,'rt',encoding='utf-8') as f: cat=json.load(f)
+          print('TOP_KEYS', sorted(cat))
+          print('SOURCE_COUNT', len(cat.get('sources',{})))
+          print('OPERATION_COUNT', len(cat.get('operations',[])))
+          print('SOURCE_KEYS', list(cat.get('sources',{}))[:20])
+          if cat.get('operations'):
+              op=cat['operations'][0]
+              print('OP_KEYS', sorted(op))
+              pprint.pp(op)
+          PY
       - name: Normalize V6 sources and generate documentation
         run: python tools/finalize_v6.py
       - name: Commit native V6 sources and generated documentation
@@ -24,5 +40,3 @@ jobs:
           git diff --cached --exit-code && exit 0
           git commit -m "fix(v6): make V6 native and expose complete API inventory"
           git push origin HEAD:main
-
-# Revision 2: strict single-stream inventory decoding.
