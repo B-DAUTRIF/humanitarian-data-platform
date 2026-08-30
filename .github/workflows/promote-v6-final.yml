@@ -55,14 +55,7 @@ jobs:
             tmp=$(mktemp -d)
             gh api "$artifact" > "$tmp/proof.zip"
             unzip -q "$tmp/proof.zip" -d "$tmp/proof"
-            hash=$(python - "$tmp/proof" <<'PY'
-import json, pathlib, sys
-p=next(pathlib.Path(sys.argv[1]).glob('*.json'))
-d=json.loads(p.read_text(encoding='utf-8-sig'))
-assert d.get('status') == 'passed', d
-print(d['installer_sha256'].lower())
-PY
-)
+            hash=$(python -c 'import json,pathlib,sys; p=next(pathlib.Path(sys.argv[1]).glob("*.json")); d=json.loads(p.read_text(encoding="utf-8-sig")); assert d.get("status")=="passed", d; print(d["installer_sha256"].lower())' "$tmp/proof")
             if [ "$hash" != "$RC_EXE_SHA256" ]; then
               echo "Preuve $workflow sur un autre EXE: $hash" >&2
               exit 1
