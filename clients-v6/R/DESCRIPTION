@@ -1,9 +1,9 @@
 Package: HDPClientsR
 Type: Package
 Title: R Clients for Humanitarian Data Platform Sources
-Version: 6.0.0
+Version: 7.0.0
 Authors@R: person("HDP", "Project", role=c("aut","cre"), email="noreply@example.invalid")
-Description: Inventory-driven clients for the ten data sources exposed by HDP.
+Description: Inventory-driven source clients and project-aware semantic-router client for HDP V7.
 License: file LICENSE
 Encoding: UTF-8
 LazyData: false
