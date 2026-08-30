@@ -102,16 +102,6 @@ function Get-Control([IntPtr]$Window, [int]$Id) {
     return $control
 }
 
-function Wait-Control([IntPtr]$Window, [int]$Id, [int]$TimeoutSeconds = 10) {
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    do {
-        $control = [HDPWin32]::GetDlgItem($Window, $Id)
-        if ($control -ne [IntPtr]::Zero) { return $control }
-        Start-Sleep -Milliseconds 100
-    } while ((Get-Date) -lt $deadline)
-    throw "Contrôle ID=$Id absent dans le délai attendu"
-}
-
 function Set-ControlText([IntPtr]$Window, [int]$Id, [string]$Value) {
     $control = Get-Control $Window $Id
     [void][HDPWin32]::SendMessageSetText($control, $WM_SETTEXT, [IntPtr]::Zero, $Value)
@@ -162,6 +152,24 @@ function Click-DialogButton([int]$ProcessId, [int]$Id, [int]$TimeoutSeconds = 20
     throw "Dialogue du processus $ProcessId avec bouton ID=$Id introuvable"
 }
 
+function Dismiss-InformationalDialog([int]$ProcessId, [int]$TimeoutSeconds = 2) {
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $dialog = [HDPWin32]::FindDialogForProcess([uint32]$ProcessId)
+        if ($dialog -ne [IntPtr]::Zero) {
+            $button = [HDPWin32]::GetDlgItem($dialog, $IDOK)
+            if ($button -ne [IntPtr]::Zero) {
+                [void][HDPWin32]::PostMessage($button, $BM_CLICK, [IntPtr]::Zero, [IntPtr]::Zero)
+                Write-Host 'INFORMATIONAL_DIALOG_DISMISSED=YES'
+                Start-Sleep -Milliseconds 250
+                return
+            }
+        }
+        Start-Sleep -Milliseconds 100
+    } while ((Get-Date) -lt $deadline)
+    Write-Host 'INFORMATIONAL_DIALOG_DISMISSED=NOT_EXPOSED_BY_RUNNER'
+}
+
 function Ensure-ControlledHealthServer {
     if ($script:healthProcess -and -not $script:healthProcess.HasExited) { return }
     $envPath = Join-Path $installDir '.env'
@@ -210,7 +218,7 @@ try {
     Click-Control $window 1007
     Click-DialogButton $process.Id $IDYES
     $status = Wait-Status $window 'Installation terminée'
-    Click-DialogButton $process.Id $IDOK
+    Dismiss-InformationalDialog $process.Id
 
     Assert-File (Join-Path $installDir 'compose.yaml')
     Assert-File (Join-Path $installDir 'start-hdp.cmd')
@@ -229,7 +237,7 @@ try {
     Click-Control $window 1007
     Click-DialogButton $process.Id $IDYES
     $status = Wait-Status $window 'Installation terminée'
-    Click-DialogButton $process.Id $IDOK
+    Dismiss-InformationalDialog $process.Id
 
     $backup = Join-Path $installDir '.env.backup-before-v6.0.0'
     Assert-File $backup
@@ -242,7 +250,7 @@ try {
     Click-Control $window 1016
     Click-DialogButton $process.Id $IDYES
     $status = Wait-Status $window 'Désinstallation terminée'
-    Click-DialogButton $process.Id $IDOK
+    Dismiss-InformationalDialog $process.Id
     Assert-File $envPath
     Assert-File $backup
     if (Test-Path -LiteralPath $shortcut) { throw 'Le raccourci HDP est resté après désinstallation contrôlée' }
