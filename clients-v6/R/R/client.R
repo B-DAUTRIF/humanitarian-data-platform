@@ -38,7 +38,7 @@ hdp_preview <- function(operation_id, params=list(), method=NULL, extra_path=lis
     if (is.null(values[[nm]]) && .hdp_has_default(sp$default)) values[[nm]] <- sp$default
     if (.hdp_required(sp$required) && is.null(values[[nm]])) stop("Missing required parameter: ",nm)
   }
-  path_values <- extra_path; query <- list(); body <- list(); headers <- list(Accept="application/json, text/csv;q=0.9, */*;q=0.5", `User-Agent`="HDP-Clients-R/6.0.0"); form <- list()
+  path_values <- extra_path; query <- list(); body <- list(); headers <- list(Accept="application/json, text/csv;q=0.9, */*;q=0.5", `User-Agent`="HDP-Clients-R/7.0.0"); form <- list()
   for (nm in names(values)) {
     val <- values[[nm]]; if (is.null(val) || identical(val,"")) next
     loc <- .hdp_loc((specs[[nm]] %||% list(location="query"))$location, method)

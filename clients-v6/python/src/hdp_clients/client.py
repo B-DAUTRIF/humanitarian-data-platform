@@ -12,58 +12,37 @@ class HDPClientError(RuntimeError):
 
 @dataclass(slots=True)
 class HDPClient:
-    """Small typed client for the local HDP V6 HTTP API.
-
-    The client deliberately talks to HDP rather than bypassing it. This keeps
-    project preferences, authentication, provenance, safety limits and the
-    per-source parameter validation enforced by the server.
-    """
+    """Typed client for the local HDP V7 HTTP API."""
 
     base_url: str = "http://localhost:8080"
     token: str | None = None
     timeout: float = 60.0
 
     def _headers(self, *, mutation: bool = False) -> dict[str, str]:
-        headers = {"Accept": "application/json", "User-Agent": "HDPClientsPython/6.0.0"}
+        headers = {"Accept": "application/json", "User-Agent": "HDPClientsPython/7.0.0"}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
             if mutation:
                 headers["X-HDP-CSRF"] = "1"
         return headers
 
-    def _request(
-        self,
-        method: str,
-        path: str,
-        *,
-        params: Mapping[str, Any] | None = None,
-        json: Any = None,
-    ) -> Any:
+    def _request(self, method: str, path: str, *, params: Mapping[str, Any] | None = None, json: Any = None) -> Any:
         url = f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
         mutation = method.upper() not in {"GET", "HEAD", "OPTIONS"}
         try:
-            response = httpx.request(
-                method,
-                url,
-                params=params,
-                json=json,
-                headers=self._headers(mutation=mutation),
-                timeout=self.timeout,
-                follow_redirects=False,
-            )
+            response = httpx.request(method, url, params=params, json=json, headers=self._headers(mutation=mutation), timeout=self.timeout, follow_redirects=False)
         except httpx.HTTPError as exc:
             raise HDPClientError(f"HDP inaccessible: {exc}") from exc
         if response.is_error:
-            detail: Any
             try:
-                detail = response.json().get("detail", response.text)
-            except (ValueError, AttributeError):
+                payload = response.json()
+                detail = payload.get("detail", payload) if isinstance(payload, dict) else payload
+            except ValueError:
                 detail = response.text
             raise HDPClientError(f"HDP HTTP {response.status_code}: {detail}")
         if response.status_code == 204 or not response.content:
             return None
-        content_type = response.headers.get("content-type", "")
-        return response.json() if "json" in content_type else response.text
+        return response.json() if "json" in response.headers.get("content-type", "") else response.text
 
     def health(self) -> dict[str, Any]:
         return self._request("GET", "/api/health")
@@ -74,15 +53,7 @@ class HDPClient:
     def inventory_sources(self) -> dict[str, Any]:
         return self._request("GET", "/api-inventory/sources")
 
-    def inventory(
-        self,
-        *,
-        source: str | None = None,
-        query: str | None = None,
-        supported: bool | None = None,
-        limit: int = 10_000,
-        offset: int = 0,
-    ) -> dict[str, Any]:
+    def inventory(self, *, source: str | None = None, query: str | None = None, supported: bool | None = None, limit: int = 10_000, offset: int = 0) -> dict[str, Any]:
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         if source:
             params["source"] = source
@@ -99,9 +70,7 @@ class HDPClient:
         return self._request("GET", "/api/projects")
 
     def create_project(self, name: str, description: str = "") -> dict[str, Any]:
-        return self._request(
-            "POST", "/api/projects", json={"name": name, "description": description}
-        )
+        return self._request("POST", "/api/projects", json={"name": name, "description": description})
 
     def project_sources(self, project_id: str) -> list[dict[str, Any]]:
         return self._request("GET", f"/api/projects/{project_id}/sources")
@@ -109,52 +78,74 @@ class HDPClient:
     def source_settings(self, source_id: str) -> dict[str, Any]:
         return self._request("GET", f"/api/source-settings/{source_id}")
 
-    def search(
-        self,
-        *,
-        project_id: str,
-        source: str,
-        query: str,
-        result_limit: int = 25,
-        auto_download: bool = False,
-        parameters: Mapping[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        body = {
-            "project_id": project_id,
-            "source": source,
-            "query": query,
-            "result_limit": result_limit,
-            "auto_download": auto_download,
-            "parameters": dict(parameters or {}),
-        }
+    def semantic_contracts(self) -> dict[str, Any]:
+        return self._request("GET", "/api/semantic/contracts")
+
+    def semantic_capabilities(self) -> dict[str, Any]:
+        return self._request("GET", "/api/semantic/capabilities")
+
+    @staticmethod
+    def _semantic_body(*, sources: Iterable[str], query: str = "", location: str = "", date_from: str = "", date_to: str = "", result_limit: int = 25, project_id: str | None = None) -> dict[str, Any]:
+        selected = list(dict.fromkeys(str(source).strip() for source in sources if str(source).strip()))
+        if not selected:
+            raise ValueError("sources must contain at least one source")
+        if not 1 <= int(result_limit) <= 100:
+            raise ValueError("result_limit must be between 1 and 100")
+        body: dict[str, Any] = {"sources": selected, "query": query, "location": location, "date_from": date_from, "date_to": date_to, "result_limit": int(result_limit)}
+        if project_id:
+            body["project_id"] = project_id
+        return body
+
+    def semantic_plan(self, *, sources: Iterable[str], query: str = "", location: str = "", date_from: str = "", date_to: str = "", result_limit: int = 25, project_id: str | None = None) -> dict[str, Any]:
+        """Build an auditable project-aware V7 Query Plan without contacting providers."""
+        body = self._semantic_body(sources=sources, query=query, location=location, date_from=date_from, date_to=date_to, result_limit=result_limit, project_id=project_id)
+        return self._request("POST", "/api/semantic/plan", json=body)
+
+    def semantic_search(self, *, sources: Iterable[str], query: str = "", location: str = "", date_from: str = "", date_to: str = "", result_limit: int = 25, project_id: str | None = None) -> dict[str, Any]:
+        """Execute the V7 semantic router preserving project context, statuses and provenance."""
+        body = self._semantic_body(sources=sources, query=query, location=location, date_from=date_from, date_to=date_to, result_limit=result_limit, project_id=project_id)
+        return self._request("POST", "/api/semantic/search", json=body)
+
+    def create_semantic_job(self, *, sources: Iterable[str], query: str = "", location: str = "", date_from: str = "", date_to: str = "", result_limit: int = 25, project_id: str | None = None) -> dict[str, Any]:
+        """Queue a persistent semantic search for long-running multisource work."""
+        body = self._semantic_body(sources=sources, query=query, location=location, date_from=date_from, date_to=date_to, result_limit=result_limit, project_id=project_id)
+        return self._request("POST", "/api/semantic/jobs", json=body)
+
+    def semantic_job(self, job_id: str) -> dict[str, Any]:
+        """Read status, progress and result for a persistent semantic job."""
+        return self._request("GET", f"/api/semantic/jobs/{job_id}")
+
+    def cancel_semantic_job(self, job_id: str) -> dict[str, Any]:
+        """Request cancellation of a queued/running semantic job."""
+        return self._request("POST", f"/api/semantic/jobs/{job_id}/cancel")
+
+    def semantic_reproducibility(self, language: str, *, sources: Iterable[str], query: str = "", location: str = "", date_from: str = "", date_to: str = "", result_limit: int = 25, project_id: str | None = None) -> str:
+        """Return a secret-free Python or R script reproducing the semantic request."""
+        normalized = language.casefold()
+        if normalized not in {"python", "r"}:
+            raise ValueError("language must be 'python' or 'r'")
+        body = self._semantic_body(sources=sources, query=query, location=location, date_from=date_from, date_to=date_to, result_limit=result_limit, project_id=project_id)
+        result = self._request("POST", f"/api/semantic/jobs/reproducibility/{normalized}", json=body)
+        if not isinstance(result, str):
+            raise HDPClientError("Unexpected reproducibility response")
+        return result
+
+    def export_semantic_job(self, job_id: str, format_name: str = "json") -> Any:
+        """Export a finished job as JSON, CSV or GeoJSON without silent geometry fabrication."""
+        normalized = format_name.casefold()
+        if normalized not in {"json", "csv", "geojson"}:
+            raise ValueError("format_name must be json, csv or geojson")
+        return self._request("GET", f"/api/semantic/jobs/{job_id}/export/{normalized}")
+
+    def search(self, *, project_id: str, source: str, query: str, result_limit: int = 25, auto_download: bool = False, parameters: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        body = {"project_id": project_id, "source": source, "query": query, "result_limit": result_limit, "auto_download": auto_download, "parameters": dict(parameters or {})}
         return self._request("POST", "/api/search", json=body)
 
-    def federated_search(
-        self,
-        *,
-        project_id: str,
-        sources: Iterable[str],
-        query: str,
-        result_limit: int = 25,
-        auto_download: bool = False,
-        parameters_by_source: Mapping[str, Mapping[str, Any]] | None = None,
-    ) -> list[dict[str, Any]]:
-        """Execute the same validated search against several HDP connectors.
-
-        Individual provider errors are returned alongside successes so a caller
-        can keep partial results and provenance instead of losing the whole batch.
-        """
+    def federated_search(self, *, project_id: str, sources: Iterable[str], query: str, result_limit: int = 25, auto_download: bool = False, parameters_by_source: Mapping[str, Mapping[str, Any]] | None = None) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         for source in sources:
             try:
-                value = self.search(
-                    project_id=project_id,
-                    source=source,
-                    query=query,
-                    result_limit=result_limit,
-                    auto_download=auto_download,
-                    parameters=(parameters_by_source or {}).get(source, {}),
-                )
+                value = self.search(project_id=project_id, source=source, query=query, result_limit=result_limit, auto_download=auto_download, parameters=(parameters_by_source or {}).get(source, {}))
                 results.append({"source": source, "ok": True, "result": value})
             except HDPClientError as exc:
                 results.append({"source": source, "ok": False, "error": str(exc)})

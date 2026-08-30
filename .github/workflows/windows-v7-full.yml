@@ -1,0 +1,142 @@
+name: HDP V7 full qualification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "source/**"
+      - "clients-v6/**"
+      - "tools/v7_*.py"
+      - "releases/v7.0.0-rc1/**"
+      - ".github/workflows/windows-v7-full.yml"
+  push:
+    branches: ["feat/v7-semantic-router-reconciled"]
+
+permissions:
+  contents: read
+
+jobs:
+  semantic-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install API and Python client dependencies
+        run: |
+          pip install -r source/payload/api/requirements.txt
+          pip install -e clients-v6/python
+          pip install pytest
+      - name: Compile Python
+        run: python -m compileall -q source/payload/api/app source/tests clients-v6/python/src clients-v6/python/tests tools/v7_release_readiness.py
+      - name: Semantic deterministic, project, job, security and use-case tests
+        run: >-
+          python -m unittest
+          source/tests/test_semantic_router.py
+          source/tests/test_semantic_provider_execution.py
+          source/tests/test_semantic_project_context.py
+          source/tests/test_v7_semantic_jobs.py
+          source/tests/test_v7_semantic_input_contract.py
+          source/tests/test_v7_semantic_provenance_security.py
+          source/tests/test_v7_use_case_matrix.py
+      - name: Python client semantic contract tests
+        run: pytest -q clients-v6/python/tests
+      - name: Offline V7 release-readiness audit
+        run: python tools/v7_release_readiness.py
+      - name: Live provider sentinel
+        run: python tools/v7_semantic_live_acceptance.py
+      - name: Legacy V6 quality gate remains green
+        run: python tools/run_v6_quality_gate.py
+
+  windows-installer-v7:
+    runs-on: windows-2025
+    timeout-minutes: 40
+    needs: semantic-contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build V7 installer from isolated versioned build tree
+        shell: pwsh
+        run: ./source/build-windows-v7.ps1 -OutputDirectory "${{ runner.temp }}/hdp-v7"
+      - name: Validate PE32+ and hashes
+        shell: pwsh
+        run: |
+          $exe = "${{ runner.temp }}/hdp-v7/HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe"
+          if (-not (Test-Path $exe)) { throw "V7 installer missing" }
+          $bytes = [System.IO.File]::ReadAllBytes($exe)
+          if ($bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw "Missing MZ header" }
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $recorded = ((Get-Content "$exe.sha256" -Raw).Split()[0]).ToLowerInvariant()
+          if ($hash -ne $recorded) { throw "SHA256 sidecar mismatch" }
+      - name: Create complete V7 archive and provenance manifests
+        shell: pwsh
+        run: |
+          $exe = "${{ runner.temp }}/hdp-v7/HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe"
+          $exeSidecar = "$exe.sha256"
+          $archive = "${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v7.0.0.zip"
+          $archiveSidecar = "$archive.sha256"
+          $manifest = "${{ runner.temp }}/HDP_V7_ARTIFACT_MANIFEST.json"
+          $stage = Join-Path $env:RUNNER_TEMP "HDP_V7"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item $exe $stage
+          Copy-Item $exeSidecar $stage
+          Copy-Item -Recurse source (Join-Path $stage "Sources")
+          Copy-Item -Recurse clients-v6 (Join-Path $stage "Clients_R_Python")
+          Copy-Item -Recurse docs (Join-Path $stage "Documentation")
+          Copy-Item -Recurse tools (Join-Path $stage "Tools")
+          Copy-Item -Recurse releases (Join-Path $stage "Release_Trace")
+          Copy-Item README.md $stage
+          if (Test-Path CHANGELOG.md) { Copy-Item CHANGELOG.md $stage }
+          if (Test-Path VERSION) { Copy-Item VERSION $stage }
+          if (Test-Path HDP_STATE.json) { Copy-Item HDP_STATE.json $stage }
+
+          $exeHash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $buildProvenance = [ordered]@{
+            schema_version = 1
+            release = "7.0.0"
+            repository = $env:GITHUB_REPOSITORY
+            commit_sha = $env:GITHUB_SHA
+            workflow_run_id = $env:GITHUB_RUN_ID
+            workflow_run_attempt = $env:GITHUB_RUN_ATTEMPT
+            runner_os = $env:RUNNER_OS
+            generated_at_utc = [DateTime]::UtcNow.ToString("o")
+            installer = [ordered]@{
+              filename = "HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe"
+              sha256 = $exeHash
+            }
+          }
+          $buildProvenance | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 (Join-Path $stage "BUILD_PROVENANCE_V7.json")
+
+          Compress-Archive -Path "$stage/*" -DestinationPath $archive -CompressionLevel Optimal
+          $archiveHash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$archiveHash  HumanitarianDataPlatform_Archive_complete_v7.0.0.zip" | Set-Content -Encoding ascii $archiveSidecar
+
+          $finalManifest = [ordered]@{
+            schema_version = 1
+            release = "7.0.0"
+            repository = $env:GITHUB_REPOSITORY
+            commit_sha = $env:GITHUB_SHA
+            workflow_run_id = $env:GITHUB_RUN_ID
+            workflow_run_attempt = $env:GITHUB_RUN_ATTEMPT
+            generated_at_utc = [DateTime]::UtcNow.ToString("o")
+            artifacts = @(
+              [ordered]@{ filename = "HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe"; sha256 = $exeHash },
+              [ordered]@{ filename = "HumanitarianDataPlatform_Archive_complete_v7.0.0.zip"; sha256 = $archiveHash }
+            )
+          }
+          $finalManifest | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 $manifest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HDP-V7-qualified-candidate
+          path: |
+            ${{ runner.temp }}/hdp-v7/HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe
+            ${{ runner.temp }}/hdp-v7/HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe.sha256
+            ${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v7.0.0.zip
+            ${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v7.0.0.zip.sha256
+            ${{ runner.temp }}/HDP_V7_ARTIFACT_MANIFEST.json
+          if-no-files-found: error
+          retention-days: 90
