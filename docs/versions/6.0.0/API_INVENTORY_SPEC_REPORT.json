@@ -1,0 +1,27 @@
+{
+  "dhs": {
+    "rows": 0,
+    "status": "not_found",
+    "url": null
+  },
+  "gdacs": {
+    "rows": 229,
+    "status": "loaded",
+    "url": "https://www.gdacs.org/gdacsapi/swagger/v1/swagger.json"
+  },
+  "hdx-hapi": {
+    "rows": 359,
+    "status": "loaded",
+    "url": "https://hapi.humdata.org/openapi.json"
+  },
+  "un-sdg": {
+    "rows": 191,
+    "status": "loaded",
+    "url": "https://unstats.un.org/SDGAPI/swagger/v1/swagger.json"
+  },
+  "unhcr": {
+    "rows": 0,
+    "status": "not_found",
+    "url": null
+  }
+}

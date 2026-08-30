@@ -8,7 +8,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 
-REGISTRY_VERSION = "6.0.0-dev"
+REGISTRY_VERSION = "6.0.0"
 VERIFIED_AT = "2026-08-21"
 
 
@@ -76,7 +76,7 @@ GLOBAL_BASE_SCHEMA: dict[str, Any] = {
             description="La réponse JSON est refusée au-delà de cette limite, avant décodage.",
         ),
         "user_agent": field(
-            "string", "Identifiant HTTP", default="HDP/6.0.0-dev",
+            "string", "Identifiant HTTP", default="HDP/6.0.0",
             min_length=3, max_length=160,
             description="Identifie clairement le client HDP auprès du fournisseur de données.",
         ),

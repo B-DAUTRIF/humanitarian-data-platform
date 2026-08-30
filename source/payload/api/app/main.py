@@ -158,7 +158,7 @@ from .script_runtime import (
 
 
 APP_NAME = "Humanitarian Data Platform"
-APP_VERSION = "6.0.0-dev"
+APP_VERSION = "6.0.0"
 DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
 EXECUTION_SPOOL_DIR = Path(os.getenv("EXECUTION_SPOOL_DIR", "/app/execution_spool"))
 DATABASE_URL = os.environ["DATABASE_URL"]
