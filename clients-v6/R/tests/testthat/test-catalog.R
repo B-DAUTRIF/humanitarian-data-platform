@@ -1,4 +1,4 @@
-test_that("catalog exposes ten sources", {
+test_that("catalog exposes ten stable source slugs", {
   expect_length(hdp_sources(), 10)
   expect_setequal(
     hdp_sources(),
@@ -6,11 +6,17 @@ test_that("catalog exposes ten sources", {
   )
 })
 
-test_that("catalog exposes a substantial versioned operation set", {
+test_that("provider catalog is versioned, substantial and internally unique", {
   ops <- hdp_operations()
-  expect_gte(length(ops), 196)
-  expect_true(all(vapply(ops, function(x) nzchar(x$id), logical(1))))
+  # The global HDP inventory has 196 operations: ten are the canonical HDP
+  # source-registry configuration operations and 186 are executable provider
+  # operations shipped in the standalone R/Python source clients.
+  expect_equal(length(ops), 186)
+  ids <- vapply(ops, function(x) x$id, character(1))
+  expect_length(unique(ids), length(ids))
+  expect_true(all(nzchar(ids)))
   expect_true(all(vapply(ops, function(x) nzchar(x$source_slug), logical(1))))
+  expect_setequal(unique(vapply(ops, function(x) x$source_slug, character(1))), hdp_sources())
 })
 
 test_that("source filters return only the requested connector", {
@@ -28,9 +34,10 @@ test_that("preview constructs a safe HTTPS request from catalog metadata", {
     !length(Filter(function(p) {
       required_value <- if (is.null(p$required)) "" else p$required
       location_value <- if (is.null(p$location)) "" else p$location
-      default_missing <- is.null(p$default) || !nzchar(as.character(p$default))
-      required <- tolower(trimws(as.character(required_value))) %in% c("oui", "yes", "true", "1", "required", "obligatoire")
-      required && default_missing && grepl("path", tolower(location_value))
+      default_value <- p$default
+      default_missing <- is.null(default_value) || !length(default_value) || !any(nzchar(as.character(default_value)))
+      required <- any(tolower(trimws(as.character(required_value))) %in% c("oui", "yes", "true", "1", "required", "obligatoire"))
+      required && default_missing && any(grepl("path", tolower(as.character(location_value))))
     }, params))
   }, ops)
   expect_gt(length(usable), 0)
@@ -72,5 +79,7 @@ test_that("exports preserve usable tabular data and provenance", {
   expect_true(file.info(xlsx_path)$size > 0)
   csv <- utils::read.csv(csv_path, stringsAsFactors=FALSE)
   expect_equal(nrow(csv), 2)
-  expect_equal(sum(csv$cases), 5)
+  expect_named(csv, c("id", "cases"))
+  expect_equal(as.numeric(csv$cases), c(2, 3))
+  expect_equal(sum(as.numeric(csv$cases)), 5)
 })
