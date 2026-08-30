@@ -1,31 +1,47 @@
-# Humanitarian Data Platform — livraison qualifiée 5.0.2
+# Humanitarian Data Platform — V6.0.0
 
-La branche `main` représente la **dernière livraison installable qualifiée** de HDP. La version publiée ici est **5.0.2**.
+La branche `main` porte désormais la **V6.0.0 qualifiée par CI Windows** de HDP.
 
-La ligne de travail **5.2** est conservée séparément sur [`develop/5.2`](https://github.com/B-DAUTRIF/humanitarian-data-platform/tree/develop/5.2). Elle ne doit pas être confondue avec une livraison installable.
+## Télécharger la V6
 
-## Télécharger la livraison qualifiée
+Le build Windows qualifié est produit par le workflow **HDP V6 full Windows installer**. Le run de référence pour la V6.0.0 est le run GitHub Actions `33295858748`, associé au commit `3eb07a3cd0e38b20953085010228fda13afc9baf` et conclu avec succès.
 
-| Livrable | SHA-256 |
-|---|---|
-| [Installateur Windows x64 5.0.2](dist/v5.0.2/HumanitarianDataPlatform_Setup_Native_GUI_v5.0.2.exe) | `0077049d4ec410a0594fa2743b0d6149c7b2c3ae4b08859bce1c219b9fe2814a` |
-| [Archive complète 5.0.2](dist/v5.0.2/HumanitarianDataPlatform_Archive_complete_v5.0.2.zip) | `89e27edd1f5bdbf75bad70a66495843a8d777e3c73957cec534b56119d4345dc` |
+- Artefact GitHub Actions : `HumanitarianDataPlatform-V6-complet`
+- Installateur contenu dans l’artefact : `HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe`
+- SHA-256 de l’EXE : `23efeeade2ec3050b4d9a9ee5ee786eb9022c8e942110cec6baa6c4e05826ba1`
+- Archive complète contenue dans l’artefact : `HumanitarianDataPlatform_Archive_complete_v6.0.0.zip`
 
-Les fichiers `.sha256` correspondants se trouvent dans le même dossier. La provenance et les limites de qualification sont consignées dans [`dist/v5.0.2/PROVENANCE.json`](dist/v5.0.2/PROVENANCE.json) et [`docs/versions/5.0.2/QUALIFICATION.md`](docs/versions/5.0.2/QUALIFICATION.md).
+Accès au run : https://github.com/B-DAUTRIF/humanitarian-data-platform/actions/runs/33295858748
 
-## Organisation du dépôt
+> L’installateur est un exécutable Windows GUI x86-64 (PE32+) construit sur `windows-2025` avec MSVC. Il n’est pas signé Authenticode : Windows peut donc afficher une confirmation de sécurité.
 
-- `source/` : source courante nécessaire à la livraison 5.0.2 ;
-- `dist/` : distributions immuables classées par version ;
-- `docs/versions/` : documentation technique classée par version ;
-- `docs/traceability/` : décisions, états, journaux et points de reprise archivés ;
-- `docs/governance/` : règles de publication, structure et audits du dépôt ;
-- `wiki/` : sources du Wiki correspondant à la génération V5.
+## Inventaire exhaustif des paramètres API
 
-L’index documentaire se trouve dans [`docs/README.md`](docs/README.md). Les règles complètes sont décrites dans [`docs/governance/REPOSITORY_STRUCTURE.md`](docs/governance/REPOSITORY_STRUCTURE.md).
+La V6 embarque un inventaire canonique contrôlé par CI :
+
+- **2 057 paramètres** ;
+- **10 sources** ;
+- **440 opérations API** cataloguées.
+
+L’inventaire est exposé directement dans l’application :
+
+- interface utilisateur : `/api-inventory` ;
+- données filtrables : `/api-inventory/data` ;
+- liste et statistiques des sources : `/api-inventory/sources` ;
+- schéma détaillé d’une source : `/api-inventory/source/{slug}`.
+
+L’interface permet la recherche textuelle, le filtrage par source et expose notamment la source, l’opération, la méthode HTTP, l’endpoint, le paramètre, son emplacement, son type, son caractère obligatoire, le contrôle UI recommandé, la classe d’accès et sa description. Les paramètres en lecture seule restent visibles comme information.
+
+Le workflow Windows bloque la publication si l’inventaire n’atteint pas exactement les seuils canoniques ci-dessus ou si le routeur d’inventaire n’est pas monté dans `main_v6.py`.
+
+## Architecture V6
+
+Le backend V6 conserve l’application historique et monte les modules V6 sans dupliquer le cœur : synchronisation GitHub et inventaire API. Le Dockerfile démarre `app.main_v6:app`. La livraison complète contient également les clients R V6, les sources de l’installateur, le payload Docker, la documentation et les fichiers de traçabilité.
+
+## Versions précédentes
+
+Les distributions antérieures restent archivées sous `dist/` et `docs/versions/`. La V5.0.2 demeure disponible pour retour arrière, mais **n’est plus la version courante de `main`**.
 
 ## Installation
 
-Sous Windows 10/11 x64, vérifier l’empreinte puis lancer l’EXE. Docker Desktop et Compose v2 restent nécessaires. Une mise à niveau depuis 5.0.0 ou 5.0.1 conserve `.env`, `data/` et le volume PostgreSQL ; ne pas exécuter `docker compose down -v`.
-
-Le dépôt reste privé tant qu’aucune licence HDP explicite n’a été choisie. L’installateur n’est pas signé Authenticode et la confirmation manuelle sur le poste Windows utilisateur reste une qualification distincte.
+Sous Windows 10/11 x64 : télécharger l’artefact du run qualifié, extraire `HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe`, vérifier son SHA-256, puis lancer l’installateur. Docker Desktop et Compose v2 restent nécessaires au fonctionnement complet de la pile.
