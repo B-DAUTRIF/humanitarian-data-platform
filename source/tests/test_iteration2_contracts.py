@@ -157,8 +157,11 @@ class IterationTwoStaticContractTest(unittest.TestCase):
 
     def test_r_service_build_fails_if_runtime_packages_are_missing(self) -> None:
         dockerfile = (SOURCE_ROOT / "payload" / "r-service" / "Dockerfile").read_text(encoding="utf-8")
-        self.assertIn("install.packages(c('plumber','jsonlite'))", dockerfile)
-        self.assertIn("stopifnot(requireNamespace('plumber'", dockerfile)
+        required = ("plumber", "jsonlite", "httr2", "writexl", "testthat")
+        self.assertIn("install.packages", dockerfile)
+        for package in required:
+            self.assertIn(f"'{package}'", dockerfile)
+            self.assertIn(f"requireNamespace('{package}', quietly=TRUE)", dockerfile)
         self.assertNotIn("repos='https://cloud.r-project.org'", dockerfile)
 
     def test_msvc_compiles_utf8_source_explicitly(self) -> None:
