@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - "source/**"
+      - "clients-v6/**"
       - "tools/v7_*.py"
       - ".github/workflows/windows-v7-full.yml"
   push:
@@ -16,18 +17,25 @@ permissions:
 jobs:
   semantic-contracts:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install API dependencies
-        run: pip install -r source/payload/api/requirements.txt
+      - name: Install API and Python client dependencies
+        run: |
+          pip install -r source/payload/api/requirements.txt
+          pip install -e clients-v6/python
+          pip install pytest
       - name: Compile Python
-        run: python -m compileall -q source/payload/api/app source/tests
+        run: python -m compileall -q source/payload/api/app source/tests clients-v6/python/src clients-v6/python/tests
       - name: Semantic deterministic tests
         run: python -m unittest source/tests/test_semantic_router.py source/tests/test_semantic_provider_execution.py
+      - name: Python client semantic contract tests
+        run: pytest -q clients-v6/python/tests
+      - name: Live provider sentinel
+        run: python tools/v7_semantic_live_acceptance.py
       - name: Legacy V6 quality gate remains green
         run: python tools/run_v6_quality_gate.py
 
@@ -61,10 +69,13 @@ jobs:
           Copy-Item "${{ runner.temp }}/hdp-v7/HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe" $stage
           Copy-Item "${{ runner.temp }}/hdp-v7/HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe.sha256" $stage
           Copy-Item -Recurse source (Join-Path $stage "Sources")
+          Copy-Item -Recurse clients-v6 (Join-Path $stage "Clients_R_Python")
           Copy-Item -Recurse docs (Join-Path $stage "Documentation")
           Copy-Item -Recurse tools (Join-Path $stage "Tools")
           Copy-Item README.md $stage
           if (Test-Path CHANGELOG.md) { Copy-Item CHANGELOG.md $stage }
+          if (Test-Path VERSION) { Copy-Item VERSION $stage }
+          if (Test-Path HDP_STATE.json) { Copy-Item HDP_STATE.json $stage }
           Compress-Archive -Path "$stage/*" -DestinationPath "${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v7.0.0.zip" -CompressionLevel Optimal
           $hash = (Get-FileHash "${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v7.0.0.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  HumanitarianDataPlatform_Archive_complete_v7.0.0.zip" | Set-Content -Encoding ascii "${{ runner.temp }}/HumanitarianDataPlatform_Archive_complete_v7.0.0.zip.sha256"
