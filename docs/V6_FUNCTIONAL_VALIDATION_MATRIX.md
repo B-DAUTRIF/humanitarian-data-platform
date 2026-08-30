@@ -3,6 +3,8 @@
 Version cible : **6.0.0**  
 Règle de release : une fonctionnalité n'est `VALIDEE` que si son implémentation, son exposition utilisateur et son test applicable sont démontrés. Une présence de code seule ne vaut pas validation.
 
+Plateformes Windows officiellement supportées et bloquantes : **Windows 10 x64 build 19044+** et **Windows 11 x64 build 22000+**. Windows Server 2025 reste un environnement CI complémentaire et ne peut pas remplacer une recette exécutée sur un véritable poste/runner Windows 10 ou Windows 11.
+
 Statuts : `A_TESTER`, `PARTIEL`, `VALIDE`, `BLOQUE`.
 
 | ID | Domaine | Fonctionnalité V6 arrêtée | Preuve attendue | Test de référence | Statut initial |
@@ -46,7 +48,9 @@ Statuts : `A_TESTER`, `PARTIEL`, `VALIDE`, `BLOQUE`.
 | V6-037 | Livrables | archive complète + clients + docs + tests | archive reproductible et contrôlée | workflow release | PARTIEL |
 | V6-038 | Compatibilité | migration/compatibilité versions précédentes | scénario upgrade sans perte | test migration | A_TESTER |
 | V6-039 | E2E métier | Cas épidémiologiste complet | signal -> API -> dataset -> analyse -> carte -> job -> alerte | recette E2E épidémiologique | PARTIEL |
-| V6-040 | Release | Toutes les portes de qualification vertes sur le même HEAD | CI Linux + Windows + E2E + matrice sans A_TESTER/BLOQUE | gate release V6 | BLOQUE |
+| V6-040 | Release | Toutes les portes fonctionnelles vertes sur le même HEAD | CI Linux + Windows + E2E + matrice sans A_TESTER/BLOQUE | gate release V6 | BLOQUE |
+| V6-041 | Compatibilité OS | Windows 10 x64 build 19044+ | compilation ciblée Win10 + installation/upgrade/lancement/désinstallation sur vrai Windows 10 x64 | `windows10_compatibility_gate.ps1` + `windows10_full_e2e.ps1` | BLOQUE |
+| V6-042 | Compatibilité OS | Windows 11 x64 build 22000+ | même installateur Win10+ + installation/upgrade/lancement/désinstallation sur vrai Windows 11 x64 | `windows11_full_e2e.ps1` | BLOQUE |
 
 ## Boucle obligatoire
 
@@ -62,4 +66,4 @@ Pour chaque ligne :
 
 ## Critère de sortie V6
 
-La V6 est qualifiée seulement lorsque **V6-001 à V6-040 sont `VALIDE`**, que la CI générale et la qualification Windows sont vertes sur le **même commit**, et que le parcours épidémiologique E2E est réussi sans anomalie BLOCKER ou MAJOR ouverte.
+La V6 est qualifiée seulement lorsque **V6-001 à V6-042 sont `VALIDE`**, que la CI générale, la qualification Windows Server complémentaire, la recette réelle Windows 10 x64 et la recette réelle Windows 11 x64 sont vertes sur le **même commit**, et que le parcours épidémiologique E2E est réussi sans anomalie BLOCKER ou MAJOR ouverte.
