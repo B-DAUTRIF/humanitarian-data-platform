@@ -30,8 +30,8 @@ jobs:
           pip install pytest
       - name: Compile Python
         run: python -m compileall -q source/payload/api/app source/tests clients-v6/python/src clients-v6/python/tests
-      - name: Semantic deterministic tests
-        run: python -m unittest source/tests/test_semantic_router.py source/tests/test_semantic_provider_execution.py
+      - name: Semantic deterministic and project-context tests
+        run: python -m unittest source/tests/test_semantic_router.py source/tests/test_semantic_provider_execution.py source/tests/test_semantic_project_context.py
       - name: Python client semantic contract tests
         run: pytest -q clients-v6/python/tests
       - name: Live provider sentinel
