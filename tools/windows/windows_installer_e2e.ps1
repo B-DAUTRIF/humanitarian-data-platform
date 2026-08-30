@@ -108,6 +108,16 @@ function Get-ControlText([IntPtr]$Window, [int]$Id) {
     return $buffer.ToString()
 }
 
+function Wait-ControlText([IntPtr]$Window, [int]$Id, [int]$TimeoutSeconds = 10) {
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        try { $value = Get-ControlText $Window $Id } catch { $value = '' }
+        if ($value) { return $value }
+        Start-Sleep -Milliseconds 100
+    } while ((Get-Date) -lt $deadline)
+    throw "Contrôle ID=$Id non initialisé dans le délai attendu"
+}
+
 function Click-DialogButton([int]$Id, [int]$TimeoutSeconds = 20) {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     do {
@@ -151,11 +161,14 @@ $process = $null
 try {
     $process = Start-Process -FilePath $installerResolved -PassThru
     $window = Wait-MainWindow $process
+    [void](Wait-ControlText $window 1001)
 
     Set-ControlText $window 1001 $installDir
     Set-ControlText $window 1002 'hdp-ci-qualification'
     Set-ControlText $window 1014 ''
     Set-Check $window 1013 $true
+    if ((Get-ControlText $window 1001) -ne $installDir) { throw 'Le chemin de recette n a pas été appliqué à la GUI' }
+    if ((Get-ControlText $window 1002) -ne 'hdp-ci-qualification') { throw 'L appname ReliefWeb de recette n a pas été appliqué' }
     Click-Control $window 1007
     Click-DialogButton $IDYES
     $status = Wait-Status $window 'Installation terminée'
