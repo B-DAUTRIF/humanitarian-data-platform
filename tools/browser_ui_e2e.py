@@ -105,12 +105,16 @@ def main() -> int:
         page.locator("#inv-params [data-inventory-param]").first.wait_for(state="visible", timeout=10_000)
         require(page.locator("#inv-params [data-inventory-param]").count() > 0, "Aucun paramètre natif rendu")
 
-        # Check authenticated API access from the same browser context.
+        # Check authenticated API access from the same browser context. RSS, backups and
+        # catalog are deliberately invoked without optional filters: these calls previously
+        # exposed PostgreSQL NULL-parameter typing failures and are now permanent regressions.
         endpoints = (
             "/api/health",
             "/api-inventory/sources",
             "/api/projects",
             "/api/v6/timeline",
+            "/api/v6/rss/candidates",
+            "/api/v6/backups",
             "/api/v6/catalog",
         )
         api_status: dict[str, int] = {}
@@ -121,8 +125,6 @@ def main() -> int:
 
         browser.close()
 
-    # Fail only on JavaScript/runtime errors attributable to HDP. Browser resource noise from
-    # optional external tiles is recorded but does not mask page/runtime exceptions.
     require(not failures, "; ".join(failures))
     local_api_errors = [item for item in api_errors if item.startswith(("4", "5")) and base in item]
     require(not local_api_errors, f"Réponses API HDP en erreur: {local_api_errors[:20]}")
