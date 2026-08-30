@@ -47,6 +47,8 @@ public static class HDPWin32 {
     public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
     [DllImport("user32.dll")]
     public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")]
+    public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 }
 '@
 
@@ -87,7 +89,9 @@ function Set-Check([IntPtr]$Window, [int]$Id, [bool]$Checked) {
 
 function Click-Control([IntPtr]$Window, [int]$Id) {
     $control = Get-Control $Window $Id
-    [void][HDPWin32]::SendMessage($control, $BM_CLICK, [IntPtr]::Zero, [IntPtr]::Zero)
+    if (-not [HDPWin32]::PostMessage($control, $BM_CLICK, [IntPtr]::Zero, [IntPtr]::Zero)) {
+        throw "PostMessage BM_CLICK ID=$Id a échoué"
+    }
 }
 
 function Get-ControlText([IntPtr]$Window, [int]$Id) {
@@ -104,7 +108,10 @@ function Click-DialogButton([int]$Id, [int]$TimeoutSeconds = 20) {
         if ($dialog -ne [IntPtr]::Zero) {
             $button = [HDPWin32]::GetDlgItem($dialog, $Id)
             if ($button -ne [IntPtr]::Zero) {
-                [void][HDPWin32]::SendMessage($button, $BM_CLICK, [IntPtr]::Zero, [IntPtr]::Zero)
+                if (-not [HDPWin32]::PostMessage($button, $BM_CLICK, [IntPtr]::Zero, [IntPtr]::Zero)) {
+                    throw "PostMessage dialogue ID=$Id a échoué"
+                }
+                Start-Sleep -Milliseconds 250
                 return
             }
         }
@@ -160,7 +167,6 @@ try {
     if ($envText -notmatch '(?m)^HDP_PORT=\d+\s*$') { throw 'HDP_PORT absent de .env' }
     Add-Content -LiteralPath $envPath -Value "CUSTOM_QUALIFICATION_VALUE=preserve-me"
 
-    # Mise à niveau réelle du même dossier : le réglage non géré doit survivre.
     Click-Control $window 1007
     Click-DialogButton $IDYES
     $status = Wait-Status $window 'Installation terminée'
@@ -174,7 +180,6 @@ try {
     if ($previous -notmatch 'CUSTOM_QUALIFICATION_VALUE=preserve-me') { throw 'La sauvegarde .env ne contient pas la valeur utilisateur' }
     Assert-File $shortcut
 
-    # Désinstallation contrôlée : fichiers gérés/raccourci supprimés, données de configuration conservées.
     Click-Control $window 1016
     Click-DialogButton $IDYES
     $status = Wait-Status $window 'Désinstallation terminée'
