@@ -106,6 +106,37 @@ class HDPClient:
         body = self._semantic_body(sources=sources, query=query, location=location, date_from=date_from, date_to=date_to, result_limit=result_limit, project_id=project_id)
         return self._request("POST", "/api/semantic/search", json=body)
 
+    def create_semantic_job(self, *, sources: Iterable[str], query: str = "", location: str = "", date_from: str = "", date_to: str = "", result_limit: int = 25, project_id: str | None = None) -> dict[str, Any]:
+        """Queue a persistent semantic search for long-running multisource work."""
+        body = self._semantic_body(sources=sources, query=query, location=location, date_from=date_from, date_to=date_to, result_limit=result_limit, project_id=project_id)
+        return self._request("POST", "/api/semantic/jobs", json=body)
+
+    def semantic_job(self, job_id: str) -> dict[str, Any]:
+        """Read status, progress and result for a persistent semantic job."""
+        return self._request("GET", f"/api/semantic/jobs/{job_id}")
+
+    def cancel_semantic_job(self, job_id: str) -> dict[str, Any]:
+        """Request cancellation of a queued/running semantic job."""
+        return self._request("POST", f"/api/semantic/jobs/{job_id}/cancel")
+
+    def semantic_reproducibility(self, language: str, *, sources: Iterable[str], query: str = "", location: str = "", date_from: str = "", date_to: str = "", result_limit: int = 25, project_id: str | None = None) -> str:
+        """Return a secret-free Python or R script reproducing the semantic request."""
+        normalized = language.casefold()
+        if normalized not in {"python", "r"}:
+            raise ValueError("language must be 'python' or 'r'")
+        body = self._semantic_body(sources=sources, query=query, location=location, date_from=date_from, date_to=date_to, result_limit=result_limit, project_id=project_id)
+        result = self._request("POST", f"/api/semantic/jobs/reproducibility/{normalized}", json=body)
+        if not isinstance(result, str):
+            raise HDPClientError("Unexpected reproducibility response")
+        return result
+
+    def export_semantic_job(self, job_id: str, format_name: str = "json") -> Any:
+        """Export a finished job as JSON, CSV or GeoJSON without silent geometry fabrication."""
+        normalized = format_name.casefold()
+        if normalized not in {"json", "csv", "geojson"}:
+            raise ValueError("format_name must be json, csv or geojson")
+        return self._request("GET", f"/api/semantic/jobs/{job_id}/export/{normalized}")
+
     def search(self, *, project_id: str, source: str, query: str, result_limit: int = 25, auto_download: bool = False, parameters: Mapping[str, Any] | None = None) -> dict[str, Any]:
         body = {"project_id": project_id, "source": source, "query": query, "result_limit": result_limit, "auto_download": auto_download, "parameters": dict(parameters or {})}
         return self._request("POST", "/api/search", json=body)
