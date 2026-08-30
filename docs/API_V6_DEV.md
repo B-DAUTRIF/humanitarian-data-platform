@@ -1,7 +1,6 @@
-# Référence API HDP 6.0.0-dev
+# Référence API HDP 6.0.0
 
-Cette référence décrit le périmètre V6 effectivement exposé au jalon du
-24 août 2026. Elle complète la [référence V5](API_V5.md) : les routes V5
+Cette référence décrit le périmètre API de la version finale V6.0.0. Elle complète la [référence V5](API_V5.md) : les routes V5
 compatibles restent disponibles, mais aucune route V6 ne doit être interprétée
 comme une qualification du déploiement Internet.
 

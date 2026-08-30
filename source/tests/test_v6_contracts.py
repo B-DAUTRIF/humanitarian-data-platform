@@ -49,13 +49,13 @@ class V6StaticContractTest(unittest.TestCase):
             with self.subTest(name=name):
                 ast.parse(source)
 
-    def test_application_declares_v6_without_renaming_qualified_installer(self) -> None:
-        self.assertIn('APP_VERSION = "6.0.0-dev"', self.main)
+    def test_application_declares_final_v6_identity(self) -> None:
+        self.assertIn('APP_VERSION = "6.0.0"', self.main)
         self.assertIn("app.include_router(v6_router)", self.main)
-        self.assertIn("développement 6.0.0", self.html)
-        self.assertIn("version 5.0.2", self.html)
+        self.assertIn("6.0.0", self.html)
+        self.assertIn("6.0.0", self.html)
         installer = (SOURCE_ROOT / "src" / "installer.c").read_text(encoding="utf-8")
-        self.assertIn('#define APP_VERSION L"6.0.0-dev"', installer)
+        self.assertIn('#define APP_VERSION L"6.0.0"', installer)
 
     def test_rule_connector_cache_and_policy_routes_are_exposed(self) -> None:
         for route in (
@@ -430,8 +430,8 @@ class V6StaticContractTest(unittest.TestCase):
         todo = (PROJECT_ROOT / "TODO_Mises_a_jour_HDP.md").read_text(encoding="utf-8")
         self.assertTrue(notice.is_file())
         self.assertIn("59 chemins V6", api_v6.read_text(encoding="utf-8"))
-        self.assertIn("Compléments V6 de développement", architecture.read_text(encoding="utf-8"))
-        self.assertIn("6.0.0-dev", wiki_home.read_text(encoding="utf-8"))
+        self.assertIn("Architecture HDP V6.0.0", architecture.read_text(encoding="utf-8"))
+        self.assertIn("6.0.0", wiki_home.read_text(encoding="utf-8"))
         self.assertTrue(gate_notice.is_file())
         self.assertTrue(gate_script.is_file())
         self.assertIn("après chaque nouvelle implémentation V6", gate_notice.read_text(encoding="utf-8"))

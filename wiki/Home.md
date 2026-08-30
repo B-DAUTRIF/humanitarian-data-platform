@@ -1,6 +1,6 @@
-# Humanitarian Data Platform V5
+# Humanitarian Data Platform V6.0.0
 
-Bienvenue dans le wiki HDP V5.
+Bienvenue dans le wiki HDP V6.0.0.
 
 - [Installation](Installation.md)
 - [Data Grid et métadonnées](Data-Grid-et-metadonnees.md)
@@ -8,4 +8,4 @@ Bienvenue dans le wiki HDP V5.
 - [Notebooks Jupyter](Notebooks.md)
 - [Architecture et sécurité](Architecture-et-securite.md)
 
-La source canonique de la documentation reste le dossier `docs/` de la version publiée. Le wiki est fourni dans l’archive pour pouvoir être synchronisé vers le Wiki GitHub.
+La source canonique de la documentation reste le dossier `docs/` de la version publiée. Le wiki est fourni dans l’archive pour synchronisation vers le Wiki GitHub.
