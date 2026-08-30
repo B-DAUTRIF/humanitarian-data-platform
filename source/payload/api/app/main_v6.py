@@ -29,6 +29,7 @@ from .api_inventory import router as api_inventory_router
 from .v6_notebook_execution import router as v6_notebook_router
 from .v6_semantic_api import router as semantic_router
 from .v7_migrations import apply_v7_migrations
+from .v7_semantic_jobs import recover_abandoned_semantic_jobs, router as semantic_jobs_router
 
 # Explicit marker retained for V6 backward-compatibility qualification tools.
 # It does not describe the active application version.
@@ -59,12 +60,14 @@ app.include_router(v6_notebook_router)
 app.include_router(github_sync_router)
 app.include_router(api_inventory_router)
 app.include_router(semantic_router)
+app.include_router(semantic_jobs_router)
 
 
 @app.on_event("startup")
 def apply_v7_schema() -> None:
-    """Apply the idempotent V7 semantic persistence schema at application startup."""
+    """Apply V7 schema and explicitly fail abandoned background jobs after restart."""
     apply_v7_migrations()
+    recover_abandoned_semantic_jobs()
 
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
