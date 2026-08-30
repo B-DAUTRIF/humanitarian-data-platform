@@ -2,8 +2,8 @@ FROM rocker/r-ver:4.4.3
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl libcurl4-openssl-dev libssl-dev libsodium-dev libicu-dev libxml2-dev zlib1g-dev \
-    && Rscript -e "install.packages(c('plumber','jsonlite'))" \
-    && Rscript -e "stopifnot(requireNamespace('plumber', quietly=TRUE), requireNamespace('jsonlite', quietly=TRUE)); cat(as.character(packageVersion('plumber')), '\n')" \
+    && Rscript -e "install.packages(c('plumber','jsonlite','httr2','writexl','testthat'))" \
+    && Rscript -e "stopifnot(requireNamespace('plumber', quietly=TRUE), requireNamespace('jsonlite', quietly=TRUE), requireNamespace('httr2', quietly=TRUE), requireNamespace('writexl', quietly=TRUE), requireNamespace('testthat', quietly=TRUE)); cat(as.character(packageVersion('plumber')), '\n')" \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/downloaded_packages
 
