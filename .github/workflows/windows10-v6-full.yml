@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [".github/workflows/windows10-v6-full.yml", ".github/workflows/windows11-v6-full.yml", "releases/v6.0.0-rc1/**", "source/**", "clients-v6/**", "tools/**", "VERSION", "HDP_STATE.json"]
+    paths: [".github/workflows/windows10-v6-full.yml", ".github/workflows/windows11-v6-full.yml", "releases/v6.0.0-rc2/**", "source/**", "clients-v6/**", "tools/**", "VERSION", "HDP_STATE.json"]
 
 permissions:
   contents: read
@@ -24,31 +24,33 @@ jobs:
           if($os.OSArchitecture -notmatch '64'){throw 'Runner x64 obligatoire'}
           $b=[int]$os.BuildNumber
           if($b -lt 19044 -or $b -ge 22000){throw "Build Windows 10 non qualifié: $b"}
-      - name: Vérifier le binaire RC exact
+      - name: Vérifier le binaire RC2 exact
         shell: pwsh
         run: |
-          $exe="$PWD/releases/v6.0.0-rc1/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"
+          $exe="$PWD/releases/v6.0.0-rc2/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"
           $hashFile="$exe.sha256"
-          if(!(Test-Path $exe) -or !(Test-Path $hashFile)){throw 'Binaire RC ou hash absent'}
+          $published='dc828ddc31eea2efe8ace9aa585b64cad6770cbbd4bacf490e27918999d4dd1c'
+          if(!(Test-Path $exe) -or !(Test-Path $hashFile)){throw 'Binaire RC2 ou hash absent'}
           $expected=((Get-Content $hashFile -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
           $actual=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
-          if($actual -ne $expected){throw "SHA-256 RC invalide: $actual != $expected"}
+          if($actual -ne $expected){throw "SHA-256 RC2 invalide: $actual != $expected"}
+          if($actual -ne $published){throw "Le binaire testé n'est pas l'asset RC2 publié: $actual"}
           ./tools/windows/windows10_compatibility_gate.ps1 -InstallerPath $exe
-      - name: Recette Windows 10 réelle complète sur le binaire publié
+      - name: Recette Windows 10 réelle complète sur le binaire RC2 publié
         shell: pwsh
         timeout-minutes: 12
-        run: ./tools/windows/windows10_full_e2e.ps1 -InstallerPath "$PWD/releases/v6.0.0-rc1/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"
+        run: ./tools/windows/windows10_full_e2e.ps1 -InstallerPath "$PWD/releases/v6.0.0-rc2/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"
       - name: Produire preuve Windows 10
         shell: pwsh
         run: |
           $os=Get-CimInstance Win32_OperatingSystem
-          $exe="$PWD/releases/v6.0.0-rc1/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"
-          $proof=[ordered]@{version='6.0.0';commit='${{ github.sha }}';status='passed';artifact='v6.0.0-rc1';os=$os.Caption;build=$os.BuildNumber;architecture=$os.OSArchitecture;installer_sha256=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()}
+          $exe="$PWD/releases/v6.0.0-rc2/HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"
+          $proof=[ordered]@{version='6.0.0';commit='${{ github.sha }}';status='passed';artifact='v6.0.0-rc2';os=$os.Caption;build=$os.BuildNumber;architecture=$os.OSArchitecture;installer_sha256=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()}
           $proof|ConvertTo-Json|Set-Content -Encoding utf8 "${{ runner.temp }}/WINDOWS10_QUALIFICATION.json"
           Get-Content "${{ runner.temp }}/WINDOWS10_QUALIFICATION.json"
       - uses: actions/upload-artifact@v4
         with:
-          name: HDP-V6-Windows10-qualification-${{ github.sha }}
+          name: HDP-V6-Windows10-RC2-qualification-${{ github.sha }}
           path: ${{ runner.temp }}/WINDOWS10_QUALIFICATION.json
           retention-days: 90
           if-no-files-found: error
