@@ -1,0 +1,79 @@
+name: HDP V6 consolidate historical implementation
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/v6-consolidate-history.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  consolidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Overlay V6 functional additions without historical deletions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin codex/v6-build-20260821:refs/remotes/origin/codex/v6-build-20260821
+          BASE=$(git merge-base HEAD refs/remotes/origin/codex/v6-build-20260821)
+          git diff --name-only --diff-filter=AM "$BASE" refs/remotes/origin/codex/v6-build-20260821 -- source > /tmp/v6-source-files.txt
+          while IFS= read -r p; do
+            [ -z "$p" ] && continue
+            git checkout refs/remotes/origin/codex/v6-build-20260821 -- "$p"
+          done < /tmp/v6-source-files.txt
+          for p in docs/API_V6_DEV.md docs/INSTALLATION_V6_DEV.md docs/NOTICE_TECHNIQUE_FONCTIONNELLE_V6.md docs/RAPPORT_CONFORMITE_ET_EVALUATION_V6.md docs/V6_IMPLEMENTATION_GATE.md tools/package_v6_release.py tools/run_v6_quality_gate.py HDP_Prompt_recreation_global_v6.0.0.txt; do
+            if git cat-file -e refs/remotes/origin/codex/v6-build-20260821:"$p" 2>/dev/null; then
+              git checkout refs/remotes/origin/codex/v6-build-20260821 -- "$p"
+            fi
+          done
+          # Preserve modules added on main after the isolated V6 branch.
+          git checkout HEAD -- source/payload/api/app/main_v6.py source/payload/api/app/github_sync.py source/payload/api/app/api_inventory.py source/payload/api/app/api_inventory_parts || true
+          echo "Overlaid $(wc -l < /tmp/v6-source-files.txt) changed/added source paths; branch deletions intentionally ignored."
+      - name: Make version 6.0.0 native in consolidated source
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          paths=[
+            'source/src/installer.c','source/src/installer.rc','source/build-windows.ps1',
+            'source/payload/api/app/main.py','source/payload/api/static/index.html',
+            'source/payload/README.md','source/SOURCE_BUILD.md'
+          ]
+          for raw in paths:
+              p=Path(raw)
+              if not p.exists(): continue
+              s=p.read_text(encoding='utf-8')
+              s=s.replace('5.0.2','6.0.0').replace('5,0,2,0','6,0,0,0')
+              p.write_text(s,encoding='utf-8')
+          PY
+      - name: Static validation of consolidated V6 modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q source/payload/api/app
+          test -f source/payload/api/app/v6_actions.py
+          test -f source/payload/api/app/v6_backup.py
+          test -f source/payload/api/app/v6_data_jobs.py
+          test -f source/payload/api/app/v6_rules.py
+          test -f source/payload/api/app/v6_timeline.py
+          test -f source/payload/api/app/passkey_auth.py
+          test -f source/payload/api/app/mail_ingestion.py
+          test -f source/payload/api/app/spip_bridge.py
+          test -d source/spip-plugin/hdp
+          grep -q '6.0.0' source/src/installer.c
+          ! grep -q '#define APP_VERSION L"5.0.2"' source/src/installer.c
+      - name: Commit consolidated implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source docs/API_V6_DEV.md docs/INSTALLATION_V6_DEV.md docs/NOTICE_TECHNIQUE_FONCTIONNELLE_V6.md docs/RAPPORT_CONFORMITE_ET_EVALUATION_V6.md docs/V6_IMPLEMENTATION_GATE.md tools/package_v6_release.py tools/run_v6_quality_gate.py HDP_Prompt_recreation_global_v6.0.0.txt
+          git diff --cached --exit-code && exit 0
+          git commit -m "feat(v6): consolidate isolated V6 implementation without deleting history"
+          git push origin HEAD:main
