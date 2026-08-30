@@ -3,7 +3,7 @@ name: HDP V6 full Windows installer
 on:
   workflow_dispatch:
   push:
-    branches: ["codex/v6-installer-fix-20260829"]
+    branches: [main, "codex/v6-installer-fix-20260829"]
     paths:
       - ".github/workflows/windows-v6-full.yml"
       - "source/**"
@@ -11,6 +11,9 @@ on:
       - "docs/**"
       - "wiki/**"
       - "VERSION"
+      - "HDP_STATE.json"
+      - "CHANGELOG.md"
+      - "TODO_Mises_a_jour_HDP.md"
 
 permissions:
   contents: read
