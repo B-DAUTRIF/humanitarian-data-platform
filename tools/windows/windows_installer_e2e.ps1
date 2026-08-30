@@ -37,10 +37,16 @@ using System;
 using System.Text;
 using System.Runtime.InteropServices;
 public static class HDPWin32 {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr GetDlgItem(IntPtr hWnd, int nIDDlgItem);
+    [DllImport("user32.dll")]
+    public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+    public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
     [DllImport("user32.dll", EntryPoint = "SendMessageW")]
     public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageW")]
@@ -49,6 +55,23 @@ public static class HDPWin32 {
     public static extern IntPtr SendMessageSetText(IntPtr hWnd, uint Msg, IntPtr wParam, string lParam);
     [DllImport("user32.dll")]
     public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+    public static IntPtr FindDialogForProcess(uint processId) {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows(delegate(IntPtr hWnd, IntPtr lParam) {
+            uint pid;
+            GetWindowThreadProcessId(hWnd, out pid);
+            if (pid != processId) return true;
+            StringBuilder name = new StringBuilder(256);
+            GetClassName(hWnd, name, name.Capacity);
+            if (name.ToString() == "#32770") {
+                found = hWnd;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
 }
 '@
 
@@ -122,10 +145,10 @@ function Click-Control([IntPtr]$Window, [int]$Id) {
     if (-not [HDPWin32]::PostMessage($control, $BM_CLICK, [IntPtr]::Zero, [IntPtr]::Zero)) { throw "PostMessage BM_CLICK ID=$Id a échoué" }
 }
 
-function Click-DialogButton([int]$Id, [int]$TimeoutSeconds = 20) {
+function Click-DialogButton([int]$ProcessId, [int]$Id, [int]$TimeoutSeconds = 20) {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     do {
-        $dialog = [HDPWin32]::FindWindow('#32770', 'Humanitarian Data Platform')
+        $dialog = [HDPWin32]::FindDialogForProcess([uint32]$ProcessId)
         if ($dialog -ne [IntPtr]::Zero) {
             $button = [HDPWin32]::GetDlgItem($dialog, $Id)
             if ($button -ne [IntPtr]::Zero) {
@@ -136,7 +159,7 @@ function Click-DialogButton([int]$Id, [int]$TimeoutSeconds = 20) {
         }
         Start-Sleep -Milliseconds 200
     } while ((Get-Date) -lt $deadline)
-    throw "Dialogue HDP avec bouton ID=$Id introuvable"
+    throw "Dialogue du processus $ProcessId avec bouton ID=$Id introuvable"
 }
 
 function Ensure-ControlledHealthServer {
@@ -185,9 +208,9 @@ try {
     if ((Get-ControlText $window 1002) -ne 'hdp-ci-qualification') { throw 'L appname ReliefWeb de recette n a pas été appliqué' }
 
     Click-Control $window 1007
-    Click-DialogButton $IDYES
+    Click-DialogButton $process.Id $IDYES
     $status = Wait-Status $window 'Installation terminée'
-    Click-DialogButton $IDOK
+    Click-DialogButton $process.Id $IDOK
 
     Assert-File (Join-Path $installDir 'compose.yaml')
     Assert-File (Join-Path $installDir 'start-hdp.cmd')
@@ -204,9 +227,9 @@ try {
     Add-Content -LiteralPath $envPath -Value "CUSTOM_QUALIFICATION_VALUE=preserve-me"
 
     Click-Control $window 1007
-    Click-DialogButton $IDYES
+    Click-DialogButton $process.Id $IDYES
     $status = Wait-Status $window 'Installation terminée'
-    Click-DialogButton $IDOK
+    Click-DialogButton $process.Id $IDOK
 
     $backup = Join-Path $installDir '.env.backup-before-v6.0.0'
     Assert-File $backup
@@ -217,9 +240,9 @@ try {
     Assert-File $shortcut
 
     Click-Control $window 1016
-    Click-DialogButton $IDYES
+    Click-DialogButton $process.Id $IDYES
     $status = Wait-Status $window 'Désinstallation terminée'
-    Click-DialogButton $IDOK
+    Click-DialogButton $process.Id $IDOK
     Assert-File $envPath
     Assert-File $backup
     if (Test-Path -LiteralPath $shortcut) { throw 'Le raccourci HDP est resté après désinstallation contrôlée' }
