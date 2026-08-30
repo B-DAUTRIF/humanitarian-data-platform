@@ -10,11 +10,24 @@
 #include <string.h>
 #include <wchar.h>
 
+static void trace_command(int argc, wchar_t **argv) {
+    wchar_t temp[MAX_PATH * 4] = L".";
+    GetEnvironmentVariableW(L"RUNNER_TEMP", temp, (DWORD)(sizeof(temp) / sizeof(wchar_t)));
+    wchar_t path[MAX_PATH * 4];
+    _snwprintf(path, sizeof(path) / sizeof(wchar_t), L"%ls\\hdp-fake-docker.log", temp);
+    FILE *file = _wfopen(path, L"a, ccs=UTF-8");
+    if (!file) return;
+    for (int i = 0; i < argc; i++) fwprintf(file, L"%ls%ls", i ? L" | " : L"", argv[i]);
+    fwprintf(file, L"\n");
+    fclose(file);
+}
+
 static unsigned short read_port_from_env(const wchar_t *compose_path) {
     wchar_t directory[MAX_PATH * 4];
     wcsncpy(directory, compose_path, (sizeof(directory) / sizeof(wchar_t)) - 1);
     directory[(sizeof(directory) / sizeof(wchar_t)) - 1] = 0;
     wchar_t *slash = wcsrchr(directory, L'\\');
+    if (!slash) slash = wcsrchr(directory, L'/');
     if (!slash) return 0;
     *slash = 0;
     wchar_t env_path[MAX_PATH * 4];
@@ -36,6 +49,8 @@ static int health_server(unsigned short port) {
     if (WSAStartup(MAKEWORD(2, 2), &data) != 0) return 21;
     SOCKET server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (server == INVALID_SOCKET) return 22;
+    BOOL exclusive = TRUE;
+    setsockopt(server, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (const char *)&exclusive, sizeof(exclusive));
     struct sockaddr_in address;
     ZeroMemory(&address, sizeof(address));
     address.sin_family = AF_INET;
@@ -74,11 +89,12 @@ static int spawn_health_server(unsigned short port) {
     if (!ok) return 32;
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
-    Sleep(300);
+    Sleep(500);
     return 0;
 }
 
 int wmain(int argc, wchar_t **argv) {
+    trace_command(argc, argv);
     if (argc >= 3 && !_wcsicmp(argv[1], L"--health-server")) {
         unsigned long port = wcstoul(argv[2], NULL, 10);
         return health_server((unsigned short)port);
