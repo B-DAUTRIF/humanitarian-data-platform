@@ -32,6 +32,7 @@ jobs:
         shell: pwsh
         run: |
           python -m compileall -q source/payload/api/app clients-v6/python
+          pip install -e clients-v6/python
           if(Test-Path clients-v6/python/tests){ pytest -q clients-v6/python/tests }
       - name: Vérifier raccourci Bureau obligatoire
         shell: pwsh
