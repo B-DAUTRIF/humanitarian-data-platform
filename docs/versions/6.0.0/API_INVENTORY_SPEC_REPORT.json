@@ -23,5 +23,13 @@
     "rows": 0,
     "status": "not_found",
     "url": null
+  },
+  "parameter_domain_audit": {
+    "status": "integrated_as_companion_inventory",
+    "audit_date": "2026-08-30",
+    "machine_file": "API_PARAMETER_DOMAINS.json",
+    "report_file": "API_INVENTORY_DOMAIN_AUDIT_2026-08-30.md",
+    "scope": "10 V6 sources; static enums, dynamic catalogues/codelists, query grammars, dates/periods, booleans and provider schemas",
+    "rule": "No modality is promoted to an exhaustive enum from examples alone. Dynamic provider catalogues remain authoritative."
   }
 }
