@@ -39,20 +39,17 @@ jobs:
               ('VERIFIED_AT = "2026-08-15"','VERIFIED_AT = "2026-08-30"'),
               ('HDP/5.0.2','HDP/6.0.0'),
           ])
-          # Active source/build identifiers must be native V6, not manufactured by CI.
           for rel in ['source/src/installer.c','source/src/installer.rc','source/build-windows.ps1']:
               patch(Path(rel), [('5.0.2','6.0.0'),('5,0,2,0','6,0,0,0')])
 
           p=root/'source/payload/api/static/index.html'
           s=p.read_text(encoding='utf-8').replace('6.0.0-dev','6.0.0')
 
-          # Remove duplicate top-level view sections introduced by historical overlays.
           section_re=re.compile(r'(?ms)^  <section id="(view-[^"]+)" class="view(?: active)?">.*?^  </section>\n')
           seen=set(); out=[]; pos=0
           for m in section_re.finditer(s):
               out.append(s[pos:m.start()])
-              view=m.group(1)
-              block=m.group(0)
+              view=m.group(1); block=m.group(0)
               if block.count('<section') != 1:
                   raise SystemExit(f'Nested section prevents safe deduplication: {view}')
               if view not in seen:
@@ -60,7 +57,6 @@ jobs:
               pos=m.end()
           out.append(s[pos:]); s=''.join(out)
 
-          # Make source settings and inventory first-class tabs.
           if 'data-view="source-settings"' not in s:
               anchor='    <button data-view="sources">Sources sanitaires</button>'
               if anchor not in s: raise SystemExit('Sources tab anchor missing')
@@ -74,7 +70,6 @@ jobs:
               section='''  <section id="view-inventory" class="view">\n    <div class="card">\n      <h2>Inventaire des paramètres API</h2>\n      <p class="intro">Tous les paramètres catalogués restent accessibles. Les paramètres effectivement mappés dans HDP sont distingués des paramètres documentés mais encore informatifs.</p>\n      <div class="actions"><a class="button" href="/api-inventory" target="_blank" rel="noopener">Ouvrir l’inventaire détaillé</a></div>\n      <iframe src="/api-inventory" title="Inventaire des paramètres API HDP V6" style="width:100%;min-height:760px;border:1px solid var(--line);border-radius:12px;background:#fff;margin-top:16px"></iframe>\n    </div>\n  </section>\n\n'''
               s=s.replace(marker,section+marker)
 
-          # Simple / Avancé / Expert is an actual user-selectable presentation mode.
           if 'id="ui-mode"' not in s:
               anchor='<div class="context">'
               selector='''<div class="context">\n      <label for="ui-mode" style="margin:0;white-space:nowrap">Mode</label>\n      <select id="ui-mode" aria-label="Niveau d’interface"><option value="simple">Simple</option><option value="advanced">Avancé</option><option value="expert">Expert</option></select>'''
@@ -86,10 +81,10 @@ jobs:
               js='''  const UI_MODE_LEVELS={simple:0,advanced:1,expert:2};\n  const UI_VIEW_LEVEL={search:0,sources:0,projects:0,data:0,map:0,technologies:0,intelligence:1,"source-settings":1,inventory:1,rss:1,notebooks:1,schedules:1,backups:1,actions:2,spip:2,mail:2,timeline:2,scripts:2,sql:2};\n  function applyUiMode(value){const mode=Object.hasOwn(UI_MODE_LEVELS,value)?value:'simple';localStorage.setItem('hdp-ui-mode',mode);const level=UI_MODE_LEVELS[mode];document.body.dataset.uiMode=mode;document.querySelectorAll('nav [data-view]').forEach(btn=>{const required=UI_VIEW_LEVEL[btn.dataset.view]??0;btn.hidden=required>level;});const active=document.querySelector('nav [data-view].active');if(active&&active.hidden){const target=document.querySelector('nav [data-view="search"]');if(target)target.click();}}\n'''
               s=s.replace(marker,js+marker,1)
           if "q('#ui-mode').addEventListener('change'" not in s:
-              marker='  async function init()'
-              hook="  q('#ui-mode').value=localStorage.getItem('hdp-ui-mode')||'simple';\n  q('#ui-mode').addEventListener('change',event=>applyUiMode(event.target.value));\n  applyUiMode(q('#ui-mode').value);\n\n"
-              if marker not in s: raise SystemExit('init anchor missing')
-              s=s.replace(marker,hook+marker,1)
+              hook="\n  const uiModeControl=q('#ui-mode');\n  if(uiModeControl){uiModeControl.value=localStorage.getItem('hdp-ui-mode')||'simple';uiModeControl.addEventListener('change',event=>applyUiMode(event.target.value));applyUiMode(uiModeControl.value);}\n"
+              idx=s.rfind('</script>')
+              if idx < 0: raise SystemExit('closing script tag missing')
+              s=s[:idx]+hook+s[idx:]
 
           p.write_text(s,encoding='utf-8')
           PY
