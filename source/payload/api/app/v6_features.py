@@ -2450,15 +2450,17 @@ def create_rss_candidate(payload: RssFeedCandidateCreate) -> dict[str, Any]:
 def list_rss_candidates(state: str | None = None) -> list[dict[str, Any]]:
     if state is not None and state not in {"draft", "validated", "approved", "suspended", "rejected"}:
         raise HTTPException(status_code=422, detail="État RSS invalide")
-    with db() as connection:
-        rows = connection.execute(
-            """SELECT id,source_key,version_number,name,organization,region,themes,languages,
+    statement = """SELECT id,source_key,version_number,name,organization,region,themes,languages,
                       feed_url,portal_url,evidence_url,protocol,license,declared_frequency,
                       allowed_hosts,state,created_at,created_by,decided_at,decided_by
-               FROM rss_feed_sources WHERE (%s IS NULL OR state=%s)
-               ORDER BY created_at DESC""",
-            (state, state),
-        ).fetchall()
+               FROM rss_feed_sources"""
+    parameters: tuple[Any, ...] = ()
+    if state is not None:
+        statement += " WHERE state=%s"
+        parameters = (state,)
+    statement += " ORDER BY created_at DESC"
+    with db() as connection:
+        rows = connection.execute(statement, parameters).fetchall()
     return [_rss_source_definition(row) for row in rows]
 
 
@@ -2477,7 +2479,7 @@ async def preview_rss_candidate(feed_source_id: uuid.UUID, actor: str = "local-o
                 definition["base_url"],
                 Path(directory),
                 max_bytes=MAX_RSS_BYTES,
-                user_agent="HDP/6.0.0-dev RSS validation",
+                user_agent="HDP/6.0.0 RSS validation",
                 max_redirects=3,
                 allowed_hosts=frozenset(definition["allowed_hosts"]),
             )
@@ -2767,7 +2769,7 @@ def create_database_backup(payload: DatabaseBackupCreate) -> dict[str, Any]:
                 selector["selected_project_count"] = len(project_ids)
             manifest = build_manifest(
                 backup_id=backup_id,
-                application_version="6.0.0-dev",
+                application_version="6.0.0",
                 schema_versions=schema_versions,
                 scope=payload.scope,
                 selector=selector,
@@ -2839,15 +2841,17 @@ def list_database_backups(
 ) -> list[dict[str, Any]]:
     if project_id is not None:
         ensure_project(project_id)
-    with db() as connection:
-        rows = connection.execute(
-            """SELECT id,scope,project_id,selector,status,bundle_sha256,size_bytes,manifest,
+    statement = """SELECT id,scope,project_id,selector,status,bundle_sha256,size_bytes,manifest,
                       error,created_at,finished_at,created_by
-               FROM database_backups
-               WHERE (%s IS NULL OR project_id=%s)
-               ORDER BY created_at DESC LIMIT %s""",
-            (project_id, project_id, limit),
-        ).fetchall()
+               FROM database_backups"""
+    parameters: list[Any] = []
+    if project_id is not None:
+        statement += " WHERE project_id=%s"
+        parameters.append(project_id)
+    statement += " ORDER BY created_at DESC LIMIT %s"
+    parameters.append(limit)
+    with db() as connection:
+        rows = connection.execute(statement, tuple(parameters)).fetchall()
     keys = (
         "id", "scope", "project_id", "selector", "status", "bundle_sha256", "size_bytes",
         "manifest", "error", "created_at", "finished_at", "created_by",
@@ -2905,21 +2909,21 @@ def restore_database_backup_temporarily(
             report = restore_global_backup_to_temporary_database(
                 path,
                 DATABASE_URL,
-                expected_application_version="6.0.0-dev",
+                expected_application_version="6.0.0",
                 expected_schema_versions=schema_versions,
             )
         elif scope == "signals":
             report = restore_signals_backup_to_temporary_database(
                 path,
                 DATABASE_URL,
-                expected_application_version="6.0.0-dev",
+                expected_application_version="6.0.0",
                 expected_schema_versions=schema_versions,
             )
         else:
             report = restore_project_backup_to_temporary_database(
                 path,
                 DATABASE_URL,
-                expected_application_version="6.0.0-dev",
+                expected_application_version="6.0.0",
                 expected_schema_versions=schema_versions,
             )
     except BackupError as exc:
@@ -2969,18 +2973,28 @@ def list_catalog(
     query: str = Query(default="", max_length=200),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> list[dict[str, Any]]:
-    with db() as connection:
-        rows = connection.execute(
-            """SELECT id,source_id,api_version,endpoint_id,external_id,record_type,title,
+    statement = """SELECT id,source_id,api_version,endpoint_id,external_id,record_type,title,
                       normalized_metadata,unmapped_fields,raw_snapshot_id,connector_version,
                       transformation_version,confidence,observed_at,valid_until
-               FROM catalog_records
-               WHERE (%s IS NULL OR source_id=%s)
-                 AND (%s IS NULL OR record_type=%s)
-                 AND (%s='' OR title ILIKE %s OR normalized_metadata::text ILIKE %s)
-               ORDER BY observed_at DESC LIMIT %s""",
-            (source_id, source_id, record_type, record_type, query, f"%{query}%", f"%{query}%", limit),
-        ).fetchall()
+               FROM catalog_records"""
+    conditions: list[str] = []
+    parameters: list[Any] = []
+    if source_id is not None:
+        conditions.append("source_id=%s")
+        parameters.append(source_id)
+    if record_type is not None:
+        conditions.append("record_type=%s")
+        parameters.append(record_type)
+    if query:
+        pattern = f"%{query}%"
+        conditions.append("(title ILIKE %s OR normalized_metadata::text ILIKE %s)")
+        parameters.extend((pattern, pattern))
+    if conditions:
+        statement += " WHERE " + " AND ".join(conditions)
+    statement += " ORDER BY observed_at DESC LIMIT %s"
+    parameters.append(limit)
+    with db() as connection:
+        rows = connection.execute(statement, tuple(parameters)).fetchall()
     keys = (
         "id",
         "source_id",
