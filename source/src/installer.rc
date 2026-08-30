@@ -19,9 +19,9 @@ BEGIN
       VALUE "FileDescription", "Installateur Windows natif"
       VALUE "FileVersion", "6.0.0.0"
       VALUE "InternalName", "HDPInstaller"
-      VALUE "OriginalFilename", "HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0-dev.exe"
+      VALUE "OriginalFilename", "HumanitarianDataPlatform_Setup_Native_GUI_v6.0.0.exe"
       VALUE "ProductName", "Humanitarian Data Platform"
-      VALUE "ProductVersion", "6.0.0-dev"
+      VALUE "ProductVersion", "6.0.0"
     END
   END
   BLOCK "VarFileInfo"
