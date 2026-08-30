@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """HDP V6 exhaustive functional coverage gate.
 
-This gate does not replace the executable test suites.  It guarantees that every
-frozen V6 feature is attached to an executable acceptance path.  CI executes the
+This gate does not replace the executable test suites. It guarantees that every
+frozen V6 feature is attached to an executable acceptance path. CI executes the
 referenced suites separately; this script prevents a feature from disappearing
 from the qualification matrix unnoticed.
 """
@@ -90,6 +90,16 @@ CASES = {
             "source/build-windows.ps1",
             "tools/windows/windows10_compatibility_gate.ps1",
             "tools/windows/windows10_full_e2e.ps1",
+            ".github/workflows/windows10-v6-full.yml",
+        ],
+    },
+    "UC11_windows11": {
+        "features": [42],
+        "evidence": [
+            "source/build-windows.ps1",
+            "tools/windows/windows10_compatibility_gate.ps1",
+            "tools/windows/windows11_full_e2e.ps1",
+            ".github/workflows/windows11-v6-full.yml",
         ],
     },
 }
@@ -102,7 +112,7 @@ for case in CASES.values():
         if not (ROOT / relative).exists():
             missing_paths.append(relative)
 
-expected = set(range(1, 42))
+expected = set(range(1, 43))
 missing_features = sorted(expected - covered)
 extra_features = sorted(covered - expected)
 result = {
@@ -114,6 +124,7 @@ result = {
     "extra_features": extra_features,
     "missing_evidence_paths": sorted(set(missing_paths)),
     "windows10_policy": "blocking_real_windows10_x64_e2e",
+    "windows11_policy": "blocking_real_windows11_x64_e2e",
 }
 print(json.dumps(result, ensure_ascii=False, sort_keys=True))
 if missing_features or extra_features or missing_paths:
