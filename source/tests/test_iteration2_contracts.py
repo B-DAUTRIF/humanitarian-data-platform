@@ -179,7 +179,7 @@ class IterationTwoStaticContractTest(unittest.TestCase):
             self.assertIn(route, main)
         for element_id in ("view-rss", "view-timeline", "view-map", "execution-settings-form"):
             self.assertIn(f'id="{element_id}"', html)
-        self.assertIn("version 5.0.2", html)
+        self.assertIn("6.0.0", html)
         self.assertIn("cookieValue('hdp_csrf')", html)
         self.assertIn('/static/vendor/leaflet/leaflet.js', html)
         self.assertNotIn('unpkg.com', html)
