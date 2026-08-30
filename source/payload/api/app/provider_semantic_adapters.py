@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-"""Provider-specific semantic translation.
-
-Only translations supported by the checked-in V6 provider contracts are emitted.
-Unknown provider identifiers are blocked rather than guessed.
-"""
+"""Provider-specific semantic translation with conservative, evidenced mappings."""
 
 from dataclasses import asdict
 from typing import Any
@@ -14,28 +10,16 @@ from .source_registry import connector_definition
 
 
 OPERATIONS: dict[str, str] = {
-    "hdx": "discover",
-    "reliefweb": "query_documents",
-    "who-gho": "get_indicators",
-    "world-bank-health": "get_indicators",
-    "unicef-sdmx": "discover",
-    "un-sdg": "get_indicators",
-    "dhs": "get_indicators",
-    "hdx-hapi": "query_observations",
-    "unhcr": "query_observations",
+    "hdx": "discover", "reliefweb": "query_documents", "who-gho": "get_indicators",
+    "world-bank-health": "get_indicators", "unicef-sdmx": "discover", "un-sdg": "get_indicators",
+    "dhs": "get_indicators", "hdx-hapi": "query_observations", "unhcr": "query_observations",
     "gdacs": "query_events",
 }
 
 
 def _base_parameters(intent: Any, result_limit: int) -> dict[str, Any]:
-    return {
-        "query": intent.keywords,
-        "date_from": intent.date_from,
-        "date_to": intent.date_to,
-        "location": intent.location,
-        "result_limit": result_limit,
-        "auto_download": False,
-    }
+    return {"query": intent.keywords, "date_from": intent.date_from, "date_to": intent.date_to,
+            "location": intent.location, "result_limit": result_limit, "auto_download": False}
 
 
 def _evidence(source_id: str) -> list[str]:
@@ -49,39 +33,36 @@ def translate(source_id: str, intent: Any, *, result_limit: int) -> dict[str, An
     warnings: list[str] = []
     executable = True
     completeness = Completeness.BOUNDED
-
     if intent.keywords:
         criteria["keywords"] = CapabilityMode.NATIVE_FILTER
     if intent.date_from or intent.date_to:
         criteria["time"] = CapabilityMode.POST_FILTER
     if intent.location:
         criteria["geography"] = CapabilityMode.POST_FILTER
-
     geo = intent.geography
 
     if source_id == "hdx":
-        # CKAN package_search remains a catalogue operation. HDP does not invent an
-        # fq field/value for HDX geography until the HDX metadata contract proves it.
         if geo:
             criteria["geography"] = CapabilityMode.BLOCKED_MISSING_MAPPING
             executable = bool(intent.keywords)
             warnings.append("HDX geography mapping is not yet verified for native package_search; geography-only execution is blocked.")
-        completeness = Completeness.BOUNDED
 
     elif source_id == "reliefweb":
-        # ReliefWeb documents country.iso3; encode the structured filter in the
-        # adapter output. The request builder consumes __semantic_native_filter.
+        # Official ReliefWeb request-parameter documentation explicitly demonstrates
+        # filter[field]=country&filter[value]=France. Use the canonical UN country
+        # name; do not invent a country.id or assume an undocumented ISO3 filter.
         if geo:
             criteria["geography"] = CapabilityMode.TRANSLATED_FILTER
-            native["filter[field]"] = "country.iso3"
-            native["filter[value]"] = geo.iso3
-            params["__semantic_native_filter"] = dict(native)
-        completeness = Completeness.BOUNDED
+            native.update({"filter[field]": "country", "filter[value]": geo.name})
+        if intent.date_from or intent.date_to:
+            criteria["time"] = CapabilityMode.TRANSLATED_FILTER
+            native["filter_date_field"] = "date.created"
+            if intent.date_from:
+                native["filter_date_from"] = intent.date_from
+            if intent.date_to:
+                native["filter_date_to"] = intent.date_to
 
     elif source_id in {"who-gho", "world-bank-health", "unicef-sdmx", "un-sdg"}:
-        # Current V6 operations are catalogue/structure discovery, not observation
-        # queries. A country-only request must therefore not be executed as if it
-        # queried observations.
         if geo:
             criteria["geography"] = CapabilityMode.UNSUPPORTED
             executable = False
@@ -106,7 +87,7 @@ def translate(source_id: str, intent: Any, *, result_limit: int) -> dict[str, An
         if geo:
             criteria["geography"] = CapabilityMode.BLOCKED_MISSING_MAPPING
             executable = False
-            warnings.append("UNHCR geography is semantically ambiguous: choose country of origin or country of asylum before execution.")
+            warnings.append("UNHCR geography is ambiguous: choose country of origin or country of asylum before execution.")
         if intent.date_from or intent.date_to:
             criteria["time"] = CapabilityMode.TRANSLATED_FILTER
 
@@ -116,22 +97,12 @@ def translate(source_id: str, intent: Any, *, result_limit: int) -> dict[str, An
         if geo:
             criteria["geography"] = CapabilityMode.BLOCKED_MISSING_MAPPING
             executable = False
-            warnings.append("GDACS native country filtering is not emitted until its exact Swagger request parameter is represented in the HDP contract.")
-        completeness = Completeness.BOUNDED
-
+            warnings.append("GDACS country filtering remains blocked until the exact Swagger request parameter is represented in the HDP contract.")
     else:
         executable = False
         warnings.append("No semantic adapter registered for this source.")
 
-    return {
-        "source": source_id,
-        "operation": OPERATIONS.get(source_id, "unknown"),
-        "executable": executable,
-        "parameters": params,
-        "native_parameters": native,
-        "criteria": {key: value.value for key, value in criteria.items()},
-        "completeness": completeness.value,
-        "warnings": warnings,
-        "evidence": _evidence(source_id),
-        "canonical_geography": asdict(geo) if geo else None,
-    }
+    return {"source": source_id, "operation": OPERATIONS.get(source_id, "unknown"), "executable": executable,
+            "parameters": params, "native_parameters": native,
+            "criteria": {key: value.value for key, value in criteria.items()}, "completeness": completeness.value,
+            "warnings": warnings, "evidence": _evidence(source_id), "canonical_geography": asdict(geo) if geo else None}
