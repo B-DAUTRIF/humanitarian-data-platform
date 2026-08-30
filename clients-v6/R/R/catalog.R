@@ -17,7 +17,8 @@ hdp_catalog <- local({
 })
 
 hdp_sources <- function() {
-  cat <- hdp_catalog(); names(cat$sources)
+  ops <- hdp_catalog()$operations
+  sort(unique(vapply(ops, function(x) as.character(x$source_slug), character(1))))
 }
 
 hdp_operations <- function(source=NULL, safe_only=FALSE) {
