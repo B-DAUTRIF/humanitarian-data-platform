@@ -33,11 +33,10 @@ test_that("preview constructs a safe HTTPS request from catalog metadata", {
     params <- op$parameters
     !length(Filter(function(p) {
       required_value <- if (is.null(p$required)) "" else p$required
-      location_value <- if (is.null(p$location)) "" else p$location
       default_value <- p$default
-      default_missing <- is.null(default_value) || !length(default_value) || !any(nzchar(as.character(default_value)))
+      default_missing <- is.null(default_value) || !length(default_value) || !any(nzchar(trimws(as.character(unlist(default_value, recursive=TRUE, use.names=FALSE)))))
       required <- any(tolower(trimws(as.character(required_value))) %in% c("oui", "yes", "true", "1", "required", "obligatoire"))
-      required && default_missing && any(grepl("path", tolower(as.character(location_value))))
+      required && default_missing
     }, params))
   }, ops)
   expect_gt(length(usable), 0)
