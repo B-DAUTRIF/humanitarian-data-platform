@@ -17,6 +17,7 @@ from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 API_ROOT = ROOT / "source" / "payload" / "api"
+APP_VERSION = "6.0.0"
 
 
 @dataclass
@@ -28,7 +29,7 @@ class CheckResult:
 
     @property
     def passed(self) -> bool:
-        return self.status in {"passed", "not_applicable", "not_executed"}
+        return self.status in {"passed", "not_applicable"}
 
 
 def run(command: list[str], *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -49,24 +50,11 @@ def summary(process: subprocess.CompletedProcess[str]) -> str:
 
 
 def check_python_tests() -> CheckResult:
-    process = run(
-        [
-            sys.executable,
-            "-B",
-            "-m",
-            "unittest",
-            "discover",
-            "-s",
-            "source/tests",
-            "-p",
-            "test_*.py",
-        ]
-    )
-    return CheckResult(
-        "python_tests",
-        "passed" if process.returncode == 0 else "failed",
-        summary(process),
-    )
+    process = run([
+        sys.executable, "-B", "-m", "unittest", "discover",
+        "-s", "source/tests", "-p", "test_*.py",
+    ])
+    return CheckResult("python_tests", "passed" if process.returncode == 0 else "failed", summary(process))
 
 
 def check_python_ast() -> CheckResult:
@@ -86,30 +74,15 @@ def check_migrations() -> CheckResult:
         for statement in migration.statements:
             parser.parse_sql(statement)
             statements += 1
-    return CheckResult(
-        "postgresql_migrations",
-        "passed",
-        f"{len(MIGRATIONS)} migrations et {statements} instructions analysées",
-    )
+    return CheckResult("postgresql_migrations", "passed", f"{len(MIGRATIONS)} migrations et {statements} instructions analysées")
 
 
 def check_javascript() -> CheckResult:
     node = shutil.which("node")
     if not node:
         return CheckResult("javascript", "failed", "Node.js indisponible")
-    process = run(
-        [
-            node,
-            "tools/check_inline_javascript.mjs",
-            "source/payload/api/static/index.html",
-            "source/payload/api/static/login.html",
-        ]
-    )
-    return CheckResult(
-        "javascript",
-        "passed" if process.returncode == 0 else "failed",
-        summary(process),
-    )
+    process = run([node, "tools/check_inline_javascript.mjs", "source/payload/api/static/index.html", "source/payload/api/static/login.html"])
+    return CheckResult("javascript", "passed" if process.returncode == 0 else "failed", summary(process))
 
 
 def check_openapi() -> CheckResult:
@@ -117,13 +90,13 @@ def check_openapi() -> CheckResult:
     os.environ.setdefault("DATA_DIR", str(Path(tempfile.gettempdir()) / "hdp-v6-quality-data"))
     os.environ.setdefault("EXECUTION_SPOOL_DIR", str(Path(tempfile.gettempdir()) / "hdp-v6-quality-spool"))
     sys.path.insert(0, str(API_ROOT))
-    from app.main import APP_VERSION, app
+    from app.main import APP_VERSION as runtime_version, app
 
     schema = app.openapi()
     paths = schema.get("paths", {})
     v6_paths = [path for path in paths if path.startswith("/api/v6")]
-    if APP_VERSION != "6.0.0-dev" or not v6_paths:
-        raise RuntimeError(f"contrat V6 incohérent: version={APP_VERSION}, chemins={len(v6_paths)}")
+    if runtime_version != APP_VERSION or not v6_paths:
+        raise RuntimeError(f"contrat V6 incohérent: version={runtime_version}, chemins={len(v6_paths)}")
     operation_ids = [
         operation.get("operationId")
         for item in paths.values()
@@ -133,11 +106,7 @@ def check_openapi() -> CheckResult:
     duplicates = sorted({value for value in operation_ids if operation_ids.count(value) > 1})
     if duplicates:
         raise RuntimeError(f"operationId OpenAPI dupliqués: {duplicates}")
-    return CheckResult(
-        "fastapi_openapi",
-        "passed",
-        f"version={APP_VERSION}, routes={len(app.routes)}, chemins={len(paths)}, chemins_v6={len(v6_paths)}",
-    )
+    return CheckResult("fastapi_openapi", "passed", f"version={runtime_version}, routes={len(app.routes)}, chemins={len(paths)}, chemins_v6={len(v6_paths)}")
 
 
 def check_c_builds() -> CheckResult:
@@ -156,12 +125,7 @@ def check_c_builds() -> CheckResult:
 def check_spip_php() -> CheckResult:
     php = shutil.which("php")
     if not php:
-        return CheckResult(
-            "spip_php_syntax",
-            "not_executed",
-            "interpréteur PHP indisponible; validation SPIP native à exécuter séparément",
-            blocking=False,
-        )
+        return CheckResult("spip_php_syntax", "not_executed", "interpréteur PHP indisponible", blocking=False)
     files = sorted((ROOT / "source" / "spip-plugin" / "hdp").rglob("*.php"))
     for path in files:
         process = run([php, "-l", str(path)])
@@ -170,37 +134,39 @@ def check_spip_php() -> CheckResult:
     return CheckResult("spip_php_syntax", "passed", f"{len(files)} fichiers PHP analysés")
 
 
-def environment_checks() -> list[CheckResult]:
+def check_compose() -> CheckResult:
     docker = shutil.which("docker")
-    docker_detail = "Docker disponible, recette Compose distincte requise" if docker else "Docker indisponible"
+    if not docker:
+        return CheckResult("docker_compose", "not_executed", "Docker indisponible", blocking=False)
+    env = os.environ.copy()
+    env.setdefault("POSTGRES_PASSWORD", "quality-placeholder")
+    env.setdefault("HDP_LOCAL_TOKEN", "quality-local-token-00000000000000000000000000000000")
+    env.setdefault("HDP_SQL_PASSWORD", "quality-sql-token-000000000000000000000000000000000")
+    process = run([docker, "compose", "-f", "source/payload/compose.yaml", "config", "--quiet"], env=env)
+    return CheckResult("docker_compose", "passed" if process.returncode == 0 else "failed", summary(process))
+
+
+def environment_checks() -> list[CheckResult]:
     windows_status = "not_executed" if platform.system() == "Windows" else "not_applicable"
-    windows_detail = (
-        "recette Windows à exécuter séparément"
-        if platform.system() == "Windows"
-        else f"hôte {platform.system()}: recette Windows non applicable"
-    )
+    windows_detail = "recette installateur Windows distincte requise" if platform.system() == "Windows" else f"hôte {platform.system()}: recette Windows exécutée dans le workflow dédié"
     return [
-        CheckResult("docker_compose", "not_executed", docker_detail, blocking=False),
+        check_compose(),
         CheckResult("windows_installer", windows_status, windows_detail, blocking=False),
-        CheckResult(
-            "live_connector_calls",
-            "not_executed",
-            "appels réels à planifier pour les connecteurs modifiés",
-            blocking=False,
-        ),
+        CheckResult("live_connector_calls", "not_executed", "recette réseau réelle distincte requise", blocking=False),
     ]
 
 
 def guarded(name: str, function: Callable[[], CheckResult]) -> CheckResult:
     try:
         return function()
-    except Exception as exc:  # le rapport doit survivre à un contrôle défaillant
+    except Exception as exc:
         return CheckResult(name, "failed", f"{type(exc).__name__}: {exc}")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Jalon de qualité répétable pour chaque implémentation HDP V6")
+    parser = argparse.ArgumentParser(description="Jalon de qualité répétable HDP V6.0.0")
     parser.add_argument("--compact", action="store_true", help="produire un JSON compact")
+    parser.add_argument("--require-complete", action="store_true", help="échouer aussi si un contrôle applicable n'a pas été exécuté")
     arguments = parser.parse_args()
     checks = [
         guarded("python_tests", check_python_tests),
@@ -213,14 +179,19 @@ def main() -> int:
         *environment_checks(),
     ]
     blocking_failures = [item.name for item in checks if item.blocking and not item.passed]
+    incomplete = [item.name for item in checks if item.status == "not_executed"]
+    if arguments.require_complete:
+        blocking_failures.extend(name for name in incomplete if name not in blocking_failures)
+    qualification_complete = not incomplete and all(item.passed for item in checks)
     report = {
         "gate": "HDP_V6_IMPLEMENTATION_GATE",
-        "application_version": "6.0.0-dev",
+        "application_version": APP_VERSION,
         "result": "passed" if not blocking_failures else "failed",
         "blocking_failures": blocking_failures,
-        "qualification_complete": all(item.status == "passed" for item in checks),
+        "incomplete_checks": incomplete,
+        "qualification_complete": qualification_complete,
         "checks": [{**asdict(item), "passed": item.passed} for item in checks],
-        "rule": "tout échec bloquant impose correction ou arbitrage avant le lot suivant",
+        "rule": "un contrôle not_executed n'est jamais une preuve de validation; tout échec bloquant impose correction avant qualification",
     }
     print(json.dumps(report, ensure_ascii=False, indent=None if arguments.compact else 2))
     return 0 if not blocking_failures else 1
