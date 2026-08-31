@@ -26,6 +26,11 @@ class SemanticProvenanceSecurityTests(unittest.TestCase):
         self.assertNotIn("TOPSECRET", serialized)
         self.assertIn('"token_count":12', serialized)
 
+    def test_reliefweb_appname_is_public_provenance(self) -> None:
+        serialized = canonical_json({"appname": "HDP_plateforme", "api_key": "TOPSECRET"}).decode("utf-8")
+        self.assertIn("HDP_plateforme", serialized)
+        self.assertNotIn("TOPSECRET", serialized)
+
     def test_secret_value_changes_do_not_change_fingerprint(self) -> None:
         def plan(secret: str) -> dict:
             return {
@@ -39,7 +44,8 @@ class SemanticProvenanceSecurityTests(unittest.TestCase):
                         "operation": "query_documents",
                         "executable": True,
                         "project_enabled": True,
-                        "native_parameters": {"api_key": secret, "country": "Rwanda"},
+                        "provider_configuration": {"api_key": secret},
+                        "native_parameters": {"country": "Rwanda"},
                         "criteria": {"geography": "translated_filter"},
                         "completeness": "bounded",
                     }
@@ -47,6 +53,29 @@ class SemanticProvenanceSecurityTests(unittest.TestCase):
             }
 
         self.assertEqual(query_fingerprint(plan("ONE")), query_fingerprint(plan("TWO")))
+
+    def test_public_appname_changes_fingerprint(self) -> None:
+        def plan(appname: str) -> dict:
+            return {
+                "schema_version": 2,
+                "contract_version": "7.0.0",
+                "intent": {"keywords": "malaria"},
+                "project_context": {"project_id": "p"},
+                "routes": [
+                    {
+                        "source": "reliefweb",
+                        "operation": "query_documents",
+                        "executable": True,
+                        "project_enabled": True,
+                        "provider_configuration": {"appname": appname},
+                        "native_parameters": {"country": "Rwanda"},
+                        "criteria": {"geography": "translated_filter"},
+                        "completeness": "bounded",
+                    }
+                ],
+            }
+
+        self.assertNotEqual(query_fingerprint(plan("HDP_plateforme")), query_fingerprint(plan("project_override")))
 
     def test_non_secret_semantics_change_fingerprint(self) -> None:
         base = {
