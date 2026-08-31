@@ -79,16 +79,13 @@ def _classify(rows: list[dict[str, object]]) -> list[dict[str, object]]:
         native = str(row["parameter"])
         hdp = mapping.get(native, "")
         row["hdp_parameter"] = hdp
-        row["implementation_status"] = (
-            "IMPLEMENTED" if hdp.startswith("<") or hdp in schema else "NOT_IMPLEMENTED"
-        )
-        row["qualification_status"] = (
-            "AUDIT_EXECUTED" if row["implementation_status"] == "IMPLEMENTED" else "NOT_QUALIFIED"
-        )
+        implemented = hdp.startswith("<") or hdp in schema
+        row["implementation_status"] = "IMPLEMENTED" if implemented else "NOT_IMPLEMENTED"
+        row["qualification_status"] = "AUDIT_EXECUTED" if implemented else "NOT_QUALIFIED"
         if native == "limit" and row.get("maximum") is not None:
             hdp_max = schema["result_limit"].get("maximum")
             row["contract_check"] = "PASS" if hdp_max is None or int(hdp_max) <= int(row["maximum"]) else "FAIL"
-        elif native == "admin_level" and native in mapping and mapping[native] in schema:
+        elif native == "admin_level" and mapping[native] in schema:
             enum = schema[mapping[native]].get("enum")
             provider_enum = row.get("enum")
             row["contract_check"] = "PASS" if not provider_enum or set(enum or []).issubset(set(provider_enum)) else "FAIL"
@@ -99,9 +96,9 @@ def _classify(rows: list[dict[str, object]]) -> list[dict[str, object]]:
 
 def main() -> int:
     OUT.mkdir(exist_ok=True)
-    status: dict[str, object] = {"source": OPENAPI_URL, "status": "NOT_TESTED"}
+    status: dict[str, object] = {"source": OPENAPI_URL, "execution_status": "NOT_TESTED", "qualification_verdict": "À VÉRIFIER"}
     try:
-        request = Request(OPENAPI_URL, headers={"User-Agent": "HDP-V7-ParameterAudit/1.0", "Accept": "application/json"})
+        request = Request(OPENAPI_URL, headers={"User-Agent": "HDP-V7-ParameterAudit/1.1", "Accept": "application/json"})
         with urlopen(request, timeout=30) as response:  # nosec B310 - fixed HTTPS authority
             raw = response.read(20_000_001)
             http_status = response.status
@@ -110,9 +107,12 @@ def main() -> int:
         document = json.loads(raw)
         rows = _classify(_enumerate_parameters(document))
         failures = [row for row in rows if row.get("contract_check") == "FAIL"]
+        configured_missing = [row for row in rows if row.get("endpoint_configured") and row.get("implementation_status") == "NOT_IMPLEMENTED"]
+        verdict = "NON QUALIFIÉ" if failures else ("QUALIFICATION PARTIELLE" if configured_missing else "QUALIFIÉ POUR TEST UTILISATEUR")
         status = {
             "source": OPENAPI_URL,
-            "status": "PASS" if not failures else "FAIL",
+            "execution_status": "PASS" if not failures else "FAIL",
+            "qualification_verdict": verdict,
             "http_status": http_status,
             "openapi": document.get("openapi"),
             "title": (document.get("info") or {}).get("title"),
@@ -121,13 +121,15 @@ def main() -> int:
             "implemented_rows": sum(row["implementation_status"] == "IMPLEMENTED" for row in rows),
             "not_implemented_rows": sum(row["implementation_status"] == "NOT_IMPLEMENTED" for row in rows),
             "configured_endpoint_rows": sum(bool(row["endpoint_configured"]) for row in rows),
+            "configured_endpoint_missing_parameter_rows": len(configured_missing),
             "contract_failures": failures,
             "rows": rows,
         }
     except Exception as exc:
         status = {
             "source": OPENAPI_URL,
-            "status": "BLOCKED",
+            "execution_status": "BLOCKED",
+            "qualification_verdict": "BLOQUÉ",
             "error": f"{type(exc).__name__}: {exc}",
             "rows": [],
         }
@@ -138,16 +140,22 @@ def main() -> int:
         fields = ["path", "operation_id", "parameter", "location", "required", "type", "default", "minimum", "maximum", "enum", "hdp_parameter", "endpoint_configured", "implementation_status", "qualification_status", "contract_check", "description"]
         with (OUT / "V7_HAPI_OPENAPI_PARAMETER_MATRIX.csv").open("w", encoding="utf-8", newline="") as stream:
             writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore")
-            writer.writeheader(); writer.writerows(rows)
-        md = ["# HDX HAPI v2 — paramètres OpenAPI", "", f"Statut live: **{status['status']}**", "", "|Endpoint|Paramètre|Type|HDP|Implémentation|Qualification|", "|---|---|---|---|---|---|"]
+            writer.writeheader()
+            writer.writerows(rows)
+        md = [
+            "# HDX HAPI v2 — paramètres OpenAPI",
+            "",
+            f"Exécution live: **{status['execution_status']}**",
+            f"Verdict de qualification: **{status['qualification_verdict']}**",
+            "",
+            "|Endpoint|Paramètre|Type|HDP|Implémentation|Qualification|",
+            "|---|---|---|---|---|---|",
+        ]
         for row in rows:
             md.append(f"|{row['path']}|{row['parameter']}|{row['type']}|{row['hdp_parameter']}|{row['implementation_status']}|{row['qualification_status']}|")
         (OUT / "V7_HAPI_OPENAPI_PARAMETER_MATRIX.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     print(json.dumps({key: value for key, value in status.items() if key != "rows"}, ensure_ascii=False, indent=2))
-    if status["status"] == "FAIL":
-        return 1
-    # BLOCKED is intentionally not PASS. The workflow records it but can continue to preserve evidence.
-    return 2 if status["status"] == "BLOCKED" else 0
+    return 0 if status["execution_status"] == "PASS" else 1
 
 
 if __name__ == "__main__":
