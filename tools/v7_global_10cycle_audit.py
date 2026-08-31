@@ -61,10 +61,13 @@ def cycle2() -> Cycle:
 
 def cycle3() -> Cycle:
     checks: list[str] = []
-    provider = text(API_ROOT / "app" / "semantic_provider_execution.py")
-    checks.append(require("max_response_bytes" in provider, "native semantic HTTP honours max_response_bytes"))
-    checks.append(require("client.stream" in provider and "aiter_bytes" in provider, "provider payload streamed before JSON decode"))
-    checks.append(require("content-length" in provider, "declared response size prechecked"))
+    transport = text(API_ROOT / "app" / "providers" / "base" / "native_service.py")
+    checks.append(require('max_bytes = int(self.settings.get("max_response_bytes"' in transport, "reference provider transport honours max_response_bytes"))
+    checks.append(require('client.stream("GET"' in transport and "aiter_bytes" in transport, "reference provider payload is streamed before JSON decode"))
+    checks.append(require('response.headers.get("content-length")' in transport, "declared provider response size is prechecked"))
+    checks.append(require("len(body) > max_bytes" in transport and "Provider response exceeds" in transport, "streamed response size is bounded during download"))
+    semantic = text(API_ROOT / "app" / "semantic_provider_execution.py")
+    checks.append(require("execute_six_provider_native" in semantic and ".execute_semantic(" in semantic, "six specialized semantic routes delegate to reference provider services"))
     return Cycle(3, "provider transport limits", checks)
 
 
@@ -96,7 +99,12 @@ def cycle5() -> Cycle:
     checks.append(require(len(plan["routes"]) == 10, "ten semantic routes generated"))
     checks.append(require(re.fullmatch(r"[0-9a-f]{64}", plan["query_fingerprint"]) is not None, "semantic query fingerprint SHA-256"))
     routes = {route["source"]: route for route in plan["routes"]}
-    checks.append(require(routes["dhs"]["criteria"].get("geography") == "blocked_missing_mapping" and not routes["dhs"]["executable"], "DHS provider-specific country IDs are never guessed"))
+    dhs = routes["dhs"]
+    checks.append(require(dhs["criteria"].get("geography") == "translated_filter" and dhs["native_parameters"].get("iso3_lookup") == "RWA", "DHS route carries only verified ISO3 lookup intent"))
+    checks.append(require("countryIds" not in dhs["native_parameters"] and "country_ids" not in dhs["parameters"], "DHS route never guesses provider-specific countryIds"))
+    dhs_service = text(API_ROOT / "app" / "providers" / "dhs" / "service.py")
+    checks.append(require('row.get("ISO3_countryCode")' in dhs_service and 'row.get("DHS_countryCode")' in dhs_service, "DHS provider ID is resolved from official catalogue fields"))
+    checks.append(require("len(matches) != 1" in dhs_service and "mapping is not uniquely verified" in dhs_service, "DHS ambiguous or missing geography mapping fails closed"))
     checks.append(require(routes["hdx"]["criteria"].get("geography") in {"post_filter", "blocked_missing_mapping"}, "HDX unverified geography is not promoted to native mapping"))
     checks.append(require(routes["world-bank-health"]["native_parameters"].get("country") == "RWA", "World Bank verified ISO3 translation"))
     checks.append(require(routes["un-sdg"]["native_parameters"].get("areaCode") == 646, "UN SDG verified M49 translation"))
