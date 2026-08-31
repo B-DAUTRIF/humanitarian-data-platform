@@ -35,6 +35,9 @@ jobs:
           source/tests/test_v7_use_case_matrix.py
           source/tests/test_reliefweb_v2.py
           source/tests/test_provider_reliefweb_architecture.py
+          source/tests/test_reliefweb_use_case_qualification.py
+      - name: Generate ReliefWeb use-case qualification report
+        run: python tools/v7_reliefweb_use_case_qualification.py
       - name: Python client semantic contract tests
         run: pytest -q clients-v6/python/tests
       - name: Offline V7 release-readiness audit
