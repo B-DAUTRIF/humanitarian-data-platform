@@ -1,0 +1,32 @@
+HDP V7 QUALIFICATION LOG ARCHIVE
+Date: 2026-08-31
+Branch: feat/v7-six-connectors-qualified
+Qualified code head before documentation archive: 78676a11f279fb014760476c58d47ae271c268b3
+PR: #21
+
+EXACT-HEAD WORKFLOW RESULTS FOR 78676a11f279fb014760476c58d47ae271c268b3
+- HDP validation / run 33431383930 / SUCCESS
+- HDP Windows installer / run 33431383966 / SUCCESS
+- HDP V7 full application audit / run 33431383952 / SUCCESS
+- HDP V7 six connectors qualification / run 33431383926 / SUCCESS
+- HDP V7 connector parameter audit / run 33431384013 / SUCCESS
+- HDP Clients V6 - R qualification / run 33431383937 / SUCCESS
+- HDP V7 full qualification / run 33431383974 / SUCCESS
+- HDP V7 global 10-cycle audit / run 33431384036 / SUCCESS
+
+SIX CONNECTORS QUALIFICATION EVIDENCE
+- DHS: 10/10 deterministic cycles PASS; live sentinel PASS
+- GDACS: 10/10 deterministic cycles PASS; live sentinel PASS
+- UN SDG: 10/10 deterministic cycles PASS; live sentinel PASS
+- UNHCR: 10/10 deterministic cycles PASS; live sentinel PASS
+- UNICEF SDMX: 10/10 deterministic cycles PASS on qualified scope; live sentinel PASS
+- WHO GHO: 10/10 deterministic cycles PASS on qualified scope; live sentinel PASS
+
+ARTIFACTS
+- HDP-V7-six-connectors-deterministic: artifact 9772525901; sha256 9d6459aefa41182cb6b05b760fd4269870f8f0d5a8dce50ed2ecdbf5905765f9
+- HDP-V7-six-connectors-live: artifact 9772516526; sha256 4cacf3d31f5c0a590f95e44e89bccf701048445c1a2ed4c9d47cbcaf7d5d39b1
+- HDP-V7-global-10cycle-audit exact final code head: artifact 9772792770; sha256 2ba3607f996979addbadee9861aee04f8c22cb947d7eca81e7099f92e6d0a9b8
+- HDP-V7-global-audited-EXE exact final code head: artifact 9772817865; sha256 d3799729c936e02a02d046279109337f350c8788a7cb106e8fc2ba6332a456af
+
+IMPORTANT
+This file archives the qualification evidence summary and immutable run/artifact identifiers. Full raw GitHub Actions logs remain attached to the corresponding workflow runs. Documentation-only commits made after 78676a11 do not retroactively change the code-head qualification; any code modification requires a new exact-head qualification.

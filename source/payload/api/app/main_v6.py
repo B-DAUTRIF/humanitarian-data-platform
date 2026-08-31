@@ -26,7 +26,13 @@ from .main import (
 )
 from .github_sync import router as github_sync_router
 from .api_inventory import router as api_inventory_router
+from .providers.dhs.api import router as dhs_provider_router
+from .providers.gdacs.api import router as gdacs_provider_router
 from .providers.reliefweb.api import router as reliefweb_provider_router
+from .providers.un_sdg.api import router as un_sdg_provider_router
+from .providers.unhcr.api import router as unhcr_provider_router
+from .providers.unicef_sdmx.api import router as unicef_sdmx_provider_router
+from .providers.who_gho.api import router as who_gho_provider_router
 from .providers.world_bank_health.api import router as world_bank_health_provider_router
 from .v6_notebook_execution import router as v6_notebook_router
 from .v6_semantic_api import router as semantic_router
@@ -34,8 +40,6 @@ from .v7_semantic_ui import router as semantic_ui_router
 from .v7_migrations import apply_v7_migrations
 from .v7_semantic_jobs import recover_abandoned_semantic_jobs, router as semantic_jobs_router
 
-# Explicit marker retained for V6 backward-compatibility qualification tools.
-# It does not describe the active application version.
 LEGACY_CONTRACT_VERSION = "6.0.0"
 ACTIVE_APPLICATION_VERSION = "7.0.0"
 
@@ -46,47 +50,42 @@ app.router.routes[:] = [
     for route in app.router.routes
     if not (
         isinstance(route, APIRoute)
-        and (
-            (route.path == LEGACY_NOTEBOOK_EXECUTION_PATH and "POST" in (route.methods or set()))
-            or route.path == "/"
-        )
+        and ((route.path == LEGACY_NOTEBOOK_EXECUTION_PATH and "POST" in (route.methods or set())) or route.path == "/")
     )
 ]
 
 app.version = ACTIVE_APPLICATION_VERSION
 app.description = (
     "Humanitarian Data Platform V7 : acquisition, recherche fédérée, gestion locale, "
-    "traitements R/Python, synchronisation GitHub et exploitation de sources "
-    "humanitaires et sanitaires par projets. Inventaire API vérifiable accessible "
-    "depuis /api-inventory. Routeur sémantique V7 accessible depuis /api/semantic. "
-    "Connecteurs individualisés ReliefWeb V2 et World Bank Health/WDI accessibles "
-    "depuis /api/providers/reliefweb et /api/providers/world-bank-health."
+    "traitements R/Python, synchronisation GitHub et exploitation de sources humanitaires et sanitaires par projets. "
+    "Inventaire API vérifiable accessible depuis /api-inventory. Routeur sémantique V7 accessible depuis /api/semantic. "
+    "APIs fournisseur spécialisées disponibles sous /api/providers pour ReliefWeb, World Bank Health, DHS, GDACS, "
+    "UN SDG, UNHCR, UNICEF SDMX et WHO GHO."
 )
 app.include_router(v6_notebook_router)
 app.include_router(github_sync_router)
 app.include_router(api_inventory_router)
 app.include_router(semantic_router)
 
-# The legacy semantic router embeds an older HTML page. Keep all API routes but
-# replace only its GET UI route with the UUID-safe V7 page.
 app.router.routes[:] = [
     route
     for route in app.router.routes
-    if not (
-        isinstance(route, APIRoute)
-        and route.path == SEMANTIC_UI_PATH
-        and "GET" in (route.methods or set())
-    )
+    if not (isinstance(route, APIRoute) and route.path == SEMANTIC_UI_PATH and "GET" in (route.methods or set()))
 ]
 app.include_router(semantic_ui_router)
 app.include_router(semantic_jobs_router)
 app.include_router(reliefweb_provider_router)
 app.include_router(world_bank_health_provider_router)
+app.include_router(dhs_provider_router)
+app.include_router(gdacs_provider_router)
+app.include_router(un_sdg_provider_router)
+app.include_router(unhcr_provider_router)
+app.include_router(unicef_sdmx_provider_router)
+app.include_router(who_gho_provider_router)
 
 
 @app.on_event("startup")
 def apply_v7_schema() -> None:
-    """Apply V7 schema and explicitly fail abandoned background jobs after restart."""
     apply_v7_migrations()
     recover_abandoned_semantic_jobs()
 
@@ -97,7 +96,6 @@ LOGIN_PATH = STATIC_DIR / "login.html"
 
 
 def v6_index_html() -> str:
-    """Return the authenticated application with V7 semantic controls injected once."""
     html = INDEX_PATH.read_text(encoding="utf-8")
     inventory_marker = '<script src="/api-inventory/native.js"></script>'
     if inventory_marker not in html:
@@ -107,10 +105,10 @@ def v6_index_html() -> str:
         banner = (
             '<div id="hdp-semantic-router-link" style="position:fixed;right:18px;bottom:18px;z-index:9999;'
             'background:#172033;border-radius:8px;padding:10px 14px;box-shadow:0 4px 16px #0003">'
-            '<a href="/api/semantic/ui" style="color:white;text-decoration:none;font-weight:600">'
-            'Routeur sémantique V7</a> · '
+            '<a href="/api/semantic/ui" style="color:white;text-decoration:none;font-weight:600">Routeur sémantique V7</a> · '
             '<a href="/api/providers/reliefweb/ui" style="color:white;text-decoration:none">ReliefWeb</a> · '
-            '<a href="/api/providers/world-bank-health/ui" style="color:white;text-decoration:none">World Bank</a></div>'
+            '<a href="/api/providers/world-bank-health/ui" style="color:white;text-decoration:none">World Bank</a> · '
+            '<a href="#sources" style="color:white;text-decoration:none">Sources</a></div>'
         )
         html = html.replace("</body>", f"{banner}</body>")
     return html
@@ -118,7 +116,6 @@ def v6_index_html() -> str:
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 def v6_index(request: Request, token: str = Query(default="", max_length=256)) -> Response:
-    """Serve the stable authentication bootstrap before exposing the application."""
     if HDP_AUTH_MODE == "passkey":
         session_secret = active_passkey_session(request)
         if not session_secret:

@@ -1,0 +1,102 @@
+name: HDP V7 six connectors qualification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "source/payload/api/app/providers/**"
+      - "source/payload/api/app/provider_semantic_adapters.py"
+      - "source/payload/api/app/semantic_provider_execution.py"
+      - "source/payload/api/app/main_v6.py"
+      - "source/tests/test_v7_six_provider_services.py"
+      - "clients-v6/**"
+      - "tools/v7_six_connectors_*.py"
+      - "docs/versions/7.0.0/**"
+      - ".github/workflows/v7-six-connectors-qualification.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: source/payload/api
+      DATABASE_URL: postgresql://hdp:hdp@127.0.0.1:5432/hdp
+      SQL_READER_URL: postgresql://hdp:hdp@127.0.0.1:5432/hdp
+      HDP_LOCAL_TOKEN: six-connectors-qualification-token-0000000000000000
+      HDP_SQL_PASSWORD: six-connectors-sql-password-00000000000000000000
+      HDP_AUTH_MODE: local_token
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: hdp
+          POSTGRES_PASSWORD: hdp
+          POSTGRES_DB: hdp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hdp -d hdp"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install runtime and Python client
+        run: |
+          pip install -r source/payload/api/requirements.txt
+          pip install -e clients-v6/python
+          pip install pytest
+      - name: Compile provider code
+        run: python -m compileall -q source/payload/api/app/providers source/payload/api/app/provider_semantic_adapters.py source/payload/api/app/semantic_provider_execution.py source/tests tools clients-v6/python/src
+      - name: Six-provider unit contracts
+        run: python -m unittest source/tests/test_v7_six_provider_services.py
+      - name: Ten qualification cycles
+        run: python tools/v7_six_connectors_10cycle_qualification.py
+      - name: Python specialized-client import contract
+        run: python -c "from hdp_clients import dhs_query,gdacs_query,un_sdg_query,unhcr_query,unicef_sdmx_query,who_gho_query; print('six-python-clients-ok')"
+      - name: Full source regression
+        run: python -m unittest discover -s source/tests -p 'test_*.py'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: HDP-V7-six-connectors-deterministic
+          path: qualification-state/V7_SIX_CONNECTORS_10CYCLE_QUALIFICATION.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  live-sentinels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: source/payload/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r source/payload/api/requirements.txt
+      - name: Execute non-destructive provider sentinels
+        run: python tools/v7_six_connectors_live_audit.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: HDP-V7-six-connectors-live
+          path: qualification-state/V7_SIX_CONNECTORS_LIVE_AUDIT.json
+          if-no-files-found: error
+          retention-days: 90
+
+  r-client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build R image and run package tests
+        run: |
+          docker compose -f source/payload/compose.yaml --profile analytics build r-service
+          docker compose -f source/payload/compose.yaml --profile analytics run --rm --no-deps -v "$PWD/clients-v6/R:/pkg:ro" --entrypoint Rscript r-service -e "lib <- '/tmp/hdp-r-lib'; dir.create(lib, recursive=TRUE, showWarnings=FALSE); status <- system2('R', c('CMD','INSTALL','-l',lib,'/pkg')); stopifnot(status == 0); .libPaths(c(lib,.libPaths())); library(testthat); library(HDPClientsR); stopifnot(exists('hdp_dhs_v7'), exists('hdp_gdacs_v7'), exists('hdp_un_sdg_v7'), exists('hdp_unhcr_v7'), exists('hdp_unicef_sdmx_v7'), exists('hdp_who_gho_v7')); test_dir('/pkg/tests/testthat', stop_on_failure=TRUE)"

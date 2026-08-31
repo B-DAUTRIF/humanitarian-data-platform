@@ -78,12 +78,14 @@ class SemanticRouterTest(unittest.TestCase):
         self.assertEqual(route["native_parameters"]["country"], "RWA")
         self.assertEqual(route["native_parameters"]["date"], "2020:2025")
 
-    def test_dhs_does_not_substitute_iso3_as_dhs_country_id(self) -> None:
+    def test_dhs_uses_verified_dynamic_iso3_lookup_without_direct_country_id_substitution(self) -> None:
         route = build_execution_plan(["dhs"], query="RWANDA")["routes"][0]
-        self.assertFalse(route["executable"])
-        self.assertEqual(route["criteria"]["geography"], "blocked_missing_mapping")
+        self.assertTrue(route["executable"])
+        self.assertEqual(route["criteria"]["geography"], "translated_filter")
         self.assertEqual(route["native_parameters"]["iso3_lookup"], "RWA")
+        self.assertNotIn("countryIds", route["native_parameters"])
         self.assertNotIn("country_ids", route["parameters"])
+        self.assertTrue(any("ISO3_countryCode" in warning and "DHS_countryCode" in warning for warning in route["warnings"]))
 
     def test_hdx_geography_only_is_blocked(self) -> None:
         route = build_execution_plan(["hdx"], query="RWANDA")["routes"][0]

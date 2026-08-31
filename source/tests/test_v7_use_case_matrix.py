@@ -52,11 +52,14 @@ class V7UseCaseMatrixTests(unittest.TestCase):
             if not route["executable"]:
                 self.assertTrue(route["warnings"], route["source"])
 
-    def test_geography_only_never_uses_unverified_generic_fallback(self) -> None:
+    def test_geography_only_uses_only_verified_mappings_or_explicit_blocks(self) -> None:
         plan = self._plan(location="Rwanda")
         routes = {route["source"]: route for route in plan["routes"]}
-        for source in ("hdx", "dhs", "unicef-sdmx", "gdacs", "who-gho"):
+        for source in ("hdx", "unicef-sdmx", "gdacs", "who-gho"):
             self.assertFalse(routes[source]["executable"], source)
+        self.assertTrue(routes["dhs"]["executable"])
+        self.assertEqual(routes["dhs"]["native_parameters"]["iso3_lookup"], "RWA")
+        self.assertNotIn("countryIds", routes["dhs"]["native_parameters"])
         self.assertEqual(routes["reliefweb"]["native_parameters"]["filter[value]"], "Rwanda")
         self.assertEqual(routes["world-bank-health"]["native_parameters"]["country"], "RWA")
         self.assertEqual(routes["un-sdg"]["native_parameters"]["areaCode"], 646)
