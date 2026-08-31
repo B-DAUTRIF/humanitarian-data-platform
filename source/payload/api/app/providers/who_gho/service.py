@@ -34,16 +34,21 @@ class WHOGHOService(NativeProviderService):
         return {"method":"GET", "url":url, "query_parameters":query}
 
     def normalize(self, operation: str, payload: Any, request_url: str, parameters: dict[str, Any]) -> list[dict[str, Any]]:
-        if operation == "list_indicators":
-            from ...main import parse_who_indicators
-            return parse_who_indicators(payload, "", int(parameters.get("top") or 100))
-        return normalize_generic_rows(
+        items = normalize_generic_rows(
             payload,
             request_url=request_url,
             source="WHO Global Health Observatory",
             organization="World Health Organization",
-            title_fields=("IndicatorName", "Title", "Dimension", "Code", "SpatialDim", "TimeDim", "name", "title"),
+            title_fields=("IndicatorName", "IndicatorCode", "Title", "Dimension", "Code", "SpatialDim", "TimeDim", "name", "title"),
         )
+        if operation == "list_indicators":
+            for item in items:
+                row = item.get("_native") or {}
+                item["id"] = str(row.get("IndicatorCode") or row.get("Indicator") or item["id"])
+                item["title"] = str(row.get("IndicatorName") or row.get("Indicator") or item["title"])
+                item["description"] = str(row.get("Language") or item.get("description") or "")
+            return items[: int(parameters.get("top") or 100)]
+        return items
 
     async def execute_semantic(
         self,
