@@ -11,9 +11,6 @@ from .descriptor import WORLD_BANK_HEALTH_DESCRIPTOR
 
 ISO3_RE = re.compile(r"^[A-Z]{3}$")
 FREQUENCIES = {"", "Y", "Q", "M"}
-# Provider aggregate identifiers that are syntactically three letters but are not
-# sovereign ISO3 countries. The authoritative country/aggregate catalogue remains
-# the final source of truth; this deny-list prevents common silent conflation.
 WORLD_BANK_AGGREGATE_CODES = {
     "WLD", "ARB", "CSS", "CEB", "EAR", "EAS", "EAP", "TEA", "EMU", "ECS", "ECA", "TEC",
     "EUU", "FCS", "HPC", "HIC", "IBD", "IBT", "IDB", "IDX", "IDA", "LTE", "LCN", "LAC", "TLA",
@@ -33,6 +30,35 @@ def validate_country_code(value: str) -> str:
     if aggregates:
         raise ValueError(f"World Bank aggregate identifiers require explicit aggregate semantics: {','.join(aggregates)}")
     return ";".join(parts)
+
+
+def build_catalog_request(operation: str, *, source: int = 2, page: int = 1, per_page: int = 1000, identifier: str = "", language: str = "en") -> dict[str, Any]:
+    if page < 1 or per_page < 1:
+        raise ValueError("page and per_page must be positive")
+    lang = language.strip().lower()
+    prefix = f"/{lang}" if lang and lang != "en" else ""
+    base = f"https://api.worldbank.org{prefix}/v2"
+    params: dict[str, Any] = {"format": "json", "page": int(page), "per_page": int(per_page)}
+    if operation == "indicators":
+        url = f"{base}/source/{int(source)}/indicator"
+    elif operation == "countries":
+        url = f"{base}/country/{identifier.strip().upper()}" if identifier else f"{base}/country"
+    elif operation == "topics":
+        url = f"{base}/topic/{identifier.strip()}" if identifier else f"{base}/topic"
+    elif operation == "sources":
+        url = f"{base}/source/{identifier.strip()}" if identifier else f"{base}/source"
+    elif operation == "metadata":
+        if not identifier.strip():
+            raise ValueError("metadata operation requires a source identifier")
+        url = f"{base}/sources/{identifier.strip()}/metadata"
+    elif operation == "indicator_metadata":
+        if not identifier.strip():
+            raise ValueError("indicator_metadata requires an indicator code")
+        url = f"{base}/indicator/{identifier.strip()}"
+        params["source"] = int(source)
+    else:
+        raise ValueError(f"Unsupported World Bank catalogue operation: {operation}")
+    return {"method": "GET", "url": url, "query_parameters": params, "qualified_format": "json"}
 
 
 def build_observation_request(*, country: str, indicator: str, source: int = 2, date: str = "", page: int = 1, per_page: int = 50, mrv: int | None = None, mrnev: int | None = None, gapfill: bool = False, frequency: str = "", footnote: bool = False, language: str = "en") -> dict[str, Any]:
@@ -96,6 +122,20 @@ def normalize_observations(payload: Any, request_url: str = "") -> list[dict[str
     return items
 
 
+def filter_indicator_catalog(rows: list[dict[str, Any]], query: str, *, limit: int = 25) -> list[dict[str, Any]]:
+    tokens = [token for token in query.casefold().replace("_", " ").replace("-", " ").split() if token]
+    if not tokens:
+        return rows[:limit]
+    matches: list[dict[str, Any]] = []
+    for row in rows:
+        haystack = " ".join(str(row.get(k) or "") for k in ("id", "name", "sourceNote", "sourceOrganization")).casefold()
+        if all(token in haystack for token in tokens):
+            matches.append(row)
+            if len(matches) >= limit:
+                break
+    return matches
+
+
 class WorldBankHealthService:
     def __init__(self, settings: dict[str, Any]):
         self.settings = settings
@@ -111,19 +151,35 @@ class WorldBankHealthService:
             response.raise_for_status()
             return response.json(), str(response.request.url), response.status_code
 
-    async def list_indicators(self, *, source: int = 2, page: int = 1, per_page: int = 20000) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
-        url = f"https://api.worldbank.org/v2/source/{int(source)}/indicator"
-        params = {"format": "json", "page": int(page), "per_page": int(per_page)}
-        payload, native_url, status = await self.get_json(url, params)
+    async def _catalog(self, operation: str, **kwargs: Any) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
+        spec = build_catalog_request(operation, **kwargs)
+        payload, native_url, status = await self.get_json(spec["url"], spec["query_parameters"])
         rows = payload[1] if isinstance(payload, list) and len(payload) > 1 and isinstance(payload[1], list) else []
-        return payload, rows, {"method": "GET", "url": native_url, "query_parameters": params, "http_status": status}
+        native = dict(spec); native["url"] = native_url; native["http_status"] = status
+        return payload, rows, native
+
+    async def list_indicators(self, *, source: int = 2, page: int = 1, per_page: int = 20000, language: str = "en") -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
+        return await self._catalog("indicators", source=source, page=page, per_page=per_page, language=language)
+
+    async def list_countries(self, *, identifier: str = "", page: int = 1, per_page: int = 1000, language: str = "en") -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
+        return await self._catalog("countries", identifier=identifier, page=page, per_page=per_page, language=language)
+
+    async def list_topics(self, *, identifier: str = "", page: int = 1, per_page: int = 1000, language: str = "en") -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
+        return await self._catalog("topics", identifier=identifier, page=page, per_page=per_page, language=language)
+
+    async def list_sources(self, *, identifier: str = "", page: int = 1, per_page: int = 1000, language: str = "en") -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
+        return await self._catalog("sources", identifier=identifier, page=page, per_page=per_page, language=language)
+
+    async def get_metadata(self, *, source: int = 2, page: int = 1, per_page: int = 1000, language: str = "en") -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
+        return await self._catalog("metadata", identifier=str(source), page=page, per_page=per_page, language=language)
+
+    async def indicator_metadata(self, indicator: str, *, source: int = 2, language: str = "en") -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
+        return await self._catalog("indicator_metadata", identifier=indicator, source=source, page=1, per_page=100, language=language)
 
     async def observations(self, **kwargs: Any) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
         spec = build_observation_request(**kwargs)
         payload, native_url, status = await self.get_json(spec["url"], spec["query_parameters"])
-        native = dict(spec)
-        native["url"] = native_url
-        native["http_status"] = status
+        native = dict(spec); native["url"] = native_url; native["http_status"] = status
         return payload, normalize_observations(payload, native_url), native
 
 
