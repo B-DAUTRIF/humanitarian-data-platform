@@ -62,8 +62,10 @@ jobs:
           source/tests/test_semantic_router.py
       - name: Ten deterministic parameter audit cycles
         run: python tools/v7_connector_parameter_audit.py
-      - name: Full V7 regression audit
-        run: python tools/v7_global_audit_10cycles.py
+      - name: Dual-connector architecture regression
+        run: python tools/v7_dual_connector_architecture_qualification.py
+      - name: V7 release-readiness audit
+        run: python tools/v7_release_readiness.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -72,6 +74,7 @@ jobs:
             qualification-state/V7_CONNECTOR_PARAMETER_AUDIT.json
             qualification-state/V7_CONNECTOR_PARAMETER_MATRIX.csv
             qualification-state/V7_CONNECTOR_PARAMETER_MATRIX.md
+            qualification-state/HDP_V7_DUAL_CONNECTOR_ARCHITECTURE_10_CYCLES.json
           if-no-files-found: warn
           retention-days: 90
 
