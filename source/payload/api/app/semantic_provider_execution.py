@@ -126,40 +126,12 @@ def _matches(value: str, query: str) -> bool:
 
 
 async def execute_world_bank_native(route: dict[str, Any], settings: dict[str, Any]) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
-    native, parameters = route.get("native_parameters", {}), route["parameters"]
-    query = str(native.get("indicator_search") or parameters.get("query") or "")
-    catalog, catalog_url = await _get_json("https://api.worldbank.org/v2/source/2/indicator", {"format": "json", "per_page": 20000, "page": 1}, settings)
-    rows = catalog[1] if isinstance(catalog, list) and len(catalog) > 1 and isinstance(catalog[1], list) else []
-    matches = [row for row in rows if isinstance(row, dict) and _matches(" ".join(str(row.get(k) or "") for k in ("id", "name", "sourceNote")), query)][:5]
-    if not matches:
-        return {"catalog": catalog, "observations": []}, [], {"catalog_url": catalog_url, "observation_requests": []}
-    country = str(native.get("country") or "all")
-    date_range = str(native.get("date") or "")
-    observation_payloads: list[Any] = []
-    items: list[dict[str, Any]] = []
-    request_urls: list[str] = []
-    per_indicator = max(1, int(parameters.get("result_limit") or 25) // len(matches))
-    for indicator in matches:
-        code = str(indicator.get("id"))
-        args: dict[str, Any] = {"format": "json", "per_page": min(1000, max(50, per_indicator * 4)), "page": 1, "source": 2}
-        if date_range:
-            args["date"] = date_range
-        payload, request_url = await _get_json(f"https://api.worldbank.org/v2/country/{country}/indicator/{code}", args, settings)
-        request_urls.append(request_url)
-        observation_payloads.append(payload)
-        observations = payload[1] if isinstance(payload, list) and len(payload) > 1 and isinstance(payload[1], list) else []
-        for row in observations:
-            if not isinstance(row, dict):
-                continue
-            country_obj = row.get("country") if isinstance(row.get("country"), dict) else {}
-            indicator_obj = row.get("indicator") if isinstance(row.get("indicator"), dict) else {}
-            year = str(row.get("date") or "")
-            items.append({"id": f"{code}:{row.get('countryiso3code') or country_obj.get('id')}:{year}", "title": f"{indicator_obj.get('value') or indicator.get('name') or code} — {country_obj.get('value') or row.get('countryiso3code') or country} — {year}", "description": f"value={row.get('value')}; unit={indicator.get('unit') or ''}; obs_status={row.get('obs_status') or ''}", "date": f"{year}-12-31" if year.isdigit() else None, "url": request_url, "source": "World Bank Health Indicators", "organization": "World Bank", "geographic_scope": country_obj.get("value") or row.get("countryiso3code"), "indicator_code": code, "indicator_name": indicator_obj.get("value") or indicator.get("name"), "value": row.get("value"), "unit": indicator.get("unit"), "observation_status": row.get("obs_status"), "resources": []})
-            if len(items) >= int(parameters.get("result_limit") or 25):
-                break
-        if len(items) >= int(parameters.get("result_limit") or 25):
-            break
-    return {"catalog": catalog, "observations": observation_payloads}, items, {"catalog_url": catalog_url, "observation_requests": request_urls}
+    """Delegate all World Bank semantic execution to the reference provider service."""
+    from .providers.world_bank_health.service import WorldBankHealthService
+
+    service = WorldBankHealthService(settings)
+    project_config = route.get("provider_configuration") if isinstance(route.get("provider_configuration"), dict) else {}
+    return await service.execute_semantic(route, global_settings=settings, project_settings=project_config)
 
 
 def _walk_dicts(value: Any) -> Iterable[dict[str, Any]]:
