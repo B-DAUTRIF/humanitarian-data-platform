@@ -78,6 +78,35 @@ class HDPClient:
     def source_settings(self, source_id: str) -> dict[str, Any]:
         return self._request("GET", f"/api/source-settings/{source_id}")
 
+    def reliefweb_descriptor(self) -> dict[str, Any]:
+        """Return the machine-readable ReliefWeb ProviderDescriptor used by HDP."""
+        return self._request("GET", "/api/providers/reliefweb/descriptor")
+
+    def reliefweb_effective_configuration(self, *, project_id: str | None = None) -> dict[str, Any]:
+        params = {"project_id": project_id} if project_id else None
+        return self._request("GET", "/api/providers/reliefweb/configuration/effective", params=params)
+
+    def reliefweb_search(self, *, content_type: str = "reports", parameters: Mapping[str, Any] | None = None, project_id: str | None = None) -> dict[str, Any]:
+        """Execute a native ReliefWeb V2 collection request through HDP."""
+        body: dict[str, Any] = {"content_type": content_type, "parameters": dict(parameters or {})}
+        if project_id:
+            body["project_id"] = project_id
+        return self._request("POST", "/api/providers/reliefweb/search", json=body)
+
+    def reliefweb_item(self, content_type: str, item_id: str | int, *, fields_include: Iterable[str] | None = None, fields_exclude: Iterable[str] | None = None, profile: str | None = None, project_id: str | None = None) -> dict[str, Any]:
+        """Fetch one ReliefWeb object while preserving native and normalized forms."""
+        parameters: dict[str, Any] = {}
+        if fields_include:
+            parameters["fields_include"] = list(fields_include)
+        if fields_exclude:
+            parameters["fields_exclude"] = list(fields_exclude)
+        if profile:
+            parameters["profile"] = profile
+        body: dict[str, Any] = {"parameters": parameters}
+        if project_id:
+            body["project_id"] = project_id
+        return self._request("POST", f"/api/providers/reliefweb/item/{content_type}/{item_id}", json=body)
+
     def semantic_contracts(self) -> dict[str, Any]:
         return self._request("GET", "/api/semantic/contracts")
 
