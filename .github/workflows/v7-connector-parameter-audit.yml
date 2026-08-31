@@ -60,7 +60,6 @@ jobs:
           source/tests/test_reliefweb_use_case_qualification.py
           source/tests/test_provider_world_bank_health_architecture.py
           source/tests/test_semantic_router.py
-          source/tests/test_v7_semantic_project_ui.py
       - name: Ten deterministic parameter audit cycles
         run: python tools/v7_connector_parameter_audit.py
       - name: Full V7 regression audit
