@@ -26,6 +26,7 @@ from .main import (
 )
 from .github_sync import router as github_sync_router
 from .api_inventory import router as api_inventory_router
+from .providers.reliefweb.api import router as reliefweb_provider_router
 from .v6_notebook_execution import router as v6_notebook_router
 from .v6_semantic_api import router as semantic_router
 from .v7_migrations import apply_v7_migrations
@@ -54,13 +55,15 @@ app.description = (
     "Humanitarian Data Platform V7 : acquisition, recherche fédérée, gestion locale, "
     "traitements R/Python, synchronisation GitHub et exploitation de sources "
     "humanitaires et sanitaires par projets. Inventaire API vérifiable accessible "
-    "depuis /api-inventory. Routeur sémantique V7 accessible depuis /api/semantic."
+    "depuis /api-inventory. Routeur sémantique V7 accessible depuis /api/semantic. "
+    "Connecteur ReliefWeb V2 individualisé accessible depuis /api/providers/reliefweb."
 )
 app.include_router(v6_notebook_router)
 app.include_router(github_sync_router)
 app.include_router(api_inventory_router)
 app.include_router(semantic_router)
 app.include_router(semantic_jobs_router)
+app.include_router(reliefweb_provider_router)
 
 
 @app.on_event("startup")
