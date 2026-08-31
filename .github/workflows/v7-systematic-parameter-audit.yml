@@ -49,7 +49,7 @@ jobs:
           source/tests/test_reliefweb_use_case_qualification.py
           source/tests/test_provider_world_bank_health_architecture.py
           source/tests/test_v7_global_audit_regressions.py
-          source/tests/test_semantic_ui_project_binding.py
+          source/tests/test_v7_semantic_ui_project_id.py
       - name: Existing dual connector architecture cycles
         run: python tools/v7_dual_connector_architecture_qualification.py
       - name: Global V7 release-readiness audit
