@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 APP_ROOT = Path(__file__).resolve().parents[1] / "payload" / "api"
 sys.path.insert(0, str(APP_ROOT))
 
-from app.semantic_provider_execution import execute_un_sdg_native, execute_world_bank_native  # noqa: E402
+from app.semantic_provider_execution import execute_six_provider_native, execute_world_bank_native  # noqa: E402
 
 SETTINGS = {"timeout_seconds": 20, "connect_timeout_seconds": 5, "retry_count": 0, "backoff_seconds": 1, "user_agent": "HDP-test", "accept_language": "en"}
 
@@ -28,16 +28,22 @@ class SemanticProviderExecutionTest(unittest.TestCase):
         self.assertEqual(request["implementation"], "WorldBankHealthService.execute_semantic")
         fake.assert_awaited_once()
 
-    def test_un_sdg_m49_series_resolution_then_observations(self) -> None:
-        route = {"parameters": {"query": "malaria", "result_limit": 10}, "native_parameters": {"areaCode": 646, "timePeriodStart": 2020, "timePeriodEnd": 2025, "series_search": "malaria"}}
-        catalog = {"goals": [{"series": [{"seriesCode": "SH_MLR_INCD", "seriesDescription": "Malaria incidence"}]}]}
-        observations = {"data": [{"seriesCode": "SH_MLR_INCD", "geoAreaCode": 646, "geoAreaName": "Rwanda", "timePeriod": 2023, "value": 42.1, "units": "PER_1000"}]}
-        fake = AsyncMock(side_effect=[(catalog, "catalog-url"), (observations, "obs-url")])
-        with patch("app.semantic_provider_execution._get_json", fake):
-            _, items, request = asyncio.run(execute_un_sdg_native(route, SETTINGS))
-        self.assertEqual(items[0]["series_code"], "SH_MLR_INCD")
-        self.assertEqual(items[0]["geographic_scope"], "Rwanda")
-        self.assertEqual(request["observation_requests"], ["obs-url"])
+    def test_un_sdg_delegates_to_reference_service(self) -> None:
+        route = {
+            "source": "un-sdg",
+            "parameters": {"query": "malaria", "result_limit": 10},
+            "native_parameters": {"areaCode": 646, "timePeriodStart": 2020, "timePeriodEnd": 2025, "series_search": "malaria"},
+            "provider_configuration": {},
+        }
+        items = [{"series_code": "SH_MLR_INCD", "geographic_scope": "Rwanda", "value": 42.1}]
+        native = {"series_requests": [{"url": "obs-url"}], "catalogue": {"url": "catalog-url"}}
+        fake = AsyncMock(return_value=({"series_data": []}, items, native))
+        with patch("app.providers.un_sdg.service.UNSDGService.execute_semantic", fake):
+            _, result_items, request = asyncio.run(execute_six_provider_native(route, SETTINGS))
+        self.assertEqual(result_items[0]["series_code"], "SH_MLR_INCD")
+        self.assertEqual(result_items[0]["geographic_scope"], "Rwanda")
+        self.assertEqual(request["series_requests"][0]["url"], "obs-url")
+        fake.assert_awaited_once()
 
 
 if __name__ == "__main__":
