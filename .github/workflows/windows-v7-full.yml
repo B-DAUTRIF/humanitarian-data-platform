@@ -3,7 +3,7 @@ name: HDP V7 full qualification
 on:
   workflow_dispatch:
   pull_request:
-    paths: ["source/**", "clients-v6/**", "tools/v7_*.py", "docs/versions/7.0.0/**", "releases/v7.0.0-rc1/**", ".github/workflows/windows-v7-full.yml"]
+    paths: ["source/**", "clients-v6/**", "tools/v7_*.py", "docs/governance/**", "docs/versions/7.0.0/**", "releases/v7.0.0-rc1/**", ".github/workflows/windows-v7-full.yml"]
 
 permissions:
   contents: read
@@ -34,6 +34,7 @@ jobs:
           source/tests/test_v7_semantic_provenance_security.py
           source/tests/test_v7_use_case_matrix.py
           source/tests/test_reliefweb_v2.py
+          source/tests/test_provider_reliefweb_architecture.py
       - name: Python client semantic contract tests
         run: pytest -q clients-v6/python/tests
       - name: Offline V7 release-readiness audit
