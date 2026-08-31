@@ -34,6 +34,7 @@ REQUIRED_FILES = (
 REQUIRED_DIRS = ("docs", "tools", "clients-v6/python", "clients-v6/R")
 EXE = "HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe"
 ARCHIVE = "HumanitarianDataPlatform_Archive_complete_v7.0.0.zip"
+ARTIFACT = "HDP-V7-user-test-RC"
 
 
 def audit() -> dict[str, object]:
@@ -55,7 +56,7 @@ def audit() -> dict[str, object]:
     required_workflow_markers = (
         EXE,
         ARCHIVE,
-        "HDP-V7-qualified-candidate",
+        ARTIFACT,
         "Get-FileHash",
         "source/tests/test_v7_use_case_matrix.py",
         "tools/v7_release_readiness.py",
@@ -77,6 +78,7 @@ def audit() -> dict[str, object]:
         "required_directory_count": len(REQUIRED_DIRS),
         "expected_exe": EXE,
         "expected_archive": ARCHIVE,
+        "expected_artifact": ARTIFACT,
     }
     return report
 
