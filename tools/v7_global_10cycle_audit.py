@@ -103,7 +103,7 @@ def cycle5() -> Cycle:
     checks.append(require(dhs["criteria"].get("geography") == "translated_filter" and dhs["native_parameters"].get("iso3_lookup") == "RWA", "DHS route carries only verified ISO3 lookup intent"))
     checks.append(require("countryIds" not in dhs["native_parameters"] and "country_ids" not in dhs["parameters"], "DHS route never guesses provider-specific countryIds"))
     dhs_service = text(API_ROOT / "app" / "providers" / "dhs" / "service.py")
-    checks.append(require('row.get("ISO3_countryCode")' in dhs_service and 'row.get("DHS_countryCode")' in dhs_service, "DHS provider ID is resolved from official catalogue fields"))
+    checks.append(require('row.get("ISO3_countryCode")' in dhs_service and 'get("DHS_countryCode")' in dhs_service, "DHS provider ID is resolved from official catalogue fields"))
     checks.append(require("len(matches) != 1" in dhs_service and "mapping is not uniquely verified" in dhs_service, "DHS ambiguous or missing geography mapping fails closed"))
     checks.append(require(routes["hdx"]["criteria"].get("geography") in {"post_filter", "blocked_missing_mapping"}, "HDX unverified geography is not promoted to native mapping"))
     checks.append(require(routes["world-bank-health"]["native_parameters"].get("country") == "RWA", "World Bank verified ISO3 translation"))
@@ -233,7 +233,7 @@ def main() -> None:
         "status": "PASS" if all(cycle.status == "PASS" for cycle in cycles) else "FAIL",
     }
     output = ROOT / "qualification-state" / "HDP_V7_GLOBAL_10CYCLE_AUDIT.json"
-    output.parent.mkdir(parents=True, exist_ok=True)
+    output.parent.mkdir(exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({key: value for key, value in report.items() if key != "cycles"}, ensure_ascii=False))
     if report["status"] != "PASS":
