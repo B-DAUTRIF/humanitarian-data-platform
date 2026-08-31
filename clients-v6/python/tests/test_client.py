@@ -123,3 +123,46 @@ def test_federated_search_preserves_partial_errors(monkeypatch):
     result = client.federated_search(project_id="p", sources=["hdx", "broken"], query="cholera")
     assert result[0]["ok"] is True
     assert result[1]["ok"] is False
+
+
+def test_world_bank_specialized_observation_parameters(monkeypatch):
+    captured = {}
+    def fake_request(method, url, **kwargs):
+        captured.update(method=method, url=url, **kwargs)
+        return response(httpx.Request(method, url), {"status":"success", "items":[]})
+    monkeypatch.setattr(httpx, "request", fake_request)
+    HDPClient(token="secret").world_bank_observations(
+        country="RWA", indicator="SH.MLR.INCD.P3", date="2020:2025", source=2,
+        page=2, per_page=100, mrv=5, mrnev=2, gapfill=True, frequency="Y", footnote=True,
+        language="fr", project_id="00000000-0000-4000-8000-000000000001",
+    )
+    assert captured["url"].endswith("/api/providers/world-bank-health/observations")
+    assert captured["json"]["country"] == "RWA"
+    assert captured["json"]["mrv"] == 5
+    assert captured["json"]["mrnev"] == 2
+    assert captured["json"]["gapfill"] is True
+    assert captured["json"]["frequency"] == "Y"
+    assert captured["json"]["footnote"] is True
+    assert captured["headers"]["X-HDP-CSRF"] == "1"
+
+
+def test_world_bank_specialized_catalogue_and_metadata_methods(monkeypatch):
+    calls = []
+    def fake_request(method, url, **kwargs):
+        calls.append((method, url, kwargs))
+        return response(httpx.Request(method, url), {"items":[]})
+    monkeypatch.setattr(httpx, "request", fake_request)
+    client = HDPClient(token="secret")
+    client.world_bank_indicators(source=2, language="fr")
+    client.world_bank_countries(identifier="RWA")
+    client.world_bank_topics()
+    client.world_bank_sources()
+    client.world_bank_indicator_metadata("SH.MLR.INCD.P3")
+    client.world_bank_geography_vocabulary(refresh=True)
+    client.world_bank_metadata(query="malaria", project_id="00000000-0000-4000-8000-000000000001")
+    urls = [url for _, url, _ in calls]
+    assert any(url.endswith("/api/providers/world-bank-health/indicators") for url in urls)
+    assert any(url.endswith("/api/providers/world-bank-health/countries") for url in urls)
+    assert any("/indicator/SH.MLR.INCD.P3/metadata" in url for url in urls)
+    assert any(url.endswith("/api/providers/world-bank-health/geography-vocabulary") for url in urls)
+    assert calls[-1][2]["json"]["project_id"].endswith("0001")

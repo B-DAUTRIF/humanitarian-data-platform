@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "provider": "world-bank-health",
+  "api_version": "v2",
+  "cycles_per_feature": 10,
+  "features": [
+    "indicator_catalogue", "indicator_keyword_discovery", "wdi_source_2", "indicator_code_selection",
+    "country_iso3", "multi_country", "single_indicator", "multi_indicator", "year_range", "single_year",
+    "pagination", "page_size", "most_recent_values", "most_recent_non_empty", "gapfill", "frequency",
+    "footnotes", "json_format", "language", "topic_catalogue", "country_metadata", "aggregate_separation",
+    "normalization", "native_provenance", "invalid_geography_rejection", "provider_error_not_empty",
+    "bounded_result_not_absence"
+  ],
+  "evidence_policy": "A feature is PASS only after ten deterministic debug/implementation/audit cycles pass. Live provider acceptance is reported separately.",
+  "false_zero_policy": "HTTP/provider/configuration/mapping failures and bounded or sampled results cannot be converted to empty_valid."
+}

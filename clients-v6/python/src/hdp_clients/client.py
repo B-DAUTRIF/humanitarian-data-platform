@@ -13,7 +13,6 @@ class HDPClientError(RuntimeError):
 @dataclass(slots=True)
 class HDPClient:
     """Typed client for the local HDP V7 HTTP API."""
-
     base_url: str = "http://localhost:8080"
     token: str | None = None
     timeout: float = 60.0
@@ -28,9 +27,16 @@ class HDPClient:
 
     def _request(self, method: str, path: str, *, params: Mapping[str, Any] | None = None, json: Any = None) -> Any:
         url = f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
-        mutation = method.upper() not in {"GET", "HEAD", "OPTIONS"}
         try:
-            response = httpx.request(method, url, params=params, json=json, headers=self._headers(mutation=mutation), timeout=self.timeout, follow_redirects=False)
+            response = httpx.request(
+                method,
+                url,
+                params=params,
+                json=json,
+                headers=self._headers(mutation=method.upper() not in {"GET", "HEAD", "OPTIONS"}),
+                timeout=self.timeout,
+                follow_redirects=False,
+            )
         except httpx.HTTPError as exc:
             raise HDPClientError(f"HDP inaccessible: {exc}") from exc
         if response.is_error:
@@ -44,138 +50,130 @@ class HDPClient:
             return None
         return response.json() if "json" in response.headers.get("content-type", "") else response.text
 
-    def health(self) -> dict[str, Any]:
-        return self._request("GET", "/api/health")
+    def health(self): return self._request("GET", "/api/health")
+    def sources(self): return self._request("GET", "/api/sources")
+    def inventory_sources(self): return self._request("GET", "/api-inventory/sources")
+    def source_inventory(self, source_slug: str): return self._request("GET", f"/api-inventory/source/{source_slug}")
+    def projects(self): return self._request("GET", "/api/projects")
+    def create_project(self, name: str, description: str = ""): return self._request("POST", "/api/projects", json={"name": name, "description": description})
+    def project_sources(self, project_id: str): return self._request("GET", f"/api/projects/{project_id}/sources")
+    def source_settings(self, source_id: str): return self._request("GET", f"/api/source-settings/{source_id}")
 
-    def sources(self) -> list[dict[str, Any]]:
-        return self._request("GET", "/api/sources")
-
-    def inventory_sources(self) -> dict[str, Any]:
-        return self._request("GET", "/api-inventory/sources")
-
-    def inventory(self, *, source: str | None = None, query: str | None = None, supported: bool | None = None, limit: int = 10_000, offset: int = 0) -> dict[str, Any]:
-        params: dict[str, Any] = {"limit": limit, "offset": offset}
-        if source:
-            params["source"] = source
-        if query:
-            params["q"] = query
-        if supported is not None:
-            params["supported"] = str(bool(supported)).lower()
+    def inventory(self, *, source=None, query=None, supported=None, limit=10000, offset=0):
+        params = {"limit": limit, "offset": offset}
+        if source: params["source"] = source
+        if query: params["q"] = query
+        if supported is not None: params["supported"] = str(bool(supported)).lower()
         return self._request("GET", "/api-inventory/data", params=params)
 
-    def source_inventory(self, source_slug: str) -> dict[str, Any]:
-        return self._request("GET", f"/api-inventory/source/{source_slug}")
-
-    def projects(self) -> list[dict[str, Any]]:
-        return self._request("GET", "/api/projects")
-
-    def create_project(self, name: str, description: str = "") -> dict[str, Any]:
-        return self._request("POST", "/api/projects", json={"name": name, "description": description})
-
-    def project_sources(self, project_id: str) -> list[dict[str, Any]]:
-        return self._request("GET", f"/api/projects/{project_id}/sources")
-
-    def source_settings(self, source_id: str) -> dict[str, Any]:
-        return self._request("GET", f"/api/source-settings/{source_id}")
-
-    def reliefweb_descriptor(self) -> dict[str, Any]:
-        """Return the machine-readable ReliefWeb ProviderDescriptor used by HDP."""
-        return self._request("GET", "/api/providers/reliefweb/descriptor")
-
-    def reliefweb_effective_configuration(self, *, project_id: str | None = None) -> dict[str, Any]:
-        params = {"project_id": project_id} if project_id else None
-        return self._request("GET", "/api/providers/reliefweb/configuration/effective", params=params)
-
-    def reliefweb_search(self, *, content_type: str = "reports", parameters: Mapping[str, Any] | None = None, project_id: str | None = None) -> dict[str, Any]:
-        """Execute a native ReliefWeb V2 collection request through HDP."""
-        body: dict[str, Any] = {"content_type": content_type, "parameters": dict(parameters or {})}
-        if project_id:
-            body["project_id"] = project_id
+    def reliefweb_descriptor(self): return self._request("GET", "/api/providers/reliefweb/descriptor")
+    def reliefweb_effective_configuration(self, *, project_id=None): return self._request("GET", "/api/providers/reliefweb/configuration/effective", params={"project_id": project_id} if project_id else None)
+    def reliefweb_search(self, *, content_type="reports", parameters=None, project_id=None):
+        body = {"content_type": content_type, "parameters": dict(parameters or {})}
+        if project_id: body["project_id"] = project_id
         return self._request("POST", "/api/providers/reliefweb/search", json=body)
-
-    def reliefweb_item(self, content_type: str, item_id: str | int, *, fields_include: Iterable[str] | None = None, fields_exclude: Iterable[str] | None = None, profile: str | None = None, project_id: str | None = None) -> dict[str, Any]:
-        """Fetch one ReliefWeb object while preserving native and normalized forms."""
-        parameters: dict[str, Any] = {}
-        if fields_include:
-            parameters["fields_include"] = list(fields_include)
-        if fields_exclude:
-            parameters["fields_exclude"] = list(fields_exclude)
-        if profile:
-            parameters["profile"] = profile
-        body: dict[str, Any] = {"parameters": parameters}
-        if project_id:
-            body["project_id"] = project_id
+    def reliefweb_item(self, content_type, item_id, *, fields_include=None, fields_exclude=None, profile=None, project_id=None):
+        parameters = {}
+        if fields_include: parameters["fields_include"] = list(fields_include)
+        if fields_exclude: parameters["fields_exclude"] = list(fields_exclude)
+        if profile: parameters["profile"] = profile
+        body = {"parameters": parameters}
+        if project_id: body["project_id"] = project_id
         return self._request("POST", f"/api/providers/reliefweb/item/{content_type}/{item_id}", json=body)
 
-    def semantic_contracts(self) -> dict[str, Any]:
-        return self._request("GET", "/api/semantic/contracts")
+    def world_bank_descriptor(self):
+        return self._request("GET", "/api/providers/world-bank-health/descriptor")
 
-    def semantic_capabilities(self) -> dict[str, Any]:
-        return self._request("GET", "/api/semantic/capabilities")
+    def world_bank_effective_configuration(self, *, project_id=None):
+        return self._request("GET", "/api/providers/world-bank-health/configuration/effective", params={"project_id": project_id} if project_id else None)
+
+    def world_bank_observations(
+        self,
+        *,
+        country: str,
+        indicator: str,
+        date: str = "",
+        source: int = 2,
+        page: int = 1,
+        per_page: int = 50,
+        mrv: int | None = None,
+        mrnev: int | None = None,
+        gapfill: bool = False,
+        frequency: str = "",
+        footnote: bool = False,
+        language: str = "en",
+        project_id: str | None = None,
+    ):
+        body = {
+            "country": country,
+            "indicator": indicator,
+            "date": date,
+            "source": source,
+            "page": page,
+            "per_page": per_page,
+            "mrv": mrv,
+            "mrnev": mrnev,
+            "gapfill": gapfill,
+            "frequency": frequency,
+            "footnote": footnote,
+            "language": language,
+        }
+        if project_id: body["project_id"] = project_id
+        return self._request("POST", "/api/providers/world-bank-health/observations", json=body)
+
+    def world_bank_metadata(self, *, query: str, source: int = 2, page: int = 1, per_page: int = 1000, language: str = "en", project_id: str | None = None):
+        body = {"query": query, "source": source, "page": page, "per_page": per_page, "language": language}
+        if project_id: body["project_id"] = project_id
+        return self._request("POST", "/api/providers/world-bank-health/metadata", json=body)
+
+    def world_bank_indicators(self, *, source: int = 2, page: int = 1, per_page: int = 1000, language: str = "en"):
+        return self._request("GET", "/api/providers/world-bank-health/indicators", params={"source": source, "page": page, "per_page": per_page, "language": language})
+
+    def world_bank_countries(self, *, identifier: str = "", page: int = 1, per_page: int = 1000, language: str = "en"):
+        return self._request("GET", "/api/providers/world-bank-health/countries", params={"identifier": identifier, "page": page, "per_page": per_page, "language": language})
+
+    def world_bank_topics(self, *, identifier: str = "", page: int = 1, per_page: int = 1000, language: str = "en"):
+        return self._request("GET", "/api/providers/world-bank-health/topics", params={"identifier": identifier, "page": page, "per_page": per_page, "language": language})
+
+    def world_bank_sources(self, *, identifier: str = "", page: int = 1, per_page: int = 1000, language: str = "en"):
+        return self._request("GET", "/api/providers/world-bank-health/sources", params={"identifier": identifier, "page": page, "per_page": per_page, "language": language})
+
+    def world_bank_indicator_metadata(self, indicator: str, *, source: int = 2, language: str = "en"):
+        return self._request("GET", f"/api/providers/world-bank-health/indicator/{indicator}/metadata", params={"source": source, "language": language})
+
+    def world_bank_geography_vocabulary(self, *, language: str = "en", refresh: bool = False):
+        return self._request("GET", "/api/providers/world-bank-health/geography-vocabulary", params={"language": language, "refresh": str(bool(refresh)).lower()})
+
+    def semantic_contracts(self): return self._request("GET", "/api/semantic/contracts")
+    def semantic_capabilities(self): return self._request("GET", "/api/semantic/capabilities")
 
     @staticmethod
-    def _semantic_body(*, sources: Iterable[str], query: str = "", location: str = "", date_from: str = "", date_to: str = "", result_limit: int = 25, project_id: str | None = None) -> dict[str, Any]:
-        selected = list(dict.fromkeys(str(source).strip() for source in sources if str(source).strip()))
-        if not selected:
-            raise ValueError("sources must contain at least one source")
-        if not 1 <= int(result_limit) <= 100:
-            raise ValueError("result_limit must be between 1 and 100")
-        body: dict[str, Any] = {"sources": selected, "query": query, "location": location, "date_from": date_from, "date_to": date_to, "result_limit": int(result_limit)}
-        if project_id:
-            body["project_id"] = project_id
+    def _semantic_body(*, sources: Iterable[str], query="", location="", date_from="", date_to="", result_limit=25, project_id=None):
+        selected = list(dict.fromkeys(str(s).strip() for s in sources if str(s).strip()))
+        if not selected: raise ValueError("sources must contain at least one source")
+        if not 1 <= int(result_limit) <= 100: raise ValueError("result_limit must be between 1 and 100")
+        body = {"sources": selected, "query": query, "location": location, "date_from": date_from, "date_to": date_to, "result_limit": int(result_limit)}
+        if project_id: body["project_id"] = project_id
         return body
 
-    def semantic_plan(self, *, sources: Iterable[str], query: str = "", location: str = "", date_from: str = "", date_to: str = "", result_limit: int = 25, project_id: str | None = None) -> dict[str, Any]:
-        """Build an auditable project-aware V7 Query Plan without contacting providers."""
-        body = self._semantic_body(sources=sources, query=query, location=location, date_from=date_from, date_to=date_to, result_limit=result_limit, project_id=project_id)
-        return self._request("POST", "/api/semantic/plan", json=body)
-
-    def semantic_search(self, *, sources: Iterable[str], query: str = "", location: str = "", date_from: str = "", date_to: str = "", result_limit: int = 25, project_id: str | None = None) -> dict[str, Any]:
-        """Execute the V7 semantic router preserving project context, statuses and provenance."""
-        body = self._semantic_body(sources=sources, query=query, location=location, date_from=date_from, date_to=date_to, result_limit=result_limit, project_id=project_id)
-        return self._request("POST", "/api/semantic/search", json=body)
-
-    def create_semantic_job(self, *, sources: Iterable[str], query: str = "", location: str = "", date_from: str = "", date_to: str = "", result_limit: int = 25, project_id: str | None = None) -> dict[str, Any]:
-        """Queue a persistent semantic search for long-running multisource work."""
-        body = self._semantic_body(sources=sources, query=query, location=location, date_from=date_from, date_to=date_to, result_limit=result_limit, project_id=project_id)
-        return self._request("POST", "/api/semantic/jobs", json=body)
-
-    def semantic_job(self, job_id: str) -> dict[str, Any]:
-        """Read status, progress and result for a persistent semantic job."""
-        return self._request("GET", f"/api/semantic/jobs/{job_id}")
-
-    def cancel_semantic_job(self, job_id: str) -> dict[str, Any]:
-        """Request cancellation of a queued/running semantic job."""
-        return self._request("POST", f"/api/semantic/jobs/{job_id}/cancel")
-
-    def semantic_reproducibility(self, language: str, *, sources: Iterable[str], query: str = "", location: str = "", date_from: str = "", date_to: str = "", result_limit: int = 25, project_id: str | None = None) -> str:
-        """Return a secret-free Python or R script reproducing the semantic request."""
-        normalized = language.casefold()
-        if normalized not in {"python", "r"}:
-            raise ValueError("language must be 'python' or 'r'")
-        body = self._semantic_body(sources=sources, query=query, location=location, date_from=date_from, date_to=date_to, result_limit=result_limit, project_id=project_id)
-        result = self._request("POST", f"/api/semantic/jobs/reproducibility/{normalized}", json=body)
-        if not isinstance(result, str):
-            raise HDPClientError("Unexpected reproducibility response")
-        return result
-
-    def export_semantic_job(self, job_id: str, format_name: str = "json") -> Any:
-        """Export a finished job as JSON, CSV or GeoJSON without silent geometry fabrication."""
-        normalized = format_name.casefold()
-        if normalized not in {"json", "csv", "geojson"}:
-            raise ValueError("format_name must be json, csv or geojson")
-        return self._request("GET", f"/api/semantic/jobs/{job_id}/export/{normalized}")
-
-    def search(self, *, project_id: str, source: str, query: str, result_limit: int = 25, auto_download: bool = False, parameters: Mapping[str, Any] | None = None) -> dict[str, Any]:
-        body = {"project_id": project_id, "source": source, "query": query, "result_limit": result_limit, "auto_download": auto_download, "parameters": dict(parameters or {})}
-        return self._request("POST", "/api/search", json=body)
-
-    def federated_search(self, *, project_id: str, sources: Iterable[str], query: str, result_limit: int = 25, auto_download: bool = False, parameters_by_source: Mapping[str, Mapping[str, Any]] | None = None) -> list[dict[str, Any]]:
-        results: list[dict[str, Any]] = []
+    def semantic_plan(self, **kwargs): return self._request("POST", "/api/semantic/plan", json=self._semantic_body(**kwargs))
+    def semantic_search(self, **kwargs): return self._request("POST", "/api/semantic/search", json=self._semantic_body(**kwargs))
+    def create_semantic_job(self, **kwargs): return self._request("POST", "/api/semantic/jobs", json=self._semantic_body(**kwargs))
+    def semantic_job(self, job_id): return self._request("GET", f"/api/semantic/jobs/{job_id}")
+    def cancel_semantic_job(self, job_id): return self._request("POST", f"/api/semantic/jobs/{job_id}/cancel")
+    def semantic_reproducibility(self, language, **kwargs):
+        if language.casefold() not in {"python", "r"}: raise ValueError("language must be 'python' or 'r'")
+        return self._request("POST", f"/api/semantic/jobs/reproducibility/{language.casefold()}", json=self._semantic_body(**kwargs))
+    def export_semantic_job(self, job_id, format_name="json"):
+        if format_name.casefold() not in {"json", "csv", "geojson"}: raise ValueError("format_name must be json, csv or geojson")
+        return self._request("GET", f"/api/semantic/jobs/{job_id}/export/{format_name.casefold()}")
+    def search(self, *, project_id, source, query, result_limit=25, auto_download=False, parameters=None):
+        return self._request("POST", "/api/search", json={"project_id": project_id, "source": source, "query": query, "result_limit": result_limit, "auto_download": auto_download, "parameters": dict(parameters or {})})
+    def federated_search(self, *, project_id, sources, query, result_limit=25, auto_download=False, parameters_by_source=None):
+        results = []
         for source in sources:
             try:
-                value = self.search(project_id=project_id, source=source, query=query, result_limit=result_limit, auto_download=auto_download, parameters=(parameters_by_source or {}).get(source, {}))
-                results.append({"source": source, "ok": True, "result": value})
+                results.append({"source": source, "ok": True, "result": self.search(project_id=project_id, source=source, query=query, result_limit=result_limit, auto_download=auto_download, parameters=(parameters_by_source or {}).get(source, {}))})
             except HDPClientError as exc:
                 results.append({"source": source, "ok": False, "error": str(exc)})
         return results
