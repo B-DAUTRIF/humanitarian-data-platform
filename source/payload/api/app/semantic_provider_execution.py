@@ -7,7 +7,10 @@ service used by their native API. This prevents a second, drifting provider
 implementation and keeps native request/provenance behavior inspectable.
 """
 
+import time
 from typing import Any
+
+from .v7_trace import trace_event
 
 
 async def execute_reliefweb_native(route: dict[str, Any], settings: dict[str, Any]) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
@@ -89,13 +92,54 @@ async def execute_six_provider_native(route: dict[str, Any], settings: dict[str,
 
 async def execute_native_route(route: dict[str, Any], settings: dict[str, Any]) -> tuple[Any, list[dict[str, Any]], dict[str, Any]] | None:
     source = str(route["source"])
-    if source == "reliefweb":
-        return await execute_reliefweb_native(route, settings)
-    if source == "hdx-hapi":
-        return await execute_hapi_native(route, settings)
-    if source == "world-bank-health":
-        return await execute_world_bank_native(route, settings)
-    specialized = await execute_six_provider_native(route, settings)
-    if specialized is not None:
-        return specialized
-    return None
+    started = time.perf_counter()
+    trace_event(
+        "semantic.provider.start",
+        source=source,
+        operation=route.get("operation"),
+        executable=route.get("executable"),
+        completeness=route.get("completeness"),
+        criteria=route.get("criteria"),
+        parameters=route.get("parameters"),
+        native_parameters=route.get("native_parameters"),
+        canonical_geography=route.get("canonical_geography"),
+        project_enabled=route.get("project_enabled"),
+        project_configuration=route.get("provider_configuration"),
+    )
+    try:
+        if source == "reliefweb":
+            result = await execute_reliefweb_native(route, settings)
+        elif source == "hdx-hapi":
+            result = await execute_hapi_native(route, settings)
+        elif source == "world-bank-health":
+            result = await execute_world_bank_native(route, settings)
+        else:
+            result = await execute_six_provider_native(route, settings)
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 3)
+        if result is None:
+            trace_event("semantic.provider.unsupported", source=source, elapsed_ms=elapsed_ms)
+            return None
+        payload, items, native = result
+        trace_event(
+            "semantic.provider.finish",
+            source=source,
+            operation=route.get("operation"),
+            elapsed_ms=elapsed_ms,
+            result_count=len(items),
+            native_request=native,
+            payload_type=type(payload).__name__,
+        )
+        return result
+    except Exception as exc:
+        trace_event(
+            "semantic.provider.exception",
+            source=source,
+            operation=route.get("operation"),
+            elapsed_ms=round((time.perf_counter() - started) * 1000, 3),
+            exception_type=type(exc).__name__,
+            exception_message=str(exc),
+            parameters=route.get("parameters"),
+            native_parameters=route.get("native_parameters"),
+            canonical_geography=route.get("canonical_geography"),
+        )
+        raise
