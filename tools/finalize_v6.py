@@ -82,8 +82,14 @@ def main() -> None:
     if summary != EXPECTED:
         raise SystemExit(f"Inventaire V6 non canonique: {summary}; attendu: {EXPECTED}")
 
-    # Le runtime et le générateur doivent utiliser exclusivement le JSONL lisible.
-    assert_text("source/payload/api/app/api_inventory.py", ["part*.jsonl", "Inventaire API V6"])
+    # Le socle V6 embarqué reste exactement le JSONL canonique qualifié. À partir de
+    # V7, le runtime peut lui superposer les nouveaux champs exécutables du registre
+    # afin que l'interface ne masque jamais un paramètre nouvellement qualifié.
+    # La compatibilité V6 porte donc sur le socle canonique et non sur un libellé UI.
+    assert_text(
+        "source/payload/api/app/api_inventory.py",
+        ["part*.jsonl", "_registry_overlay_rows", "source_registry"],
+    )
     assert_text("source/payload/api/app/main_v6.py", ["6.0.0", "api_inventory"])
     assert_text("source/payload/api/Dockerfile", ["app.main_v6:app"])
     assert_text("source/src/installer.c", ["APP_VERSION L\"6.0.0\"", "create_desktop_shortcut"])
@@ -102,7 +108,10 @@ def main() -> None:
         "inventory": summary,
         "sources": dict(sorted(source_counts.items())),
         "runtime_entrypoint": "app.main_v6:app",
+        "compatibility_model": "canonical_v6_jsonl_plus_additive_v7_registry_overlay",
         "notes": [
+            "Le socle V6 canonique reste inchangé et vérifié à 1020 entrées.",
+            "Le runtime V7 superpose uniquement les nouveaux champs de configuration du registre afin de préserver leur visibilité UI.",
             "Ce rapport valide la cohérence des sources et de l'inventaire embarqué.",
             "La qualification de release exige séparément les workflows CI Linux/PostgreSQL et Windows installateur verts sur le même commit.",
         ],

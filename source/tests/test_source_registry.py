@@ -13,6 +13,7 @@ sys.path.insert(0, str(API_ROOT))
 from app.source_registry import (  # noqa: E402
     CONNECTORS,
     GLOBAL_SCHEMA,
+    REGISTRY_VERSION,
     connector_definition,
     enrich_source_catalog,
     merge_values,
@@ -34,12 +35,41 @@ class SourceRegistryContractTest(unittest.TestCase):
                 "un-sdg", "dhs", "hdx-hapi", "unhcr", "gdacs",
             },
         )
+        self.assertEqual(REGISTRY_VERSION, "7.0.0")
         for source_id in CONNECTORS:
             definition = connector_definition(source_id)
-            self.assertEqual(definition["registry_version"], "6.0.0")
+            self.assertEqual(definition["registry_version"], REGISTRY_VERSION)
             self.assertTrue(definition["documentation_evidence"])
             defaults = deepcopy(definition["project_defaults"])
             self.assertEqual(merge_values(source_id, defaults, scope="project"), defaults)
+
+    def test_v6_project_contract_remains_backward_compatible_in_v7(self) -> None:
+        """V7 may version the registry without removing V6 project-facing fields."""
+        required_v6_common = {"query", "date_from", "date_to", "location", "result_limit", "auto_download"}
+        legacy_source_specific = {
+            "hdx": {"start", "fq", "sort"},
+            "reliefweb": {"offset", "profile", "preset", "sort"},
+            "who-gho": {"skip", "catalog_top"},
+            "world-bank-health": {"page", "catalog_page_size", "language"},
+            "unicef-sdmx": {"agency", "dataflow", "version", "detail", "references"},
+            "un-sdg": set(),
+            "dhs": {"page", "catalog_page_size", "country_ids", "indicator_ids", "survey_years", "breakdown"},
+            "hdx-hapi": {"endpoint", "location_code", "admin_level", "offset"},
+            "unhcr": {"page", "year_from", "year_to", "country_of_origin", "country_of_asylum"},
+            "gdacs": {"event_types", "alert_levels"},
+        }
+        for source_id, source_fields in legacy_source_specific.items():
+            props = set(connector_definition(source_id)["project_schema"]["properties"])
+            self.assertTrue(required_v6_common <= props, source_id)
+            self.assertTrue(source_fields <= props, source_id)
+
+    def test_world_bank_v7_extension_is_additive(self) -> None:
+        props = connector_definition("world-bank-health")["project_schema"]["properties"]
+        self.assertTrue(
+            {"source", "country", "indicator", "date", "per_page", "mrv", "mrnev", "gapfill", "frequency", "footnote", "format"}
+            <= set(props)
+        )
+        self.assertEqual(connector_definition("world-bank-health")["version"], "2.0.0")
 
     def test_empty_stored_query_is_valid_but_bounded(self) -> None:
         values = self.project_defaults("hdx")
@@ -98,8 +128,11 @@ class SourceRegistryContractTest(unittest.TestCase):
             definition = connector_definition(source_id)
             properties = definition["project_schema"]["properties"]
             self.assertTrue({"query", "date_from", "date_to", "location"} <= set(properties))
-            self.assertEqual(definition["capabilities"]["contract_version"], "6.0.0")
-            self.assertEqual(definition["capabilities"]["criteria"]["location"], "normalized_post_filter")
+            self.assertEqual(definition["capabilities"]["contract_version"], REGISTRY_VERSION)
+            self.assertIn(
+                definition["capabilities"]["criteria"]["location"],
+                {"normalized_post_filter", "verified_iso3_to_native_country_path"},
+            )
 
     def test_invalid_common_date_range_is_rejected(self) -> None:
         defaults = self.project_defaults("hdx")

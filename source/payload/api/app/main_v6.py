@@ -27,6 +27,7 @@ from .main import (
 from .github_sync import router as github_sync_router
 from .api_inventory import router as api_inventory_router
 from .providers.reliefweb.api import router as reliefweb_provider_router
+from .providers.world_bank_health.api import router as world_bank_health_provider_router
 from .v6_notebook_execution import router as v6_notebook_router
 from .v6_semantic_api import router as semantic_router
 from .v7_migrations import apply_v7_migrations
@@ -56,7 +57,8 @@ app.description = (
     "traitements R/Python, synchronisation GitHub et exploitation de sources "
     "humanitaires et sanitaires par projets. Inventaire API vérifiable accessible "
     "depuis /api-inventory. Routeur sémantique V7 accessible depuis /api/semantic. "
-    "Connecteur ReliefWeb V2 individualisé accessible depuis /api/providers/reliefweb."
+    "Connecteurs individualisés ReliefWeb V2 et World Bank Health/WDI accessibles "
+    "depuis /api/providers/reliefweb et /api/providers/world-bank-health."
 )
 app.include_router(v6_notebook_router)
 app.include_router(github_sync_router)
@@ -64,6 +66,7 @@ app.include_router(api_inventory_router)
 app.include_router(semantic_router)
 app.include_router(semantic_jobs_router)
 app.include_router(reliefweb_provider_router)
+app.include_router(world_bank_health_provider_router)
 
 
 @app.on_event("startup")
@@ -90,7 +93,9 @@ def v6_index_html() -> str:
             '<div id="hdp-semantic-router-link" style="position:fixed;right:18px;bottom:18px;z-index:9999;'
             'background:#172033;border-radius:8px;padding:10px 14px;box-shadow:0 4px 16px #0003">'
             '<a href="/api/semantic/ui" style="color:white;text-decoration:none;font-weight:600">'
-            'Routeur sémantique V7</a></div>'
+            'Routeur sémantique V7</a> · '
+            '<a href="/api/providers/reliefweb/ui" style="color:white;text-decoration:none">ReliefWeb</a> · '
+            '<a href="/api/providers/world-bank-health/ui" style="color:white;text-decoration:none">World Bank</a></div>'
         )
         html = html.replace("</body>", f"{banner}</body>")
     return html

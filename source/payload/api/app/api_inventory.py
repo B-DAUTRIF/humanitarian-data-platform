@@ -8,7 +8,78 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse, Response
 
-router = APIRouter(prefix="/api-inventory", tags=["API inventory V6"])
+router = APIRouter(prefix="/api-inventory", tags=["API inventory V7"])
+
+
+def _recommended_control(definition: dict[str, Any]) -> str:
+    if definition.get("readOnly"):
+        return "information en lecture seule"
+    if definition.get("enum"):
+        return "liste de sélection"
+    if definition.get("type") == "boolean":
+        return "case à cocher"
+    if definition.get("type") == "integer":
+        return "champ numérique"
+    if definition.get("type") == "array":
+        return "sélection multiple"
+    return "champ texte"
+
+
+def _registry_overlay_rows(existing: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Add registry fields introduced after the generated V6 inventory snapshot.
+
+    Provider-native rows remain generated/curated evidence. Configuration fields are
+    sourced dynamically from the executable source registry so the UI cannot silently
+    omit a newly qualified HDP parameter.
+    """
+    from .health_sources import source_catalog
+    from .source_registry import CONNECTORS, connector_definition
+
+    names = {item["id"]: item["name"] for item in source_catalog() if item.get("id") in CONNECTORS}
+    known = {(str(row.get("source_slug")), str(row.get("Paramètre")), str(row.get("origin"))) for row in existing}
+    additions: list[dict[str, Any]] = []
+    for source_id in CONNECTORS:
+        definition = connector_definition(source_id)
+        docs = definition.get("documentation_evidence") or []
+        documentation_url = str(docs[0]) if docs else ""
+        for scope, schema, operation, location in (
+            ("global", definition["global_settings_schema"], "Configuration globale HDP", "configuration globale"),
+            ("project", definition["project_schema"], "Configuration projet HDP", "configuration projet"),
+        ):
+            for name, spec in schema.get("properties", {}).items():
+                origin = f"source_registry:{scope}"
+                key = (source_id, name, origin)
+                if key in known:
+                    continue
+                readonly = bool(spec.get("readOnly"))
+                additions.append(
+                    {
+                        "Classe d’accès": "information" if readonly else "modifiable",
+                        "Contrôle recommandé": _recommended_control(spec),
+                        "Description officielle / synthèse": str(spec.get("description") or ""),
+                        "Emplacement": location,
+                        "Endpoint": definition["base_url"],
+                        "Méthode": "CONFIG",
+                        "Obligatoire": name in set(schema.get("required") or []),
+                        "Opération": operation,
+                        "Paramètre": name,
+                        "Source": names.get(source_id, source_id),
+                        "Type": str(spec.get("type") or "string"),
+                        "default": spec.get("default"),
+                        "documentation_url": documentation_url,
+                        "enum": spec.get("enum"),
+                        "maximum": spec.get("maximum"),
+                        "minimum": spec.get("minimum"),
+                        "origin": origin,
+                        "pattern": spec.get("pattern"),
+                        "readonly": readonly,
+                        "sensitive": False,
+                        "source_slug": source_id,
+                        "supported": not readonly,
+                    }
+                )
+                known.add(key)
+    return additions
 
 
 @lru_cache(maxsize=1)
@@ -16,7 +87,7 @@ def inventory() -> list[dict[str, Any]]:
     parts = Path(__file__).with_name("api_inventory_parts")
     files = sorted(parts.glob("part*.jsonl"))
     if not files:
-        raise RuntimeError("Inventaire API V6 absent : exécuter tools/build_v6_inventory.py")
+        raise RuntimeError("Inventaire API absent : exécuter tools/build_v6_inventory.py")
     rows: list[dict[str, Any]] = []
     for path in files:
         with path.open("r", encoding="utf-8") as handle:
@@ -27,26 +98,32 @@ def inventory() -> list[dict[str, Any]]:
                 try:
                     row = json.loads(line)
                 except json.JSONDecodeError as exc:
-                    raise RuntimeError(f"Inventaire API V6 corrompu: {path.name}:{line_number}") from exc
+                    raise RuntimeError(f"Inventaire API corrompu: {path.name}:{line_number}") from exc
                 if not isinstance(row, dict):
-                    raise RuntimeError(f"Inventaire API V6 invalide: {path.name}:{line_number}")
-                origin = str(row.get("origin") or "")
-                direct = origin.startswith("source_registry:") and bool(row.get("supported")) and not bool(row.get("readonly")) and not bool(row.get("sensitive"))
-                row["ui_editable"] = direct
-                if direct:
-                    row["mapping_mode"] = "champ HDP directement configurable"
-                elif bool(row.get("supported")):
-                    row["mapping_mode"] = "paramètre fournisseur pris en charge par l’adaptateur HDP"
-                else:
-                    row["mapping_mode"] = "information fournisseur non exécutable"
+                    raise RuntimeError(f"Inventaire API invalide: {path.name}:{line_number}")
                 rows.append(row)
+
+    rows.extend(_registry_overlay_rows(rows))
+    rows.sort(key=lambda row: (str(row.get("Source")), str(row.get("Opération")), str(row.get("Endpoint")), str(row.get("Méthode")), str(row.get("Paramètre"))))
+
+    for row in rows:
+        origin = str(row.get("origin") or "")
+        direct = origin.startswith("source_registry:") and bool(row.get("supported")) and not bool(row.get("readonly")) and not bool(row.get("sensitive"))
+        row["ui_editable"] = direct
+        if direct:
+            row["mapping_mode"] = "champ HDP directement configurable"
+        elif bool(row.get("supported")):
+            row["mapping_mode"] = "paramètre fournisseur pris en charge par l’adaptateur HDP"
+        else:
+            row["mapping_mode"] = "information fournisseur non exécutable"
+
     if not rows:
-        raise RuntimeError("Inventaire API V6 vide")
+        raise RuntimeError("Inventaire API vide")
     required = {"Source", "source_slug", "Opération", "Méthode", "Endpoint", "Paramètre", "Emplacement", "Type"}
     for index, row in enumerate(rows):
         missing = required - set(row)
         if missing:
-            raise RuntimeError(f"Inventaire API V6 ligne {index + 1}: champs absents {sorted(missing)}")
+            raise RuntimeError(f"Inventaire API ligne {index + 1}: champs absents {sorted(missing)}")
     return rows
 
 
@@ -114,7 +191,7 @@ def native_js() -> Response:
     return Response(NATIVE_JS, media_type="application/javascript")
 
 
-PAGE = r'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HDP V6 — Inventaire API</title><style>body{font-family:system-ui;margin:20px;background:#f4f6f8;color:#182230}table{border-collapse:collapse;width:100%;background:white;font-size:13px}th,td{padding:8px;border:1px solid #d7dde4;text-align:left;vertical-align:top}input,select,button{padding:8px;margin:4px}</style></head><body><h1>Inventaire des paramètres API</h1><p><a href="/">Retour HDP</a></p><input id="q" placeholder="Rechercher"><select id="src"><option value="">Toutes les sources</option></select><button id="go">Rechercher</button><p id="stats"></p><table><thead><tr><th>Source</th><th>Opération</th><th>Endpoint</th><th>Paramètre</th><th>Type</th><th>Accès</th><th>Correspondance</th><th>Origine</th><th>Description</th></tr></thead><tbody id="body"></tbody></table><script>const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));async function load(){let u=new URL('/api-inventory/data',location.origin);if(src.value)u.searchParams.set('source',src.value);if(q.value)u.searchParams.set('q',q.value);u.searchParams.set('limit','10000');let d=await fetch(u).then(r=>r.json());stats.textContent=d.total+' paramètres';body.innerHTML=d.rows.map(r=>`<tr><td>${esc(r.Source)}</td><td>${esc(r['Opération'])}</td><td>${esc(r.Endpoint)}</td><td>${esc(r['Paramètre'])}</td><td>${esc(r.Type)}</td><td>${r.ui_editable?'configurable':(r.supported?'adaptateur':'information')}</td><td>${esc(r.mapping_mode)}</td><td>${esc(r.origin)}</td><td>${esc(r['Description officielle / synthèse'])}</td></tr>`).join('')}async function init(){let s=await fetch('/api-inventory/sources').then(r=>r.json());s.items.forEach(x=>src.insertAdjacentHTML('beforeend',`<option value="${esc(x.slug)}">${esc(x.name)}</option>`));load()}go.onclick=load;src.onchange=load;q.onkeydown=e=>{if(e.key==='Enter')load()};init()</script></body></html>'''
+PAGE = r'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HDP V7 — Inventaire API</title><style>body{font-family:system-ui;margin:20px;background:#f4f6f8;color:#182230}table{border-collapse:collapse;width:100%;background:white;font-size:13px}th,td{padding:8px;border:1px solid #d7dde4;text-align:left;vertical-align:top}input,select,button{padding:8px;margin:4px}</style></head><body><h1>Inventaire des paramètres API</h1><p><a href="/">Retour HDP</a></p><input id="q" placeholder="Rechercher"><select id="src"><option value="">Toutes les sources</option></select><button id="go">Rechercher</button><p id="stats"></p><table><thead><tr><th>Source</th><th>Opération</th><th>Endpoint</th><th>Paramètre</th><th>Type</th><th>Accès</th><th>Correspondance</th><th>Origine</th><th>Description</th></tr></thead><tbody id="body"></tbody></table><script>const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));async function load(){let u=new URL('/api-inventory/data',location.origin);if(src.value)u.searchParams.set('source',src.value);if(q.value)u.searchParams.set('q',q.value);u.searchParams.set('limit','10000');let d=await fetch(u).then(r=>r.json());stats.textContent=d.total+' paramètres';body.innerHTML=d.rows.map(r=>`<tr><td>${esc(r.Source)}</td><td>${esc(r['Opération'])}</td><td>${esc(r.Endpoint)}</td><td>${esc(r['Paramètre'])}</td><td>${esc(r.Type)}</td><td>${r.ui_editable?'configurable':(r.supported?'adaptateur':'information')}</td><td>${esc(r.mapping_mode)}</td><td>${esc(r.origin)}</td><td>${esc(r['Description officielle / synthèse'])}</td></tr>`).join('')}async function init(){let s=await fetch('/api-inventory/sources').then(r=>r.json());s.items.forEach(x=>src.insertAdjacentHTML('beforeend',`<option value="${esc(x.slug)}">${esc(x.name)}</option>`));load()}go.onclick=load;src.onchange=load;q.onkeydown=e=>{if(e.key==='Enter')load()};init()</script></body></html>'''
 
 
 @router.get("", response_class=HTMLResponse)
