@@ -33,7 +33,10 @@ def cycle(provider: str) -> dict[str, object]:
     checks: list[tuple[str, bool]] = []
     descriptor = service.descriptor
     checks.append(("official_evidence", bool(descriptor.evidence)))
-    checks.append(("operation_contract", bool(service.operation_contract(operation))))
+    contracts = descriptor.metadata.get("parameter_contracts") or {}
+    checks.append(("operation_contract_declared", operation in contracts))
+    if operation in contracts:
+        service.operation_contract(operation)
     try:
         service.validate_parameters(operation, {"project_id":"rwanda"})
         unknown_rejected = False
