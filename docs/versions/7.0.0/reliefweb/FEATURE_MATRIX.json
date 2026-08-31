@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "provider": "reliefweb",
+  "api_version": "v2",
+  "generated_from_official_docs_consulted": "2026-08-31",
+  "coverage_dimensions": ["documentation", "implementation", "qualification", "live_qualification"],
+  "features": [
+    {"feature_id":"RW-ENDPOINT-COLLECTION","feature":"collection endpoints for 9 documented content types","documentation_status":"DOCUMENTED","implementation_status":"IMPLEMENTED","unit_test":true,"integration_test":false,"live_test":"BLOCKED_HTTP_403","ui_test":false},
+    {"feature_id":"RW-ENDPOINT-ITEM","feature":"individual item GET","documentation_status":"DOCUMENTED","implementation_status":"IMPLEMENTED","unit_test":true,"integration_test":false,"live_test":"BLOCKED_HTTP_403","ui_test":false},
+    {"feature_id":"RW-QUERY","feature":"query value/fields/operator","documentation_status":"DOCUMENTED","implementation_status":"IMPLEMENTED","unit_test":true,"integration_test":false,"live_test":"BLOCKED_HTTP_403","ui_test":false},
+    {"feature_id":"RW-ADVANCED","feature":"advanced Lucene/exact/boost syntax passed as native query value/fields","documentation_status":"DOCUMENTED","implementation_status":"PARTIAL","unit_test":false,"integration_test":false,"live_test":"BLOCKED_HTTP_403","ui_test":false},
+    {"feature_id":"RW-FILTER","feature":"recursive AND/OR filters and negate","documentation_status":"DOCUMENTED","implementation_status":"IMPLEMENTED","unit_test":true,"integration_test":false,"live_test":"BLOCKED_HTTP_403","ui_test":false},
+    {"feature_id":"RW-FACETS","feature":"facets, facet filter, interval and scope","documentation_status":"DOCUMENTED","implementation_status":"IMPLEMENTED","unit_test":true,"integration_test":false,"live_test":"BLOCKED_HTTP_403","ui_test":false},
+    {"feature_id":"RW-PAGING","feature":"limit/offset pagination","documentation_status":"DOCUMENTED","implementation_status":"IMPLEMENTED_INTERACTIVE","unit_test":true,"integration_test":false,"live_test":"BLOCKED_HTTP_403","ui_test":false},
+    {"feature_id":"RW-EXHAUSTIVE","feature":"exhaustive pagination through common HDP jobs","documentation_status":"DOCUMENTED_PROVIDER_LIMITS","implementation_status":"TODO","unit_test":false,"integration_test":false,"live_test":"NOT_RUN","ui_test":false},
+    {"feature_id":"RW-SORT","feature":"sort fields/directions","documentation_status":"DOCUMENTED","implementation_status":"IMPLEMENTED","unit_test":true,"integration_test":false,"live_test":"BLOCKED_HTTP_403","ui_test":false},
+    {"feature_id":"RW-PROFILE","feature":"minimal/list/full profiles","documentation_status":"DOCUMENTED","implementation_status":"IMPLEMENTED","unit_test":true,"integration_test":false,"live_test":"BLOCKED_HTTP_403","ui_test":false},
+    {"feature_id":"RW-PRESET","feature":"analysis/latest/minimal presets with content-specific semantics","documentation_status":"DOCUMENTED","implementation_status":"IMPLEMENTED_PARAMETER_ONLY","unit_test":true,"integration_test":false,"live_test":"BLOCKED_HTTP_403","ui_test":false},
+    {"feature_id":"RW-FIELDS","feature":"fields include/exclude","documentation_status":"DOCUMENTED","implementation_status":"IMPLEMENTED","unit_test":true,"integration_test":false,"live_test":"BLOCKED_HTTP_403","ui_test":false},
+    {"feature_id":"RW-SLIM","feature":"slim response","documentation_status":"DOCUMENTED","implementation_status":"IMPLEMENTED","unit_test":true,"integration_test":false,"live_test":"BLOCKED_HTTP_403","ui_test":false},
+    {"feature_id":"RW-VERBOSE","feature":"verbose details","documentation_status":"DOCUMENTED","implementation_status":"IMPLEMENTED","unit_test":true,"integration_test":false,"live_test":"BLOCKED_HTTP_403","ui_test":false},
+    {"feature_id":"RW-APPNAME","feature":"default/global/project appname resolution","documentation_status":"DOCUMENTED_REQUIREMENT","implementation_status":"IMPLEMENTED_CORE","unit_test":true,"integration_test":false,"live_test":"BLOCKED_HTTP_403_HDP_plateforme","ui_test":false},
+    {"feature_id":"RW-FIELD-CATALOG","feature":"complete content-type field capability catalog","documentation_status":"DOCUMENTED","implementation_status":"PARTIAL_INVENTORY","unit_test":false,"integration_test":false,"live_test":"NOT_RUN","ui_test":false},
+    {"feature_id":"RW-REFERENCES","feature":"references/taxonomies discovery","documentation_status":"DOCUMENTED_ENDPOINT_UNDER_AUDIT","implementation_status":"TODO","unit_test":false,"integration_test":false,"live_test":"BLOCKED_HTTP_403","ui_test":false},
+    {"feature_id":"RW-RAW","feature":"immutable raw artifacts and versioned normalization","documentation_status":"HDP_INVARIANT","implementation_status":"PARTIAL_NATIVE_INLINE","unit_test":true,"integration_test":false,"live_test":"NOT_RUN","ui_test":false},
+    {"feature_id":"RW-SEMANTIC","feature":"semantic router uses common ReliefWeb ProviderService","documentation_status":"HDP_INVARIANT","implementation_status":"TODO_MIGRATION_FROM_LEGACY_REPORTS_EXECUTOR","unit_test":false,"integration_test":false,"live_test":"OLD_EXECUTOR_CONFIGURATION_ERROR","ui_test":false},
+    {"feature_id":"RW-UI","feature":"Simple/Advanced/Expert descriptor-driven UI","documentation_status":"HDP_REQUIREMENT","implementation_status":"TODO","unit_test":false,"integration_test":false,"live_test":"NOT_RUN","ui_test":false},
+    {"feature_id":"RW-CLIENTS","feature":"R/Python dedicated HDP wrappers","documentation_status":"HDP_REQUIREMENT","implementation_status":"TODO","unit_test":false,"integration_test":false,"live_test":"NOT_RUN","ui_test":false},
+    {"feature_id":"RW-PUBLISH","feature":"Publishing API kept separate from public read connector","documentation_status":"DOCUMENTED_SEPARATE_SUBSYSTEM","implementation_status":"NOT_ENABLED","unit_test":false,"integration_test":false,"live_test":"NOT_RUN","ui_test":false}
+  ]
+}
