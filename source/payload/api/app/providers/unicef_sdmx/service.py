@@ -6,6 +6,61 @@ from ..base.native_service import NativeProviderService, normalize_generic_rows
 from .descriptor import UNICEF_SDMX_DESCRIPTOR
 
 
+def _dataflow_rows(payload: Any) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+
+    def walk(value: Any) -> None:
+        if isinstance(value, list):
+            for item in value:
+                walk(item)
+            return
+        if not isinstance(value, dict):
+            return
+
+        lowered = {str(key).casefold(): key for key in value}
+        identifier_key = next((lowered[key] for key in ("id", "dataflowid", "dataflow_id") if key in lowered), None)
+        agency_key = next((lowered[key] for key in ("agencyid", "agency_id", "agency") if key in lowered), None)
+        name_key = next((lowered[key] for key in ("name", "names", "label", "title") if key in lowered), None)
+        if identifier_key is not None and (agency_key is not None or name_key is not None):
+            rows.append(value)
+
+        for key, child in value.items():
+            if str(key).casefold() in {"dataflows", "dataflow", "structure", "data", "items", "results"}:
+                walk(child)
+
+    walk(payload)
+    seen: set[tuple[str, str, str]] = set()
+    unique: list[dict[str, Any]] = []
+    for row in rows:
+        identifier = str(row.get("id") or row.get("ID") or row.get("dataflowId") or row.get("dataflowID") or "")
+        agency = str(row.get("agencyID") or row.get("agencyId") or row.get("agency") or "")
+        version = str(row.get("version") or row.get("Version") or "")
+        key = (agency, identifier, version)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(row)
+    return unique
+
+
+def _label(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for preferred in ("en", "fr", "EN", "FR"):
+            if value.get(preferred):
+                return str(value[preferred])
+        for item in value.values():
+            if isinstance(item, str) and item.strip():
+                return item
+    if isinstance(value, list):
+        for item in value:
+            text = _label(item)
+            if text:
+                return text
+    return ""
+
+
 class UNICEFSDMXService(NativeProviderService):
     descriptor = UNICEF_SDMX_DESCRIPTOR
 
@@ -27,8 +82,27 @@ class UNICEFSDMXService(NativeProviderService):
 
     def normalize(self, operation: str, payload: Any, request_url: str, parameters: dict[str, Any]) -> list[dict[str, Any]]:
         if operation == "list_dataflows":
-            from ...main import parse_unicef_dataflows
-            return parse_unicef_dataflows(payload, "", 5000)
+            items: list[dict[str, Any]] = []
+            for index, row in enumerate(_dataflow_rows(payload)):
+                identifier = row.get("id") or row.get("ID") or row.get("dataflowId") or row.get("dataflowID") or index
+                name = _label(row.get("name") or row.get("Name") or row.get("names") or row.get("label"))
+                agency = row.get("agencyID") or row.get("agencyId") or row.get("agency") or ""
+                version = row.get("version") or row.get("Version") or ""
+                items.append({
+                    "id": str(identifier),
+                    "title": name or str(identifier),
+                    "description": _label(row.get("description") or row.get("Description")),
+                    "date": None,
+                    "url": request_url,
+                    "source": "UNICEF Data SDMX",
+                    "organization": "UNICEF",
+                    "geographic_scope": "",
+                    "agency": str(agency),
+                    "version": str(version),
+                    "_native": row,
+                    "resources": [],
+                })
+            return items
         return normalize_generic_rows(
             payload,
             request_url=request_url,
