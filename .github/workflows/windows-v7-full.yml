@@ -12,6 +12,8 @@ jobs:
   semantic-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      deterministic_ready: ${{ steps.readiness.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -42,17 +44,41 @@ jobs:
         run: pytest -q clients-v6/python/tests
       - name: Offline V7 release-readiness audit
         run: python tools/v7_release_readiness.py
-      - name: Live provider sentinel
-        run: python tools/v7_semantic_live_acceptance.py
-      - name: Live ReliefWeb exhaustive endpoint sentinel
-        run: python tools/v7_reliefweb_live_acceptance.py
       - name: Legacy V6 quality gate remains green
         run: python tools/run_v6_quality_gate.py
+      - name: Mark deterministic candidate ready
+        id: readiness
+        shell: bash
+        run: echo "ready=true" >> "$GITHUB_OUTPUT"
+      - name: Live provider sentinel
+        continue-on-error: true
+        run: python tools/v7_semantic_live_acceptance.py
+      - name: Live ReliefWeb acceptance (non-blocking until appname approval)
+        id: reliefweb_live
+        continue-on-error: true
+        run: python tools/v7_reliefweb_live_acceptance.py
+      - name: Record live qualification state
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p qualification-state
+          cat > qualification-state/RELIEFWEB_LIVE_STATUS.txt <<'EOF'
+          ReliefWeb live qualification is intentionally non-blocking for the user-test RC while the pre-approved appname is pending provider approval.
+          A 403 or other provider/configuration failure MUST remain visible in HDP and MUST NOT be interpreted as empty_valid.
+          Stable/final promotion remains forbidden until the live gate succeeds.
+          EOF
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: HDP-V7-live-qualification-state
+          path: qualification-state/RELIEFWEB_LIVE_STATUS.txt
+          retention-days: 90
 
   windows-installer-v7:
     runs-on: windows-2025
     timeout-minutes: 40
     needs: semantic-contracts
+    if: needs.semantic-contracts.outputs.deterministic_ready == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -91,14 +117,14 @@ jobs:
           if (Test-Path VERSION) { Copy-Item VERSION $stage }
           if (Test-Path HDP_STATE.json) { Copy-Item HDP_STATE.json $stage }
           $exeHash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
-          [ordered]@{schema_version=1;release="7.0.0";repository=$env:GITHUB_REPOSITORY;commit_sha=$env:GITHUB_SHA;workflow_run_id=$env:GITHUB_RUN_ID;generated_at_utc=[DateTime]::UtcNow.ToString("o");installer=[ordered]@{filename="HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe";sha256=$exeHash}} | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 (Join-Path $stage "BUILD_PROVENANCE_V7.json")
+          [ordered]@{schema_version=1;release="7.0.0-user-test-rc";qualification="deterministic-qualified-live-reliefweb-pending";repository=$env:GITHUB_REPOSITORY;commit_sha=$env:GITHUB_SHA;workflow_run_id=$env:GITHUB_RUN_ID;generated_at_utc=[DateTime]::UtcNow.ToString("o");installer=[ordered]@{filename="HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe";sha256=$exeHash}} | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 (Join-Path $stage "BUILD_PROVENANCE_V7.json")
           Compress-Archive -Path "$stage/*" -DestinationPath $archive -CompressionLevel Optimal
           $archiveHash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           "$archiveHash  HumanitarianDataPlatform_Archive_complete_v7.0.0.zip" | Set-Content -Encoding ascii $archiveSidecar
-          [ordered]@{schema_version=1;release="7.0.0";repository=$env:GITHUB_REPOSITORY;commit_sha=$env:GITHUB_SHA;workflow_run_id=$env:GITHUB_RUN_ID;generated_at_utc=[DateTime]::UtcNow.ToString("o");artifacts=@([ordered]@{filename="HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe";sha256=$exeHash},[ordered]@{filename="HumanitarianDataPlatform_Archive_complete_v7.0.0.zip";sha256=$archiveHash})} | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 $manifest
+          [ordered]@{schema_version=1;release="7.0.0-user-test-rc";qualification="deterministic-qualified-live-reliefweb-pending";repository=$env:GITHUB_REPOSITORY;commit_sha=$env:GITHUB_SHA;workflow_run_id=$env:GITHUB_RUN_ID;generated_at_utc=[DateTime]::UtcNow.ToString("o");artifacts=@([ordered]@{filename="HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe";sha256=$exeHash},[ordered]@{filename="HumanitarianDataPlatform_Archive_complete_v7.0.0.zip";sha256=$archiveHash})} | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 $manifest
       - uses: actions/upload-artifact@v4
         with:
-          name: HDP-V7-qualified-candidate
+          name: HDP-V7-user-test-RC
           path: |
             ${{ runner.temp }}/hdp-v7/HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe
             ${{ runner.temp }}/hdp-v7/HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe.sha256
