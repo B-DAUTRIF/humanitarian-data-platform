@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "provider": "ReliefWeb",
+  "api_version": "v2",
+  "consulted_at": "2026-08-31",
+  "base_url": "https://api.reliefweb.int/v2",
+  "official_docs": ["https://apidoc.reliefweb.int/","https://apidoc.reliefweb.int/endpoints","https://apidoc.reliefweb.int/parameters","https://apidoc.reliefweb.int/fields-tables","https://apidoc.reliefweb.int/result-structure","https://apidoc.reliefweb.int/presets","https://apidoc.reliefweb.int/faq","https://apidoc.reliefweb.int/publishing"],
+  "content_types": ["reports","disasters","countries","jobs","training","sources","blog","book","references"],
+  "list_methods": ["GET","POST"],
+  "item_methods": ["GET"],
+  "item_parameters": ["fields","profile"],
+  "parameters": {
+    "appname":{"type":"string","required":true,"location":"url","hdp_default":"HDP_plateforme","project_override":true},
+    "query":{"properties":{"value":"string","fields":"string[]","operator":["AND","OR"]}},
+    "filter":{"recursive":true,"properties":{"field":"string","value":"scalar|array|range","operator":["AND","OR"],"conditions":"filter[]","negate":"boolean"}},
+    "facets":{"type":"array","properties":{"field":"string","name":"string","limit":"integer","sort":"count|value:asc|desc","filter":"filter","interval":["year","month","week","day"],"scope":["default","query","global"]}},
+    "limit":{"type":"integer","min":0,"max":1000,"default":10},
+    "offset":{"type":"integer","min":0,"default":0},
+    "sort":{"type":"string[]","syntax":"field:asc|desc"},
+    "profile":{"enum":["minimal","list","full"],"default":"minimal"},
+    "preset":{"enum":["minimal","latest","analysis"]},
+    "fields":{"properties":{"include":"string[]","exclude":"string[]"}},
+    "slim":{"type":"integer-switch"},
+    "verbose":{"type":"integer-switch"}
+  },
+  "query_syntax":{"exact_phrase":true,"boolean_operators":["AND","OR","NOT"],"field_qualified":true,"parentheses":true,"exact_suffix":".exact","field_boost":"^N"},
+  "response":{"top_level":["href","time","links","totalCount","count","data"],"item":["id","fields","score","href"],"verbose_adds":"details"},
+  "quotas":{"max_entries_per_call":1000,"max_calls_per_day":1000},
+  "taxonomy":{"endpoint":"references","dynamic":true,"disasters_dynamic":true},
+  "publishing_api":{"separate":true,"write_method":"PUT","success_status":202,"requires_api_key":true,"requires_provider_id":true,"uuid":"v5","schemas":["report.json","job.json","training.json"]}
+}
