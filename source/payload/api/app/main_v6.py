@@ -30,6 +30,7 @@ from .providers.reliefweb.api import router as reliefweb_provider_router
 from .providers.world_bank_health.api import router as world_bank_health_provider_router
 from .v6_notebook_execution import router as v6_notebook_router
 from .v6_semantic_api import router as semantic_router
+from .v7_semantic_ui import router as semantic_ui_router
 from .v7_migrations import apply_v7_migrations
 from .v7_semantic_jobs import recover_abandoned_semantic_jobs, router as semantic_jobs_router
 
@@ -39,6 +40,7 @@ LEGACY_CONTRACT_VERSION = "6.0.0"
 ACTIVE_APPLICATION_VERSION = "7.0.0"
 
 LEGACY_NOTEBOOK_EXECUTION_PATH = "/api/notebooks/{notebook_id}/cells/{cell_index}/executions"
+SEMANTIC_UI_PATH = "/api/semantic/ui"
 app.router.routes[:] = [
     route
     for route in app.router.routes
@@ -64,6 +66,19 @@ app.include_router(v6_notebook_router)
 app.include_router(github_sync_router)
 app.include_router(api_inventory_router)
 app.include_router(semantic_router)
+
+# The legacy semantic router embeds an older HTML page. Keep all API routes but
+# replace only its GET UI route with the UUID-safe V7 page.
+app.router.routes[:] = [
+    route
+    for route in app.router.routes
+    if not (
+        isinstance(route, APIRoute)
+        and route.path == SEMANTIC_UI_PATH
+        and "GET" in (route.methods or set())
+    )
+]
+app.include_router(semantic_ui_router)
 app.include_router(semantic_jobs_router)
 app.include_router(reliefweb_provider_router)
 app.include_router(world_bank_health_provider_router)
