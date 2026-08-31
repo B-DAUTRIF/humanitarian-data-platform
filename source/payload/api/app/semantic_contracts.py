@@ -106,7 +106,12 @@ class ProvenanceRecord(BaseModel):
 
 
 def can_claim_empty_valid(*, completeness: Completeness, used_post_filter: bool) -> bool:
-    """P0 invariant: bounded/partial post-filtering can never prove absence."""
-    if not used_post_filter:
-        return True
+    """Return True only when the provider coverage can actually prove absence.
+
+    A bounded, sampled, partial or unknown acquisition can never establish a true
+    zero, even when all filtering was native. Post-filtering does not weaken an
+    exhaustive/paginated-exhaustive acquisition when the whole acquired result set
+    is filtered locally, but every non-exhaustive state remains non-conclusive.
+    """
+    del used_post_filter  # retained in the public contract for backwards compatibility
     return completeness in {Completeness.EXHAUSTIVE, Completeness.PAGINATED_EXHAUSTIVE}
