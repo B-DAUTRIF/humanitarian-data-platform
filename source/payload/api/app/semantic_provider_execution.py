@@ -37,42 +37,41 @@ async def _get_json(url: str, params: dict[str, Any], settings: dict[str, Any]) 
 
 
 async def execute_reliefweb_native(route: dict[str, Any], settings: dict[str, Any]) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
-    from .main import RELIEFWEB_APPNAME, normalize_reliefweb_items
-    if not RELIEFWEB_APPNAME:
-        raise RuntimeError("ReliefWeb exige RELIEFWEB_APPNAME pré-approuvé")
+    """Execute semantic ReliefWeb searches through the same ProviderService as the native API.
+
+    The semantic adapter currently targets reports because SearchIntent represents
+    document discovery. Native ReliefWeb UI/API callers can select all documented
+    content types. Project-specific configuration is accepted when injected in the
+    route; until the semantic API passes it, global/default resolution remains active.
+    """
+    from .providers.reliefweb.service import ReliefWebService
+
     parameters, native = route["parameters"], route.get("native_parameters", {})
-    query: dict[str, Any] = {"appname": RELIEFWEB_APPNAME, "limit": int(parameters.get("result_limit") or 25), "offset": 0, "profile": "full", "preset": "latest", "sort[]": "date.created:desc"}
-    if parameters.get("query"):
-        query["query[value]"] = parameters["query"]
-    conditions: list[dict[str, Any]] = []
+    filters: list[dict[str, Any]] = []
     if native.get("filter[field]"):
-        conditions.append({"field": native["filter[field]"], "value": native["filter[value]"]})
+        filters.append({"field": native["filter[field]"], "value": native["filter[value]"]})
     if native.get("filter_date_field"):
         value: dict[str, str] = {}
         if native.get("filter_date_from"):
             value["from"] = f"{native['filter_date_from']}T00:00:00+00:00"
         if native.get("filter_date_to"):
             value["to"] = f"{native['filter_date_to']}T23:59:59+00:00"
-        conditions.append({"field": native["filter_date_field"], "value": value})
-    if len(conditions) == 1:
-        query["filter[field]"] = conditions[0]["field"]
-        if isinstance(conditions[0]["value"], dict):
-            for key, value in conditions[0]["value"].items():
-                query[f"filter[value][{key}]"] = value
-        else:
-            query["filter[value]"] = conditions[0]["value"]
-    elif conditions:
-        query["filter[operator]"] = "AND"
-        for index, condition in enumerate(conditions):
-            query[f"filter[conditions][{index}][field]"] = condition["field"]
-            if isinstance(condition["value"], dict):
-                for key, value in condition["value"].items():
-                    query[f"filter[conditions][{index}][value][{key}]"] = value
-            else:
-                query[f"filter[conditions][{index}][value]"] = condition["value"]
-    payload, request_url = await _get_json("https://api.reliefweb.int/v2/reports", query, settings)
-    redacted = {**query, "appname": "<RELIEFWEB_APPNAME>"}
-    return payload, normalize_reliefweb_items(payload), {"method": "GET", "url": request_url.split("?")[0], "query_parameters": redacted}
+        filters.append({"field": native["filter_date_field"], "value": value})
+    rw_parameters: dict[str, Any] = {
+        "query": parameters.get("query") or "",
+        "limit": int(parameters.get("result_limit") or 25),
+        "offset": 0,
+        "profile": "full",
+        "preset": "latest",
+        "sort": ["date.created:desc"],
+    }
+    if len(filters) == 1:
+        rw_parameters["filter"] = filters[0]
+    elif filters:
+        rw_parameters["filter"] = {"operator": "AND", "conditions": filters}
+    service = ReliefWebService(settings)
+    project_config = route.get("provider_configuration") if isinstance(route.get("provider_configuration"), dict) else {}
+    return await service.execute("reports", rw_parameters, global_settings=settings, project_settings=project_config)
 
 
 async def execute_hapi_native(route: dict[str, Any], settings: dict[str, Any]) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:

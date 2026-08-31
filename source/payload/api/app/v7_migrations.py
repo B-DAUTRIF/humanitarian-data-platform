@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Idempotent V7 semantic/provenance/job schema, isolated from legacy migrations."""
+"""Idempotent V7 semantic/provider/provenance/job schema, isolated from legacy migrations."""
 
 
 def apply_v7_migrations() -> None:
@@ -78,6 +78,109 @@ def apply_v7_migrations() -> None:
         "CREATE INDEX IF NOT EXISTS idx_semantic_jobs_project_created ON semantic_jobs(project_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_semantic_jobs_status ON semantic_jobs(status, created_at)",
         """
+        CREATE TABLE IF NOT EXISTS provider_schema_versions (
+            provider_id TEXT NOT NULL,
+            api_version TEXT NOT NULL,
+            descriptor_hash CHAR(64) NOT NULL,
+            descriptor_json JSONB NOT NULL,
+            evidence_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+            observed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            PRIMARY KEY (provider_id, api_version, descriptor_hash)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS provider_field_catalog (
+            provider_id TEXT NOT NULL,
+            api_version TEXT NOT NULL,
+            content_type TEXT NOT NULL,
+            field_path TEXT NOT NULL,
+            field_type TEXT NOT NULL,
+            capabilities JSONB NOT NULL DEFAULT '{}'::jsonb,
+            description TEXT,
+            abbreviation TEXT,
+            evidence_url TEXT,
+            observed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            PRIMARY KEY (provider_id, api_version, content_type, field_path)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_provider_field_catalog_provider ON provider_field_catalog(provider_id, content_type)",
+        """
+        CREATE TABLE IF NOT EXISTS provider_vocabulary_cache (
+            provider_id TEXT NOT NULL,
+            vocabulary_id TEXT NOT NULL,
+            source_url TEXT NOT NULL,
+            payload_hash CHAR(64) NOT NULL,
+            etag TEXT,
+            last_modified TEXT,
+            retrieved_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            expires_at TIMESTAMPTZ,
+            metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            PRIMARY KEY (provider_id, vocabulary_id, payload_hash)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS provider_vocabulary_values (
+            provider_id TEXT NOT NULL,
+            vocabulary_id TEXT NOT NULL,
+            provider_value TEXT NOT NULL,
+            label TEXT,
+            parent_value TEXT,
+            aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
+            metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            valid_from TIMESTAMPTZ,
+            valid_to TIMESTAMPTZ,
+            PRIMARY KEY (provider_id, vocabulary_id, provider_value)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS provider_raw_artifacts (
+            id UUID PRIMARY KEY,
+            provider_id TEXT NOT NULL,
+            semantic_search_id UUID NULL REFERENCES semantic_searches(id) ON DELETE SET NULL,
+            project_id UUID NULL,
+            request_fingerprint CHAR(64) NOT NULL,
+            response_hash CHAR(64) NOT NULL,
+            content_type TEXT,
+            media_type TEXT NOT NULL DEFAULT 'application/json',
+            http_status INTEGER,
+            artifact_uri TEXT,
+            inline_payload JSONB,
+            request_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            acquired_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            CHECK (artifact_uri IS NOT NULL OR inline_payload IS NOT NULL),
+            UNIQUE(provider_id, response_hash)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_provider_raw_artifacts_search ON provider_raw_artifacts(semantic_search_id, provider_id)",
+        """
+        CREATE TABLE IF NOT EXISTS provider_normalizations (
+            id UUID PRIMARY KEY,
+            raw_artifact_id UUID NOT NULL REFERENCES provider_raw_artifacts(id) ON DELETE CASCADE,
+            normalization_version TEXT NOT NULL,
+            normalized_hash CHAR(64) NOT NULL,
+            record_count INTEGER NOT NULL DEFAULT 0 CHECK (record_count >= 0),
+            metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE(raw_artifact_id, normalization_version)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS provider_schema_drift_events (
+            id UUID PRIMARY KEY,
+            provider_id TEXT NOT NULL,
+            api_version TEXT,
+            event_type TEXT NOT NULL,
+            field_path TEXT,
+            expected_json JSONB,
+            observed_json JSONB,
+            evidence_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            status TEXT NOT NULL DEFAULT 'open',
+            detected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            resolved_at TIMESTAMPTZ
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_provider_schema_drift_open ON provider_schema_drift_events(provider_id, status, detected_at DESC)",
+        """
         DO $$ BEGIN
           IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_semantic_searches_project') THEN
             ALTER TABLE semantic_searches ADD CONSTRAINT fk_semantic_searches_project
@@ -90,6 +193,14 @@ def apply_v7_migrations() -> None:
           IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_semantic_jobs_project') THEN
             ALTER TABLE semantic_jobs ADD CONSTRAINT fk_semantic_jobs_project
               FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+          END IF;
+        END $$
+        """,
+        """
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_provider_raw_artifacts_project') THEN
+            ALTER TABLE provider_raw_artifacts ADD CONSTRAINT fk_provider_raw_artifacts_project
+              FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
           END IF;
         END $$
         """,

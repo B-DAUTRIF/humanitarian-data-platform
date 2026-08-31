@@ -7,8 +7,10 @@ import json
 import re
 from typing import Any
 
+# Public provider identifiers such as ReliefWeb ``appname`` are deliberately not
+# included here: changing them can alter provider behavior and must remain visible
+# in provenance/fingerprints. Credentials and opaque application secrets remain redacted.
 _EXACT_SECRET_KEYS = {
-    "appname",
     "app_identifier",
     "authorization",
     "password",
@@ -96,6 +98,7 @@ def query_fingerprint(plan_without_fingerprint: dict[str, Any]) -> str:
                 "operation": route.get("operation"),
                 "executable": route.get("executable"),
                 "project_enabled": route.get("project_enabled"),
+                "provider_configuration": route.get("provider_configuration", {}),
                 "native_parameters": route.get("native_parameters", {}),
                 "criteria": route.get("criteria", {}),
                 "completeness": route.get("completeness"),
