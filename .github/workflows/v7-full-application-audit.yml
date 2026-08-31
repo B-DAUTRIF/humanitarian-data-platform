@@ -1,0 +1,96 @@
+name: HDP V7 full application audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "source/**"
+      - "clients-v6/**"
+      - "tools/**"
+      - "docs/**"
+      - ".github/workflows/**"
+
+permissions:
+  contents: read
+
+jobs:
+  full-application-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: hdp_audit
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d hdp_audit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      HDP_BACKUP_RESTORE_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/hdp_audit
+      HDP_LOCAL_TOKEN: full-audit-local-token-0000000000000000000000000000
+      HDP_SQL_PASSWORD: full-audit-sql-password-000000000000000000000000000
+      HDP_AUTH_MODE: local_token
+      RELIEFWEB_APPNAME: HDP_full_application_audit
+      HDX_HAPI_APP_IDENTIFIER: HDP_full_application_audit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install audit dependencies
+        run: |
+          python -m pip install -r source/payload/api/requirements.txt
+          python -m pip install -e clients-v6/python
+          python -m pip install pytest
+      - name: Compile all active Python code
+        run: python -m compileall -q source/payload/api/app source/tests clients-v6/python/src clients-v6/python/tests tools
+      - name: Execute complete source test suite
+        run: python -m unittest discover -s source/tests -p 'test_*.py'
+      - name: Execute Python client test suite
+        run: python -m unittest discover -s clients-v6/python/tests -p 'test*.py'
+      - name: Execute V6 functional and epidemiological gates
+        run: |
+          python tools/v6_use_case_gate.py
+          python tools/epidemiology_acceptance.py
+          python tools/epidemiology_reference_acceptance.py
+      - name: Execute V7 connector and semantic qualification gates
+        run: |
+          python tools/v7_connector_parameter_audit.py
+          python tools/v7_dual_connector_architecture_qualification.py
+          python tools/v7_global_10cycle_audit.py
+          python tools/v7_release_readiness.py
+      - name: Check JavaScript and Docker Compose contracts
+        run: |
+          node tools/check_inline_javascript.mjs source/payload/api/static/index.html
+          docker compose -f source/payload/compose.yaml config --quiet
+        env:
+          POSTGRES_PASSWORD: audit-placeholder-not-a-secret
+      - name: Execute static security checks
+        run: python tools/security_static_checks.py
+      - name: Generate full application audit inventory
+        run: python tools/v7_full_application_audit.py
+      - name: Verify clean patch semantics
+        run: git diff --check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: HDP-V7-full-application-audit
+          path: |
+            qualification-state/HDP_V7_FULL_APPLICATION_AUDIT.json
+            qualification-state/HDP_V7_FULL_APPLICATION_AUDIT.md
+            qualification-state/V7_CONNECTOR_PARAMETER_AUDIT.json
+            qualification-state/V7_CONNECTOR_PARAMETER_MATRIX.csv
+            qualification-state/V7_CONNECTOR_PARAMETER_MATRIX.md
+            qualification-state/HDP_V7_DUAL_CONNECTOR_ARCHITECTURE_10_CYCLES.json
+            qualification-state/HDP_V7_GLOBAL_10CYCLE_AUDIT.json
+          if-no-files-found: warn
+          retention-days: 90
