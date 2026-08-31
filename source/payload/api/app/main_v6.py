@@ -28,6 +28,7 @@ from .github_sync import router as github_sync_router
 from .api_inventory import router as api_inventory_router
 from .providers.reliefweb.api import router as reliefweb_provider_router
 from .providers.world_bank_health.api import router as world_bank_health_provider_router
+from .providers.world_bank_health.semantic_interface import router as world_bank_health_semantic_router
 from .v6_notebook_execution import router as v6_notebook_router
 from .v6_semantic_api import router as semantic_router
 from .v7_semantic_ui import router as semantic_ui_router
@@ -82,6 +83,7 @@ app.include_router(semantic_ui_router)
 app.include_router(semantic_jobs_router)
 app.include_router(reliefweb_provider_router)
 app.include_router(world_bank_health_provider_router)
+app.include_router(world_bank_health_semantic_router)
 
 
 @app.on_event("startup")
