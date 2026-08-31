@@ -41,7 +41,7 @@ def _exercise(feature: str, cycle: int) -> None:
         "country_metadata": lambda: build_catalog_request("countries", identifier="RWA")["url"].endswith("/v2/country/RWA"),
         "aggregate_separation": _aggregate_is_rejected,
         "normalization": _normalization_is_stable,
-        "native_provenance": lambda: basic["method"] == "GET" and isinstance(basic["query_parameters"], dict) and build_catalog_request("metadata", identifier="2")["method"] == "GET",
+        "native_provenance": lambda: basic["method"] == "GET" and isinstance(basic["query_parameters"], dict) and build_catalog_request("metadata", identifier="2", query="health")["method"] == "GET",
         "invalid_geography_rejection": _invalid_geography_is_rejected,
         "provider_error_not_empty": lambda: any(c.name == "provider_error_not_empty" for c in WORLD_BANK_HEALTH_DESCRIPTOR.capabilities),
         "bounded_result_not_absence": lambda: any(c.name == "bounded_result_not_absence" for c in WORLD_BANK_HEALTH_DESCRIPTOR.capabilities),
