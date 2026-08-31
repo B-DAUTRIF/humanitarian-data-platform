@@ -9,7 +9,7 @@ sys.path.insert(0, str(APP_ROOT))
 
 from app.providers.base.contracts import resolve_provider_configuration
 from app.providers.world_bank_health.descriptor import FEATURES, WORLD_BANK_HEALTH_DESCRIPTOR
-from app.providers.world_bank_health.service import build_observation_request, normalize_observations, validate_country_code
+from app.providers.world_bank_health.service import build_catalog_request, build_observation_request, filter_indicator_catalog, normalize_observations, validate_country_code
 
 
 class ProviderWorldBankHealthArchitectureTests(unittest.TestCase):
@@ -25,10 +25,11 @@ class ProviderWorldBankHealthArchitectureTests(unittest.TestCase):
         self.assertEqual(override["source"]["value"], 3)
         self.assertEqual(override["source"]["origin"], "project")
 
-    def test_iso3_validation(self):
+    def test_iso3_validation_and_aggregate_separation(self):
         self.assertEqual(validate_country_code("rwa"), "RWA")
         self.assertEqual(validate_country_code("RWA;KEN"), "RWA;KEN")
-        with self.assertRaises(ValueError): validate_country_code("SSA")  # aggregate codes need explicit aggregate semantics
+        with self.assertRaises(ValueError): validate_country_code("SSA")
+        with self.assertRaises(ValueError): validate_country_code("WLD")
         with self.assertRaises(ValueError): validate_country_code("Rwanda")
 
     def test_native_request_date_and_pagination(self):
@@ -53,6 +54,24 @@ class ProviderWorldBankHealthArchitectureTests(unittest.TestCase):
         spec = build_observation_request(country="RWA", indicator="SH.MLR.INCD.P3", language="fr")
         self.assertIn("api.worldbank.org/fr/v2", spec["url"])
 
+    def test_auxiliary_catalog_request_contracts(self):
+        self.assertIn("/source/2/indicator", build_catalog_request("indicators")["url"])
+        self.assertTrue(build_catalog_request("countries")["url"].endswith("/v2/country"))
+        self.assertTrue(build_catalog_request("topics")["url"].endswith("/v2/topic"))
+        self.assertTrue(build_catalog_request("sources")["url"].endswith("/v2/source"))
+        self.assertIn("/sources/2/metadata", build_catalog_request("metadata", identifier="2")["url"])
+        metadata = build_catalog_request("indicator_metadata", identifier="SH.MLR.INCD.P3")
+        self.assertIn("/indicator/SH.MLR.INCD.P3", metadata["url"])
+        self.assertEqual(metadata["query_parameters"]["source"], 2)
+
+    def test_indicator_keyword_discovery(self):
+        rows = [
+            {"id":"SH.MLR.INCD.P3", "name":"Incidence of malaria", "sourceNote":"Malaria cases"},
+            {"id":"SP.POP.TOTL", "name":"Population, total", "sourceNote":"Population"},
+        ]
+        matches = filter_indicator_catalog(rows, "malaria")
+        self.assertEqual([row["id"] for row in matches], ["SH.MLR.INCD.P3"])
+
     def test_normalization_preserves_native(self):
         payload = [{"page":1}, [{"indicator":{"id":"X","value":"Test"},"country":{"id":"RW","value":"Rwanda"},"countryiso3code":"RWA","date":"2024","value":12.3,"obs_status":"","decimal":1}]]
         item = normalize_observations(payload, "https://example.test")[0]
@@ -63,6 +82,10 @@ class ProviderWorldBankHealthArchitectureTests(unittest.TestCase):
 
     def test_invalid_frequency_is_rejected(self):
         with self.assertRaises(ValueError): build_observation_request(country="RWA", indicator="X", frequency="D")
+
+    def test_invalid_catalog_operation_is_rejected(self):
+        with self.assertRaises(ValueError): build_catalog_request("unknown")
+        with self.assertRaises(ValueError): build_catalog_request("metadata")
 
     def test_json_is_qualified_format(self):
         spec = build_observation_request(country="RWA", indicator="X")
