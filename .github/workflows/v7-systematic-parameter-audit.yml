@@ -9,6 +9,7 @@ on:
       - "tools/v7_systematic_parameter_audit.py"
       - "tools/v7_systematic_parameter_live.py"
       - "docs/prompts/**"
+      - "docs/versions/7.0.0/parameter-audit/**"
       - ".github/workflows/v7-systematic-parameter-audit.yml"
 
 permissions:
