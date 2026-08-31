@@ -13,14 +13,20 @@ from app.providers.world_bank_health.service import WorldBankHealthService
 SETTINGS = {"timeout_seconds": 30, "connect_timeout_seconds": 10, "user_agent": "HDP/7 WorldBankHealthQualification", "accept_language": "en"}
 
 
+async def _record(name: str, call, checks: list[dict]) -> None:
+    payload, rows, native = await call
+    checks.append({"name": name, "status": "PASS", "http_status": native.get("http_status"), "url": native.get("url"), "row_count": len(rows), "has_payload": bool(payload)})
+
+
 async def main_async() -> int:
     service = WorldBankHealthService(SETTINGS)
-    checks = []
+    checks: list[dict] = []
     try:
-        country_payload, country_url, country_status = await service.get_json("https://api.worldbank.org/v2/country/RWA", {"format": "json"})
-        checks.append({"name": "country_RWA", "status": "PASS", "http_status": country_status, "url": country_url, "has_payload": bool(country_payload)})
-        indicator_payload, indicator_url, indicator_status = await service.get_json("https://api.worldbank.org/v2/indicator/SH.MLR.INCD.P3", {"format": "json", "source": 2})
-        checks.append({"name": "indicator_metadata", "status": "PASS", "http_status": indicator_status, "url": indicator_url, "has_payload": bool(indicator_payload)})
+        await _record("country_RWA", service.list_countries(identifier="RWA", per_page=10), checks)
+        await _record("indicator_metadata", service.indicator_metadata("SH.MLR.INCD.P3", source=2), checks)
+        await _record("topic_catalogue", service.list_topics(per_page=20), checks)
+        await _record("source_catalogue", service.list_sources(per_page=20), checks)
+        await _record("source_2_metadata", service.get_metadata(source=2, per_page=50), checks)
         payload, items, native = await service.observations(country="RWA", indicator="SH.MLR.INCD.P3", source=2, date="2020:2025", page=1, per_page=20)
         checks.append({"name": "health_observations_RWA_2020_2025", "status": "PASS", "http_status": native.get("http_status"), "url": native.get("url"), "item_count": len(items), "has_payload": bool(payload)})
         status = "PASS"
