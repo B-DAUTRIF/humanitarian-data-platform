@@ -61,12 +61,14 @@ def _project_plan(payload: SemanticSearchRequest, sources: list[str]) -> dict[st
         source_id = str(route["source"])
         project_settings = get_project_source_settings(payload.project_id, source_id)
         enabled = bool(project_settings.get("enabled", True))
+        project_parameters = project_settings.get("parameters") or {}
         project_sources[source_id] = {
             "enabled": enabled,
-            "parameters": project_settings.get("parameters") or {},
+            "parameters": project_parameters,
             "schedule_defaults": project_settings.get("schedule_defaults") or {},
         }
         route["project_enabled"] = enabled
+        route["provider_configuration"] = dict(project_parameters)
         if not enabled:
             route["executable"] = False
             route["project_blocked"] = True
