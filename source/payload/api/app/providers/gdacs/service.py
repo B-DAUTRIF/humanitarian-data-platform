@@ -1,9 +1,24 @@
 from __future__ import annotations
 
+from html import unescape
+from re import sub
 from typing import Any
 
 from ..base.native_service import NativeProviderService
 from .descriptor import GDACS_DESCRIPTOR
+
+
+def _plain_text(value: Any) -> str:
+    text = unescape(str(value or ""))
+    return " ".join(sub(r"<[^>]+>", " ", text).split())
+
+
+def _gdacs_features(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, dict) and isinstance(payload.get("features"), list):
+        return [row for row in payload["features"] if isinstance(row, dict)]
+    if isinstance(payload, list):
+        return [row for row in payload if isinstance(row, dict)]
+    return []
 
 
 class GDACSService(NativeProviderService):
@@ -28,8 +43,33 @@ class GDACSService(NativeProviderService):
         }
 
     def normalize(self, operation: str, payload: Any, request_url: str, parameters: dict[str, Any]) -> list[dict[str, Any]]:
-        from ...main import parse_gdacs_events
-        return parse_gdacs_events(payload, "", 100, resource_url=request_url)
+        if operation != "search_events":
+            raise ValueError(f"Unsupported GDACS operation: {operation}")
+        items: list[dict[str, Any]] = []
+        for index, feature in enumerate(_gdacs_features(payload)):
+            properties = feature.get("properties") if isinstance(feature.get("properties"), dict) else feature
+            event_id = properties.get("eventid") or properties.get("eventId") or properties.get("id") or index
+            event_type = properties.get("eventtype") or properties.get("eventType") or ""
+            name = properties.get("name") or properties.get("eventname") or properties.get("eventName")
+            description = _plain_text(properties.get("description") or properties.get("htmldescription") or "")
+            title = str(name or description or f"{event_type} {event_id}").strip()
+            country = properties.get("country") or properties.get("countryname") or properties.get("countryName") or ""
+            event_url = properties.get("url") or properties.get("eventurl") or properties.get("eventUrl") or request_url
+            items.append({
+                "id": str(event_id),
+                "title": title,
+                "description": description,
+                "date": properties.get("fromdate") or properties.get("fromDate") or properties.get("date"),
+                "url": str(event_url),
+                "source": "GDACS",
+                "organization": "Global Disaster Alert and Coordination System",
+                "geographic_scope": str(country),
+                "event_type": event_type,
+                "alert_level": properties.get("alertlevel") or properties.get("alertLevel"),
+                "_native": feature,
+                "resources": [],
+            })
+        return items
 
     async def execute_semantic(
         self,
