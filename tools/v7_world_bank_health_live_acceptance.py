@@ -26,7 +26,7 @@ async def main_async() -> int:
         await _record("indicator_metadata", service.indicator_metadata("SH.MLR.INCD.P3", source=2), checks)
         await _record("topic_catalogue", service.list_topics(per_page=20), checks)
         await _record("source_catalogue", service.list_sources(per_page=20), checks)
-        await _record("source_2_metadata", service.get_metadata(source=2, per_page=50), checks)
+        await _record("source_2_metadata_search_health", service.get_metadata(source=2, query="health", per_page=50), checks)
         payload, items, native = await service.observations(country="RWA", indicator="SH.MLR.INCD.P3", source=2, date="2020:2025", page=1, per_page=20)
         checks.append({"name": "health_observations_RWA_2020_2025", "status": "PASS", "http_status": native.get("http_status"), "url": native.get("url"), "item_count": len(items), "has_payload": bool(payload)})
         status = "PASS"
