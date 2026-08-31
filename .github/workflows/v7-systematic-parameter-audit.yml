@@ -1,0 +1,90 @@
+name: HDP V7 systematic parameter audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "source/**"
+      - "clients-v6/**"
+      - "tools/v7_systematic_parameter_audit.py"
+      - "docs/prompts/**"
+      - ".github/workflows/v7-systematic-parameter-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-parameter-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install API dependencies
+        run: |
+          pip install -r source/payload/api/requirements.txt
+          pip install pytest
+      - name: Compile connector and audit code
+        run: python -m compileall -q source/payload/api/app source/tests tools
+      - name: Ten systematic parameter audit cycles
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p qualification-state/parameter-audit/cycles
+          for cycle in $(seq 1 10); do
+            echo "=== parameter audit cycle ${cycle}/10 ==="
+            python tools/v7_systematic_parameter_audit.py
+            cp qualification-state/parameter-audit/PARAMETER_AUDIT.json "qualification-state/parameter-audit/cycles/cycle_${cycle}.json"
+          done
+      - name: Existing connector and semantic regressions
+        run: >-
+          python -m unittest
+          source/tests/test_semantic_router.py
+          source/tests/test_semantic_provider_execution.py
+          source/tests/test_provider_reliefweb_architecture.py
+          source/tests/test_reliefweb_use_case_qualification.py
+          source/tests/test_provider_world_bank_health_architecture.py
+          source/tests/test_v7_global_audit_regressions.py
+          source/tests/test_semantic_ui_project_binding.py
+      - name: Existing dual connector architecture cycles
+        run: python tools/v7_dual_connector_architecture_qualification.py
+      - name: Global V7 release-readiness audit
+        run: python tools/v7_release_readiness.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: HDP-V7-systematic-parameter-audit
+          path: qualification-state/parameter-audit/**
+          retention-days: 90
+
+  windows-regression:
+    runs-on: windows-2025
+    needs: deterministic-parameter-audit
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build V7 Windows installer after parameter audit
+        shell: pwsh
+        run: ./source/build-windows-v7.ps1 -OutputDirectory "${{ runner.temp }}/hdp-v7-parameter-audit"
+      - name: Verify audited installer
+        shell: pwsh
+        run: |
+          $exe = "${{ runner.temp }}/hdp-v7-parameter-audit/HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe"
+          if (-not (Test-Path $exe)) { throw "installer missing" }
+          $bytes=[System.IO.File]::ReadAllBytes($exe)
+          if ($bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw "missing MZ" }
+          $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $recorded=((Get-Content "$exe.sha256" -Raw).Split()[0]).ToLowerInvariant()
+          if ($hash -ne $recorded) { throw "SHA256 mismatch" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HDP-V7-parameter-audited-EXE
+          path: |
+            ${{ runner.temp }}/hdp-v7-parameter-audit/HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe
+            ${{ runner.temp }}/hdp-v7-parameter-audit/HumanitarianDataPlatform_Setup_Native_GUI_v7.0.0.exe.sha256
+          retention-days: 90
