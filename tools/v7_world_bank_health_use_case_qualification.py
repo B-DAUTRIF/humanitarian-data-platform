@@ -9,7 +9,7 @@ APP_ROOT = ROOT / "source" / "payload" / "api"
 sys.path.insert(0, str(APP_ROOT))
 
 from app.providers.world_bank_health.descriptor import FEATURES, WORLD_BANK_HEALTH_DESCRIPTOR
-from app.providers.world_bank_health.service import build_observation_request, normalize_observations, validate_country_code
+from app.providers.world_bank_health.service import build_catalog_request, build_observation_request, filter_indicator_catalog, normalize_observations, validate_country_code
 
 CYCLES = 10
 
@@ -18,8 +18,8 @@ def _exercise(feature: str, cycle: int) -> None:
     basic = build_observation_request(country="RWA", indicator="SH.MLR.INCD.P3", date="2020:2025", page=1 + cycle % 2, per_page=50)
     q = basic["query_parameters"]
     checks = {
-        "indicator_catalogue": lambda: "indicators" in WORLD_BANK_HEALTH_DESCRIPTOR.content_types,
-        "indicator_keyword_discovery": lambda: any(c.name == "indicator_keyword_discovery" for c in WORLD_BANK_HEALTH_DESCRIPTOR.capabilities),
+        "indicator_catalogue": lambda: "/source/2/indicator" in build_catalog_request("indicators")["url"],
+        "indicator_keyword_discovery": _indicator_search_is_stable,
         "wdi_source_2": lambda: q["source"] == 2,
         "indicator_code_selection": lambda: "SH.MLR.INCD.P3" in basic["url"],
         "country_iso3": lambda: validate_country_code("rwa") == "RWA",
@@ -35,19 +35,27 @@ def _exercise(feature: str, cycle: int) -> None:
         "gapfill": lambda: build_observation_request(country="RWA", indicator="X", gapfill=True)["query_parameters"]["gapfill"] == "Y",
         "frequency": lambda: build_observation_request(country="RWA", indicator="X", frequency="Q")["query_parameters"]["frequency"] == "Q",
         "footnotes": lambda: build_observation_request(country="RWA", indicator="X", footnote=True)["query_parameters"]["footnote"] == "y",
-        "json_format": lambda: q["format"] == "json",
+        "json_format": lambda: q["format"] == "json" and build_catalog_request("countries")["query_parameters"]["format"] == "json",
         "language": lambda: "/fr/v2/" in build_observation_request(country="RWA", indicator="X", language="fr")["url"],
-        "topic_catalogue": lambda: "topics" in WORLD_BANK_HEALTH_DESCRIPTOR.content_types,
-        "country_metadata": lambda: "countries" in WORLD_BANK_HEALTH_DESCRIPTOR.content_types,
+        "topic_catalogue": lambda: build_catalog_request("topics")["url"].endswith("/v2/topic"),
+        "country_metadata": lambda: build_catalog_request("countries", identifier="RWA")["url"].endswith("/v2/country/RWA"),
         "aggregate_separation": _aggregate_is_rejected,
         "normalization": _normalization_is_stable,
-        "native_provenance": lambda: basic["method"] == "GET" and isinstance(basic["query_parameters"], dict),
+        "native_provenance": lambda: basic["method"] == "GET" and isinstance(basic["query_parameters"], dict) and build_catalog_request("metadata", identifier="2")["method"] == "GET",
         "invalid_geography_rejection": _invalid_geography_is_rejected,
         "provider_error_not_empty": lambda: any(c.name == "provider_error_not_empty" for c in WORLD_BANK_HEALTH_DESCRIPTOR.capabilities),
         "bounded_result_not_absence": lambda: any(c.name == "bounded_result_not_absence" for c in WORLD_BANK_HEALTH_DESCRIPTOR.capabilities),
     }
     if feature not in checks or not checks[feature]():
         raise AssertionError(f"feature failed: {feature} cycle={cycle}")
+
+
+def _indicator_search_is_stable() -> bool:
+    rows = [
+        {"id": "SH.MLR.INCD.P3", "name": "Incidence of malaria", "sourceNote": "Malaria cases"},
+        {"id": "SP.POP.TOTL", "name": "Population, total", "sourceNote": "Population"},
+    ]
+    return [x["id"] for x in filter_indicator_catalog(rows, "malaria")] == ["SH.MLR.INCD.P3"]
 
 
 def _aggregate_is_rejected() -> bool:
