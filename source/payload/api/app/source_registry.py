@@ -8,8 +8,8 @@ from typing import Any
 from urllib.parse import urlencode
 
 
-REGISTRY_VERSION = "6.0.0"
-VERIFIED_AT = "2026-08-21"
+REGISTRY_VERSION = "7.0.0"
+VERIFIED_AT = "2026-08-31"
 
 
 def field(
@@ -76,7 +76,7 @@ GLOBAL_BASE_SCHEMA: dict[str, Any] = {
             description="La réponse JSON est refusée au-delà de cette limite, avant décodage.",
         ),
         "user_agent": field(
-            "string", "Identifiant HTTP", default="HDP/6.0.0",
+            "string", "Identifiant HTTP", default="HDP/7.0.0",
             min_length=3, max_length=160,
             description="Identifie clairement le client HDP auprès du fournisseur de données.",
         ),
@@ -191,11 +191,16 @@ GLOBAL_SCHEMA_EXTRAS: dict[str, dict[str, Any]] = {
         "indicator_source_id": field(
             "string", "Identifiant de source", default="2",
             enum=["2"], read_only=True,
-            description="Source WDI utilisée pour les indicateurs sanitaires et de développement.",
+            description="Source WDI utilisée par défaut ; le paramètre projet source reste exposé pour les opérations qualifiées.",
         ),
         "api_version": field(
             "string", "Version Indicators API", default="v2",
             enum=["v2"], read_only=True,
+        ),
+        "geography_catalogue_policy": field(
+            "string", "Validation géographique", default="provider_versioned_catalogue",
+            enum=["provider_versioned_catalogue"], read_only=True,
+            description="Les codes géographiques sont contrôlés contre le catalogue World Bank versionné ; la liste statique n’est qu’un garde-fou de repli.",
         ),
     },
     "unicef-sdmx": {
@@ -313,7 +318,7 @@ TECHNICAL_PROFILES: dict[str, dict[str, Any]] = {
     },
     "world-bank-health": {
         "protocol": "World Bank Indicators API v2 / HTTPS / JSON",
-        "formats": ["JSON", "XML", "CSV/ZIP par indicateur"],
+        "formats": ["JSON qualifié dans HDP", "XML/CSV documentés mais hors chemin normalisé V7"],
         "authentication": "Aucune pour l’API publique",
         "freshness": "Variable selon la série WDI",
         "terms": "Conditions Banque mondiale et licence du jeu",
@@ -323,6 +328,11 @@ TECHNICAL_PROFILES: dict[str, dict[str, Any]] = {
             official_link("Thème Santé", "https://data.worldbank.org/topic/health", "portal"),
             official_link("Documentation Indicators API", "https://datahelpdesk.worldbank.org/knowledgebase/articles/889392-about-the-indicators-api-documentation", "documentation"),
             official_link("Structure des appels", "https://datahelpdesk.worldbank.org/knowledgebase/articles/898581-api-basic-call-structures", "reference"),
+            official_link("Country API queries", "https://datahelpdesk.worldbank.org/knowledgebase/articles/898590-country-api-queries", "reference"),
+            official_link("Indicator API queries", "https://datahelpdesk.worldbank.org/knowledgebase/articles/898599-indicator-api-queries", "reference"),
+            official_link("Aggregate API queries", "https://datahelpdesk.worldbank.org/knowledgebase/articles/898614-aggregate-api-queries", "reference"),
+            official_link("Topic API queries", "https://datahelpdesk.worldbank.org/knowledgebase/articles/898611-topic-api-queries", "reference"),
+            official_link("Metadata API queries", "https://datahelpdesk.worldbank.org/knowledgebase/articles/1886695-metadata-api-queries", "reference"),
             official_link("Conditions d’utilisation", "https://www.worldbank.org/en/about/legal/terms-of-use-for-datasets", "terms"),
         ],
     },
@@ -481,23 +491,56 @@ CONNECTORS: dict[str, dict[str, Any]] = {
         ),
     },
     "world-bank-health": {
-        "version": "1.0.0",
+        "version": "2.0.0",
         "base_url": "https://api.worldbank.org/v2/source/2/indicator",
         "allowed_hosts": ["api.worldbank.org"],
         "secret_environment_variable": None,
         "documentation_evidence": [
-            "https://datahelpdesk.worldbank.org/knowledgebase/articles/898581-api-basic-call-structures"
+            "https://datahelpdesk.worldbank.org/knowledgebase/articles/889392-about-the-indicators-api-documentation",
+            "https://datahelpdesk.worldbank.org/knowledgebase/articles/898581-api-basic-call-structures",
+            "https://datahelpdesk.worldbank.org/knowledgebase/articles/898590-country-api-queries",
+            "https://datahelpdesk.worldbank.org/knowledgebase/articles/898599-indicator-api-queries",
+            "https://datahelpdesk.worldbank.org/knowledgebase/articles/898614-aggregate-api-queries",
+            "https://datahelpdesk.worldbank.org/knowledgebase/articles/898611-topic-api-queries",
+            "https://datahelpdesk.worldbank.org/knowledgebase/articles/1886695-metadata-api-queries",
         ],
+        "capability_overrides": {
+            "criteria": {
+                "query": "verified_catalogue_filter_then_native_indicator_request",
+                "date_from": "native_year_range_translation",
+                "date_to": "native_year_range_translation",
+                "location": "verified_iso3_to_native_country_path",
+                "source_specific": "native",
+            },
+        },
         "project_schema": project_schema(
             {
+                "source": field("integer", "Source World Bank", default=2, minimum=1, maximum=10000,
+                    description="Identifiant de source World Bank ; 2 correspond à WDI."),
+                "country": field("string", "Pays ISO3 World Bank", default="all", max_length=399,
+                    pattern=r"^(all|ALL|[A-Z]{3}(;[A-Z]{3})*)$",
+                    description="Un ou plusieurs ISO3 séparés par ;. Les agrégats sont contrôlés par le catalogue World Bank versionné."),
+                "indicator": field("string", "Code(s) indicateur(s)", default="", max_length=1000,
+                    pattern=r"^$|^[A-Za-z0-9_.-]+(;[A-Za-z0-9_.-]+)*$",
+                    description="Un ou plusieurs codes d’indicateurs séparés par ;."),
+                "date": field("string", "Année ou intervalle World Bank", default="",
+                    pattern=r"^$|^\d{4}(:\d{4})?$",
+                    description="Paramètre natif date, par exemple 2024 ou 2020:2025."),
                 "page": field("integer", "Page", default=1, minimum=1, maximum=10000),
-                "catalog_page_size": field(
-                    "integer", "Indicateurs chargés", default=20000,
-                    minimum=100, maximum=50000,
-                ),
-                "language": field(
-                    "string", "Langue", default="en", enum=["en", "fr", "es", "ar", "zh"]
-                ),
+                "per_page": field("integer", "Résultats par page", default=50, minimum=1, maximum=50000),
+                "catalog_page_size": field("integer", "Indicateurs chargés pour la découverte", default=20000, minimum=100, maximum=50000),
+                "mrv": field("integer", "Valeurs les plus récentes (MRV)", minimum=1, maximum=10000,
+                    description="Paramètre natif mrv ; omis lorsqu’il n’est pas renseigné."),
+                "mrnev": field("integer", "Valeurs récentes non vides (MRNEV)", minimum=1, maximum=10000,
+                    description="Paramètre natif mrnev ; omis lorsqu’il n’est pas renseigné."),
+                "gapfill": field("boolean", "Combler les lacunes", default=False,
+                    description="Expose le paramètre natif gapfill=Y."),
+                "frequency": field("string", "Fréquence", default="", enum=["", "Y", "Q", "M"]),
+                "footnote": field("boolean", "Inclure les notes", default=False,
+                    description="Expose le paramètre natif footnote=y."),
+                "format": field("string", "Format qualifié", default="json", enum=["json"],
+                    description="Le chemin HDP V7 normalisé est qualifié pour JSON."),
+                "language": field("string", "Langue", default="en", enum=["en", "fr", "es", "ar", "zh"]),
             }
         ),
     },
@@ -773,7 +816,6 @@ def source_configuration_definition(source_id: str) -> tuple[dict[str, Any], str
     """Retourne le contrat lisible d'un connecteur ou d'un portail de référence."""
     if source_id in CONNECTORS:
         return connector_definition(source_id), "app/source_registry.py"
-    # Import local pour éviter le cycle health_sources -> source_registry au chargement.
     from .health_sources import source_catalog
 
     definition = next((item for item in source_catalog() if item["id"] == source_id), None)
@@ -915,7 +957,34 @@ def request_preview(source_id: str, parameters: dict[str, Any]) -> dict[str, Any
             "$format": "json",
         }
     elif source_id == "world-bank-health":
-        query = {"format": "json", "page": values["page"], "per_page": values["catalog_page_size"], "language": values["language"]}
+        language_prefix = f"/{values['language']}" if values["language"] != "en" else ""
+        if values.get("indicator"):
+            url = f"https://api.worldbank.org{language_prefix}/v2/country/{values['country']}/indicator/{values['indicator']}"
+            query = {
+                "format": values["format"],
+                "source": values["source"],
+                "page": values["page"],
+                "per_page": values["per_page"],
+            }
+            if values.get("date"):
+                query["date"] = values["date"]
+            elif values.get("date_from") or values.get("date_to"):
+                start_year = values["date_from"][:4] if values.get("date_from") else values["date_to"][:4]
+                end_year = values["date_to"][:4] if values.get("date_to") else values["date_from"][:4]
+                query["date"] = f"{start_year}:{end_year}" if start_year != end_year else start_year
+            if values.get("mrv") is not None:
+                query["mrv"] = values["mrv"]
+            if values.get("mrnev") is not None:
+                query["mrnev"] = values["mrnev"]
+            if values["gapfill"]:
+                query["gapfill"] = "Y"
+            if values["frequency"]:
+                query["frequency"] = values["frequency"]
+            if values["footnote"]:
+                query["footnote"] = "y"
+        else:
+            url = f"https://api.worldbank.org{language_prefix}/v2/source/{values['source']}/indicator"
+            query = {"format": values["format"], "page": values["page"], "per_page": values["catalog_page_size"]}
     elif source_id == "unicef-sdmx":
         url = f"{url}/dataflow/{values['agency']}/{values['dataflow']}/{values['version']}/"
         query = {"format": "sdmx-json", "detail": values["detail"], "references": values["references"]}
@@ -966,7 +1035,7 @@ def request_preview(source_id: str, parameters: dict[str, Any]) -> dict[str, Any
             query["eventlist"] = ",".join(values["event_types"])
         if values["alert_levels"]:
             query["alertlevel"] = ";".join(values["alert_levels"])
-    encoded = urlencode(query, doseq=True, safe="<>")
+    encoded = urlencode(query, doseq=True, safe="<>;:")
     display_url = f"{url}?{encoded}" if encoded else url
     defaults = definition["global_defaults"]
     curl = (
