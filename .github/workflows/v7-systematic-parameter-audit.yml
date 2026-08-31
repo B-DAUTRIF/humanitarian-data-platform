@@ -7,6 +7,7 @@ on:
       - "source/**"
       - "clients-v6/**"
       - "tools/v7_systematic_parameter_audit.py"
+      - "tools/v7_systematic_parameter_live.py"
       - "docs/prompts/**"
       - ".github/workflows/v7-systematic-parameter-audit.yml"
 
@@ -52,6 +53,24 @@ jobs:
         run: python tools/v7_dual_connector_architecture_qualification.py
       - name: Global V7 release-readiness audit
         run: python tools/v7_release_readiness.py
+      - name: Live parameter acceptance
+        id: live_parameter_acceptance
+        continue-on-error: true
+        env:
+          RELIEFWEB_APPNAME: ${{ vars.RELIEFWEB_APPNAME }}
+          HDX_HAPI_APP_IDENTIFIER: ${{ secrets.HDX_HAPI_APP_IDENTIFIER }}
+        run: python tools/v7_systematic_parameter_live.py
+      - name: Record live gate semantics
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p qualification-state/parameter-audit
+          cat > qualification-state/parameter-audit/LIVE_GATE_POLICY.txt <<'EOF'
+          Live provider acceptance is evaluated separately from deterministic qualification.
+          A provider HTTP error, missing app identifier, timeout or schema drift is never interpreted as an empty dataset.
+          The live script records PASS / FAIL / BLOCKED per parameter; its external-provider failures remain visible in the artifact.
+          Stable promotion requires review of every live FAIL and every BLOCKED item that belongs to the release scope.
+          EOF
       - uses: actions/upload-artifact@v4
         if: always()
         with:
