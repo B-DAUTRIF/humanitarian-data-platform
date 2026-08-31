@@ -10,6 +10,7 @@ on:
       - "tools/v7_hapi_openapi_parameter_audit.py"
       - "docs/prompts/**"
       - "docs/governance/**"
+      - "docs/versions/7.0.0/connector-parameter-audit/**"
       - ".github/workflows/v7-connector-parameter-audit.yml"
 
 permissions:
