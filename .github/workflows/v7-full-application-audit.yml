@@ -56,7 +56,7 @@ jobs:
       - name: Execute complete source test suite
         run: python -m unittest discover -s source/tests -p 'test_*.py'
       - name: Execute Python client test suite
-        run: python -m unittest discover -s clients-v6/python/tests -p 'test*.py'
+        run: python -m pytest -q clients-v6/python/tests
       - name: Execute V6 functional and epidemiological gates
         run: |
           python tools/v6_use_case_gate.py
