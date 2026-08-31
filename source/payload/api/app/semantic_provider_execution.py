@@ -3,6 +3,7 @@ from __future__ import annotations
 """Provider-native execution helpers for the V7 semantic router."""
 
 import asyncio
+import json
 from typing import Any, Iterable
 
 import httpx
@@ -17,15 +18,26 @@ def _headers(settings: dict[str, Any]) -> dict[str, str]:
 
 
 async def _get_json(url: str, params: dict[str, Any], settings: dict[str, Any]) -> tuple[Any, str]:
+    """Fetch JSON with retries while enforcing the connector response-size contract."""
     retries = int(settings["retry_count"])
     backoff = int(settings["backoff_seconds"])
+    max_bytes = int(settings.get("max_response_bytes") or 25_000_000)
     last_error: Exception | None = None
     for attempt in range(retries + 1):
         try:
             async with httpx.AsyncClient(timeout=_timeout(settings), follow_redirects=True) as client:
-                response = await client.get(url, params=params, headers=_headers(settings))
-                response.raise_for_status()
-                return response.json(), str(response.request.url)
+                async with client.stream("GET", url, params=params, headers=_headers(settings)) as response:
+                    response.raise_for_status()
+                    declared = response.headers.get("content-length")
+                    if declared and declared.isdigit() and int(declared) > max_bytes:
+                        raise RuntimeError(f"Réponse fournisseur trop volumineuse: {declared} octets > {max_bytes}")
+                    body = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        body.extend(chunk)
+                        if len(body) > max_bytes:
+                            raise RuntimeError(f"Réponse fournisseur trop volumineuse: > {max_bytes} octets")
+                    request_url = str(response.request.url)
+            return json.loads(body), request_url
         except httpx.HTTPError as exc:
             last_error = exc
             status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
