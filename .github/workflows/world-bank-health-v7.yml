@@ -1,0 +1,41 @@
+name: HDP V7 World Bank Health qualification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "source/payload/api/app/providers/world_bank_health/**"
+      - "source/tests/test_provider_world_bank_health_architecture.py"
+      - "tools/v7_world_bank_health_*.py"
+      - "docs/versions/7.0.0/world-bank-health/**"
+      - "docs/versions/7.0.0/WORLD_BANK_HEALTH_IMPLEMENTATION_LOG.md"
+      - ".github/workflows/world-bank-health-v7.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-10-cycles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Install API dependencies
+        run: pip install -r source/payload/api/requirements.txt
+      - name: Compile connector and qualification tools
+        run: python -m compileall -q source/payload/api/app/providers/world_bank_health source/tests/test_provider_world_bank_health_architecture.py tools/v7_world_bank_health_use_case_qualification.py tools/v7_world_bank_health_live_acceptance.py
+      - name: Provider architecture tests
+        run: python -m unittest source/tests/test_provider_world_bank_health_architecture.py
+      - name: Ten debug implementation audit cycles per functionality
+        run: python tools/v7_world_bank_health_use_case_qualification.py
+      - name: Live provider acceptance
+        run: python tools/v7_world_bank_health_live_acceptance.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: HDP-V7-world-bank-health-qualification
+          path: qualification-state/WORLD_BANK_HEALTH_*.json
+          if-no-files-found: warn
+          retention-days: 90
