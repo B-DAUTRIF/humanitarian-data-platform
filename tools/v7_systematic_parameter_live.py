@@ -4,7 +4,7 @@ from __future__ import annotations
 
 This script never interprets an empty payload as proof of absence. It only records
 provider acceptance/rejection of documented request shapes and leaves missing
-credentials as BLOCKED.
+credentials or transient provider timeouts as BLOCKED.
 """
 
 import asyncio
@@ -18,8 +18,8 @@ import httpx
 
 OUT = Path("qualification-state/parameter-audit")
 OUT.mkdir(parents=True, exist_ok=True)
-TIMEOUT = httpx.Timeout(25.0, connect=10.0)
-UA = "HDP-V7-parameter-audit/1.0"
+TIMEOUT = httpx.Timeout(40.0, connect=10.0)
+UA = "HDP-V7-parameter-audit/1.1"
 
 
 def record(provider: str, parameter: str, url: str, status: str, http_status: int | None = None,
@@ -56,12 +56,14 @@ async def request_json(client: httpx.AsyncClient, provider: str, parameter: str,
             observed = {"content_type": response.headers.get("content-type"), "length": len(response.content)}
         return record(provider, parameter, str(response.request.url), status, response.status_code, observed,
                       None if status == "PASS" else response.text[:500])
+    except httpx.TimeoutException as exc:
+        return record(provider, parameter, url, "BLOCKED", error=f"TIMEOUT: {type(exc).__name__}: {exc}")
     except httpx.HTTPError as exc:
-        return record(provider, parameter, url, "FAIL", error=f"{type(exc).__name__}: {exc}")
+        return record(provider, parameter, url, "BLOCKED", error=f"TRANSPORT: {type(exc).__name__}: {exc}")
 
 
 async def reliefweb(client: httpx.AsyncClient) -> list[dict[str, Any]]:
-    appname = os.getenv("RELIEFWEB_APPNAME", "HDP_plateforme").strip()
+    appname = (os.getenv("RELIEFWEB_APPNAME") or "HDP_plateforme").strip()
     base = "https://api.reliefweb.int/v2/reports"
     q = {"appname": appname}
     probes: list[dict[str, Any]] = []
@@ -112,11 +114,13 @@ async def world_bank(client: httpx.AsyncClient) -> list[dict[str, Any]]:
         ("gapfill", {"format": "json", "source": 2, "mrv": 2, "gapfill": "Y"}),
         ("frequency", {"format": "json", "source": 2, "mrv": 2, "frequency": "Y"}),
         ("footnote", {"format": "json", "source": 2, "footnote": "y", "per_page": 1}),
+        ("ctrycode", {"format": "json", "source": 2, "ctrycode": "y", "per_page": 1}),
+        ("scale", {"format": "json", "source": 2, "scale": "y", "per_page": 1}),
         ("format", {"format": "json", "source": 2, "per_page": 1}),
     ]
     for name, params in cases:
         probes.append(await request_json(client, "world-bank-health", name, "GET", base, params=params))
-    probes.append(await request_json(client, "world-bank-health", "language", "GET", "https://api.worldbank.org/fr/v2/country/RWA/indicator/SP.POP.TOTL", params={"format": "json", "source": 2, "per_page": 1}))
+    probes.append(await request_json(client, "world-bank-health", "language", "GET", "https://api.worldbank.org/v2/fr/country/RWA/indicator/SP.POP.TOTL", params={"format": "json", "source": 2, "per_page": 1}))
     probes.append(await request_json(client, "world-bank-health", "multi_country", "GET", "https://api.worldbank.org/v2/country/RWA;UGA/indicator/SP.POP.TOTL", params={"format": "json", "source": 2, "date": "2020", "per_page": 5}))
     probes.append(await request_json(client, "world-bank-health", "multi_indicator", "GET", "https://api.worldbank.org/v2/country/RWA/indicator/SP.POP.TOTL;SP.DYN.LE00.IN", params={"format": "json", "source": 2, "date": "2020", "per_page": 5}))
     for name, url in [
@@ -175,13 +179,13 @@ async def main_async() -> int:
         results.extend(await hdx_ckan(client))
         results.extend(await hdx_hapi(client))
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "results": results,
         "pass": sum(1 for r in results if r["status"] == "PASS"),
         "fail": sum(1 for r in results if r["status"] == "FAIL"),
         "blocked": sum(1 for r in results if r["status"] == "BLOCKED"),
-        "rule": "Provider errors and blocked credentials are never interpreted as empty data.",
+        "rule": "Provider errors, transport failures, timeouts and blocked credentials are never interpreted as empty data.",
     }
     (OUT / "LIVE_PARAMETER_AUDIT.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({k: report[k] for k in ("pass", "fail", "blocked")}, indent=2))
