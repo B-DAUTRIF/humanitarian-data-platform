@@ -59,7 +59,7 @@ class ProviderWorldBankHealthArchitectureTests(unittest.TestCase):
         self.assertTrue(build_catalog_request("countries")["url"].endswith("/v2/country"))
         self.assertTrue(build_catalog_request("topics")["url"].endswith("/v2/topic"))
         self.assertTrue(build_catalog_request("sources")["url"].endswith("/v2/source"))
-        self.assertIn("/sources/2/metadata", build_catalog_request("metadata", identifier="2")["url"])
+        self.assertIn("/sources/2/search/health", build_catalog_request("metadata", identifier="2", query="health")["url"])
         metadata = build_catalog_request("indicator_metadata", identifier="SH.MLR.INCD.P3")
         self.assertIn("/indicator/SH.MLR.INCD.P3", metadata["url"])
         self.assertEqual(metadata["query_parameters"]["source"], 2)
@@ -86,6 +86,7 @@ class ProviderWorldBankHealthArchitectureTests(unittest.TestCase):
     def test_invalid_catalog_operation_is_rejected(self):
         with self.assertRaises(ValueError): build_catalog_request("unknown")
         with self.assertRaises(ValueError): build_catalog_request("metadata")
+        with self.assertRaises(ValueError): build_catalog_request("metadata", identifier="2")
 
     def test_json_is_qualified_format(self):
         spec = build_observation_request(country="RWA", indicator="X")
