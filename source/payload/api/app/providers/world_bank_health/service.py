@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 
@@ -32,7 +32,7 @@ def validate_country_code(value: str) -> str:
     return ";".join(parts)
 
 
-def build_catalog_request(operation: str, *, source: int = 2, page: int = 1, per_page: int = 1000, identifier: str = "", language: str = "en") -> dict[str, Any]:
+def build_catalog_request(operation: str, *, source: int = 2, page: int = 1, per_page: int = 1000, identifier: str = "", query: str = "", language: str = "en") -> dict[str, Any]:
     if page < 1 or per_page < 1:
         raise ValueError("page and per_page must be positive")
     lang = language.strip().lower()
@@ -48,9 +48,9 @@ def build_catalog_request(operation: str, *, source: int = 2, page: int = 1, per
     elif operation == "sources":
         url = f"{base}/source/{identifier.strip()}" if identifier else f"{base}/source"
     elif operation == "metadata":
-        if not identifier.strip():
-            raise ValueError("metadata operation requires a source identifier")
-        url = f"{base}/sources/{identifier.strip()}/metadata"
+        if not identifier.strip() or not query.strip():
+            raise ValueError("metadata search requires a source identifier and a search query")
+        url = f"{base}/sources/{identifier.strip()}/search/{quote(query.strip(), safe='')}"
     elif operation == "indicator_metadata":
         if not identifier.strip():
             raise ValueError("indicator_metadata requires an indicator code")
@@ -170,8 +170,8 @@ class WorldBankHealthService:
     async def list_sources(self, *, identifier: str = "", page: int = 1, per_page: int = 1000, language: str = "en") -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
         return await self._catalog("sources", identifier=identifier, page=page, per_page=per_page, language=language)
 
-    async def get_metadata(self, *, source: int = 2, page: int = 1, per_page: int = 1000, language: str = "en") -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
-        return await self._catalog("metadata", identifier=str(source), page=page, per_page=per_page, language=language)
+    async def get_metadata(self, *, source: int = 2, query: str, page: int = 1, per_page: int = 1000, language: str = "en") -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
+        return await self._catalog("metadata", identifier=str(source), query=query, page=page, per_page=per_page, language=language)
 
     async def indicator_metadata(self, indicator: str, *, source: int = 2, language: str = "en") -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
         return await self._catalog("indicator_metadata", identifier=indicator, source=source, page=1, per_page=100, language=language)
