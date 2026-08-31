@@ -11,6 +11,15 @@ from .descriptor import WORLD_BANK_HEALTH_DESCRIPTOR
 
 ISO3_RE = re.compile(r"^[A-Z]{3}$")
 FREQUENCIES = {"", "Y", "Q", "M"}
+# Provider aggregate identifiers that are syntactically three letters but are not
+# sovereign ISO3 countries. The authoritative country/aggregate catalogue remains
+# the final source of truth; this deny-list prevents common silent conflation.
+WORLD_BANK_AGGREGATE_CODES = {
+    "WLD", "ARB", "CSS", "CEB", "EAR", "EAS", "EAP", "TEA", "EMU", "ECS", "ECA", "TEC",
+    "EUU", "FCS", "HPC", "HIC", "IBD", "IBT", "IDB", "IDX", "IDA", "LTE", "LCN", "LAC", "TLA",
+    "LDC", "LMY", "LIC", "LMC", "MEA", "MNA", "TMN", "MIC", "NAC", "OED", "OSS", "PSS",
+    "PST", "PRE", "SST", "SAS", "TSA", "SSA", "SSF", "TSS", "UMC",
+}
 
 
 def validate_country_code(value: str) -> str:
@@ -19,7 +28,10 @@ def validate_country_code(value: str) -> str:
         return "all"
     parts = value.split(";")
     if not all(ISO3_RE.fullmatch(part) for part in parts):
-        raise ValueError("World Bank sovereign-country routing requires verified ISO3 codes; aggregate identifiers require an explicit aggregate semantic type")
+        raise ValueError("World Bank sovereign-country routing requires verified ISO3 codes")
+    aggregates = [part for part in parts if part in WORLD_BANK_AGGREGATE_CODES]
+    if aggregates:
+        raise ValueError(f"World Bank aggregate identifiers require explicit aggregate semantics: {','.join(aggregates)}")
     return ";".join(parts)
 
 
