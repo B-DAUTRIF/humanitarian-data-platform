@@ -15,16 +15,18 @@ SETTINGS = {"timeout_seconds": 20, "connect_timeout_seconds": 5, "retry_count": 
 
 
 class SemanticProviderExecutionTest(unittest.TestCase):
-    def test_world_bank_catalog_then_native_observation(self) -> None:
+    def test_world_bank_delegates_to_reference_service(self) -> None:
         route = {"parameters": {"query": "malaria", "result_limit": 10}, "native_parameters": {"country": "RWA", "date": "2020:2025", "indicator_search": "malaria"}}
-        catalog = [{"page": 1}, [{"id": "SH.MLR.INCD.P3", "name": "Incidence of malaria", "unit": "per 1,000 population at risk"}]]
-        observations = [{"page": 1}, [{"indicator": {"value": "Incidence of malaria"}, "country": {"value": "Rwanda"}, "countryiso3code": "RWA", "date": "2023", "value": 48.2}]]
-        fake = AsyncMock(side_effect=[(catalog, "catalog-url"), (observations, "obs-url")])
-        with patch("app.semantic_provider_execution._get_json", fake):
-            _, items, request = asyncio.run(execute_world_bank_native(route, SETTINGS))
-        self.assertEqual(items[0]["indicator_code"], "SH.MLR.INCD.P3")
-        self.assertEqual(items[0]["geographic_scope"], "Rwanda")
-        self.assertEqual(request["observation_requests"], ["obs-url"])
+        observations = [{"page": 1}, [{"indicator": {"id":"SH.MLR.INCD.P3", "value": "Incidence of malaria"}, "country": {"value": "Rwanda"}, "countryiso3code": "RWA", "date": "2023", "value": 48.2}]]
+        items = [{"indicator_code":"SH.MLR.INCD.P3", "geographic_scope":"Rwanda", "value":48.2}]
+        native = {"observation_requests":[{"url":"obs-url"}], "implementation":"WorldBankHealthService.execute_semantic"}
+        fake = AsyncMock(return_value=({"observations": observations}, items, native))
+        with patch("app.providers.world_bank_health.service.WorldBankHealthService.execute_semantic", fake):
+            _, result_items, request = asyncio.run(execute_world_bank_native(route, SETTINGS))
+        self.assertEqual(result_items[0]["indicator_code"], "SH.MLR.INCD.P3")
+        self.assertEqual(result_items[0]["geographic_scope"], "Rwanda")
+        self.assertEqual(request["implementation"], "WorldBankHealthService.execute_semantic")
+        fake.assert_awaited_once()
 
     def test_un_sdg_m49_series_resolution_then_observations(self) -> None:
         route = {"parameters": {"query": "malaria", "result_limit": 10}, "native_parameters": {"areaCode": 646, "timePeriodStart": 2020, "timePeriodEnd": 2025, "series_search": "malaria"}}
