@@ -41,6 +41,22 @@ Chaque cycle fournisseur exécute quatre gates : G1 connecteur ; G2 Semantic Cor
 
 Mesurer séparément couverture documentaire, couverture d'implémentation, couverture de qualification et couverture live. Ne jamais annoncer 100 % sans matrice machine-readable.
 
+## Protocole canonique de qualification de tout connecteur
+Pour CHAQUE connecteur HDP, appliquer le protocole suivant. Il constitue le protocole de qualification permanent et doit être conservé lors de toute recréation de l'application.
+
+1. Auditer d'abord la documentation officielle actuelle et construire un inventaire machine-readable des endpoints, opérations collection/item, méthodes HTTP, paramètres, champs, domaines/nomenclatures, recherche, filtres, facettes, pagination, tri, profils/presets, limites, erreurs, structure de réponse, configuration, provenance, UI et clients. Classer les preuves `DOCUMENTED|LIVE_VERIFIED|INFERRED|UNVERIFIED|CONFLICTING_DOCUMENTATION` et l'état HDP `NOT_IMPLEMENTED|PARTIAL|IMPLEMENTED|QUALIFIED|BLOCKED`.
+2. Construire une taxonomie des cas d'usage métier réellement permis par le fournisseur. Ne jamais inventer un usage non supporté par le contrat natif.
+3. Pour chaque fonctionnalité inventoriée, générer cinq cas distincts : nominal simple, nominal complexe, limite, négatif/vide légitime, erreur ou contrainte fournisseur. Chaque cas possède `case_id`, objectif métier, content type/opération, entrée, comportement natif attendu, comportement HDP attendu, complétude/statut attendu, preuve, résultat réel, pass/fail et defect_id.
+4. Pour chaque cas, effectuer jusqu'à cinq cycles `TEST -> DIAGNOSTIC -> CORRECTION JUSTIFIÉE -> RETEST -> RÉGRESSION`. Une correction n'est réalisée que lorsqu'un défaut HDP est démontré. Si le cas est déjà conforme, les cycles suivants deviennent des contrôles de stabilité, robustesse et non-régression ; il est interdit de modifier artificiellement un code correct pour atteindre cinq changements.
+5. Ajouter des tests transversaux combinatoires et négatifs : filtres combinés, pagination interrompue, vrai résultat vide, résultat non exhaustif, timeout, 4xx/403/404/429/5xx, schéma inattendu, Unicode, volumes importants, annulation/reprise de job et panne du fournisseur dans une recherche multisource. Préserver l'invariant `post_filter + non_exhaustive != empty_valid`.
+6. Vérifier le chemin complet `UI -> ProviderService -> requête native -> réponse native -> RawArtifact -> normalisation -> provenance -> résultat`, dans les modes Simple/Avancé/Expert. Vérifier aussi les clients R/Python sans dupliquer la logique fournisseur.
+7. Après chaque groupe significatif de corrections, exécuter G1 connecteur, G2 Semantic Core, G3 autres fournisseurs/multisource, G4 application complète/projets/jobs/clients/build. Une régression globale annule la réussite locale.
+8. Maintenir inventaire des fonctionnalités, matrice des cas, matrice de tests, journal des cinq cycles, anomalies, corrections/commits, résultats live et couvertures documentaire/implémentée/testée/live.
+9. Produire un rapport final avec périmètre, résultats, erreurs, performances, robustesse, fidélité API, qualité normalisation/provenance, ergonomie, maintenabilité et bloqueurs. Noter séparément sur 100 fidélité API, couverture fonctionnelle, robustesse, tests, interface, intégration HDP, R/Python, provenance/reproductibilité et maintenabilité. Toute note globale doit documenter son calcul.
+10. Le statut final est exclusivement `QUALIFIED`, `QUALIFIED_WITH_KNOWN_LIMITATIONS`, `PARTIALLY_IMPLEMENTED` ou `BLOCKED`. `FINALIZED` n'est jamais déduit de tests déterministes seuls ; une capacité obligatoire non testable live reste explicitement non qualifiée.
+
+Ce protocole est générique. Les détails propres à une API restent dans son package/descripteur et sa documentation de qualification ; ils ne deviennent jamais des règles universelles sans preuve d'un besoin partagé.
+
 ## ReliefWeb — contrat de référence individualisé
 ReliefWeb V2 doit être transposé fidèlement sans devenir le modèle universel HDP. Inventorier et maintenir les 9 content types officiellement documentés (`reports`, `disasters`, `countries`, `jobs`, `training`, `sources`, `blog`, `book`, `references`), les endpoints collection/item, GET/POST, query, recherche avancée/Lucene, `.exact`, boosts, filtres récursifs AND/OR/négation, facettes et scopes, pagination, tris, profiles, presets, fields include/exclude, slim, verbose, résultats, champs et taxonomies/références.
 
@@ -53,7 +69,7 @@ Les réponses ReliefWeb natives sont conservées immuables avant normalisation. 
 ## ReliefWeb — qualification obligatoire
 Chaque fonctionnalité inventoriée possède `documentation_status`, `implementation_status`, `unit_test`, `integration_test`, `live_test`, `ui_test`, `status`, `notes`. Tests minimaux : chaque content type, item applicable, query, AND/OR, exact, boost, filtres simples/imbriqués/négation, facettes/scopes, tri, profiles/presets, fields, pagination, appname global/projet, réponses vides réelles, 4xx/403/429/5xx/timeout/schema drift et isolation multisource.
 
-Effectuer au moins cinq cycles `AUDIT -> IMPLEMENTATION -> TEST -> DEBUG -> REGRESSION`. Le statut FINALIZED est interdit si un gate obligatoire échoue. Utiliser `QUALIFIED_WITH_KNOWN_LIMITATIONS`, `PARTIALLY_IMPLEMENTED` ou `BLOCKED` selon les preuves.
+Appliquer le protocole canonique ci-dessus à ReliefWeb. Effectuer cinq cycles par cas sans imposer cinq modifications : `TEST -> DIAGNOSTIC -> CORRECTION SI DÉFAUT -> RETEST -> RÉGRESSION`. Le statut FINALIZED est interdit si un gate obligatoire échoue. Utiliser `QUALIFIED_WITH_KNOWN_LIMITATIONS`, `PARTIALLY_IMPLEMENTED` ou `BLOCKED` selon les preuves.
 
 ## Anti-hallucination
 Chaque affirmation fournisseur est `DOCUMENTED|LIVE_VERIFIED|INFERRED|UNVERIFIED|CONFLICTING_DOCUMENTATION`. Les règles de production ne reposent jamais sur INFERRED/UNVERIFIED sans garde-fou. En cas de divergence documentation/API, conserver le conflit, tester, journaliser et éviter de fabriquer une règle.
