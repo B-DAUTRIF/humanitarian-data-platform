@@ -54,6 +54,11 @@ def _http_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=502, detail={"status":"provider_error", "message":f"{type(exc).__name__}: {exc}"})
 
 
+def _bounded_status(items: list[dict[str, Any]]) -> str:
+    """A bounded/paginated provider response cannot prove universal absence."""
+    return "success" if items else "partial"
+
+
 @router.get("/descriptor")
 def descriptor() -> dict[str, Any]:
     return RELIEFWEB_DESCRIPTOR.to_dict()
@@ -96,7 +101,7 @@ async def search(payload: ReliefWebSearchRequest) -> dict[str, Any]:
         runtime, global_settings, project_parameters = _contexts(payload.project_id)
         service = ReliefWebService(runtime)
         raw, normalized, native_request = await service.execute(payload.content_type, payload.parameters, global_settings=global_settings, project_settings=project_parameters)
-        return {"provider":"reliefweb", "content_type":payload.content_type, "status":"success" if normalized else "empty_valid", "count":len(normalized), "items":normalized, "native_response":raw, "native_request":native_request}
+        return {"provider":"reliefweb", "content_type":payload.content_type, "status":_bounded_status(normalized), "completeness":"bounded", "count":len(normalized), "items":normalized, "native_response":raw, "native_request":native_request}
     except Exception as exc:
         raise _http_error(exc) from exc
 
@@ -109,6 +114,6 @@ async def item(content_type: str, item_id: str, payload: ReliefWebItemRequest) -
         runtime, global_settings, project_parameters = _contexts(payload.project_id)
         service = ReliefWebService(runtime)
         raw, normalized, native_request = await service.execute(content_type, payload.parameters, global_settings=global_settings, project_settings=project_parameters, item_id=item_id)
-        return {"provider":"reliefweb", "content_type":content_type, "item_id":item_id, "status":"success" if normalized else "empty_valid", "items":normalized, "native_response":raw, "native_request":native_request}
+        return {"provider":"reliefweb", "content_type":content_type, "item_id":item_id, "status":_bounded_status(normalized), "completeness":"bounded", "items":normalized, "native_response":raw, "native_request":native_request}
     except Exception as exc:
         raise _http_error(exc) from exc

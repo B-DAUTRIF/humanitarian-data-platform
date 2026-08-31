@@ -1,0 +1,103 @@
+name: HDP V7 connector parameter audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "source/**"
+      - "clients-v6/**"
+      - "tools/v7_connector_parameter_audit.py"
+      - "tools/v7_hapi_openapi_parameter_audit.py"
+      - "docs/prompts/**"
+      - "docs/governance/**"
+      - "docs/versions/7.0.0/connector-parameter-audit/**"
+      - ".github/workflows/v7-connector-parameter-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-parameter-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: hdp
+          POSTGRES_PASSWORD: hdp
+          POSTGRES_DB: hdp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hdp -d hdp"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://hdp:hdp@localhost:5432/hdp
+      SQL_READER_URL: postgresql://hdp:hdp@localhost:5432/hdp
+      HDP_LOCAL_TOKEN: parameter-audit-token
+      HDP_AUTH_MODE: token
+      RELIEFWEB_APPNAME: HDP_plateforme
+      HDX_HAPI_APP_IDENTIFIER: HDP_parameter_audit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install -r source/payload/api/requirements.txt
+          pip install -e clients-v6/python
+          pip install pytest
+      - name: Compile audited code
+        run: python -m compileall -q source/payload/api/app source/tests clients-v6/python/src tools
+      - name: Parameter regression tests
+        run: >-
+          python -m unittest
+          source/tests/test_v7_connector_parameter_audit.py
+          source/tests/test_provider_reliefweb_architecture.py
+          source/tests/test_reliefweb_use_case_qualification.py
+          source/tests/test_provider_world_bank_health_architecture.py
+          source/tests/test_semantic_router.py
+      - name: Ten deterministic parameter audit cycles
+        run: python tools/v7_connector_parameter_audit.py
+      - name: Dual-connector architecture regression
+        run: python tools/v7_dual_connector_architecture_qualification.py
+      - name: V7 release-readiness audit
+        run: python tools/v7_release_readiness.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: HDP-V7-connector-parameter-audit
+          path: |
+            qualification-state/V7_CONNECTOR_PARAMETER_AUDIT.json
+            qualification-state/V7_CONNECTOR_PARAMETER_MATRIX.csv
+            qualification-state/V7_CONNECTOR_PARAMETER_MATRIX.md
+            qualification-state/HDP_V7_DUAL_CONNECTOR_ARCHITECTURE_10_CYCLES.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  hapi-openapi-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install minimal runtime
+        run: pip install -r source/payload/api/requirements.txt
+      - name: Audit current HAPI v2 OpenAPI
+        run: python tools/v7_hapi_openapi_parameter_audit.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: HDP-V7-HAPI-live-parameter-audit
+          path: |
+            qualification-state/V7_HAPI_OPENAPI_PARAMETER_AUDIT.json
+            qualification-state/V7_HAPI_OPENAPI_PARAMETER_MATRIX.csv
+            qualification-state/V7_HAPI_OPENAPI_PARAMETER_MATRIX.md
+          if-no-files-found: warn
+          retention-days: 90
