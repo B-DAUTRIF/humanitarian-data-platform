@@ -40,21 +40,50 @@ class DHSService(NativeProviderService):
             title_fields=("Indicator", "IndicatorName", "CountryName", "SurveyType", "SurveyId", "name", "title"),
         )
 
+    @staticmethod
+    def _verified_country_mapping(rows: list[dict[str, Any]], iso3: str) -> tuple[str, dict[str, Any]]:
+        """Resolve ISO3 to one DHS country code without treating duplicate catalogue rows as ambiguity.
+
+        The DHS countries endpoint may return repeated catalogue rows. Verification is therefore
+        based on the set of distinct non-empty DHS_countryCode values attached to exact
+        ISO3_countryCode matches. More than one distinct DHS code still fails closed.
+        """
+        wanted = iso3.strip().upper()
+        matches = [
+            row for row in rows
+            if isinstance(row, dict)
+            and str(row.get("ISO3_countryCode") or "").strip().upper() == wanted
+        ]
+        codes = sorted({str(row.get("DHS_countryCode") or "").strip() for row in matches if str(row.get("DHS_countryCode") or "").strip()})
+        if len(codes) != 1:
+            raise ValueError(
+                f"DHS ISO3 mapping is not uniquely verified for {wanted}: "
+                f"{len(matches)} exact catalogue row(s), {len(codes)} distinct DHS code(s)"
+            )
+        code = codes[0]
+        representative = next(row for row in matches if str(row.get("DHS_countryCode") or "").strip() == code)
+        evidence = {
+            "iso3": wanted,
+            "dhs_country_code": code,
+            "exact_match_count": len(matches),
+            "distinct_dhs_codes": codes,
+            "catalogue_row": representative,
+        }
+        return code, evidence
+
     async def _resolve_iso3(self, iso3: str) -> tuple[str, dict[str, Any]]:
-        payload, _items, native = await self.execute("list_countries", {"f":"json", "page":1, "perpage":10000})
+        # 100 is sufficient for the current DHS country catalogue and avoids provider-side
+        # behaviour observed with oversized perpage values. We still verify the exact ISO3
+        # mapping and never substitute ISO3 directly into countryIds.
+        payload, _items, native = await self.execute("list_countries", {"f":"json", "page":1, "perpage":100})
         rows = payload.get("Data") if isinstance(payload, dict) else None
         if not isinstance(rows, list):
             rows = payload.get("data") if isinstance(payload, dict) else None
         if not isinstance(rows, list):
             raise ValueError("DHS countries catalogue response does not expose a verifiable row list")
-        iso3 = iso3.strip().upper()
-        matches = [row for row in rows if isinstance(row, dict) and str(row.get("ISO3_countryCode") or "").upper() == iso3]
-        if len(matches) != 1:
-            raise ValueError(f"DHS ISO3 mapping is not uniquely verified for {iso3}")
-        code = str(matches[0].get("DHS_countryCode") or "").strip()
-        if not code:
-            raise ValueError(f"DHS country code missing for verified ISO3 {iso3}")
-        return code, {"catalogue_request":native, "catalogue_row":matches[0]}
+        code, evidence = self._verified_country_mapping(rows, iso3)
+        evidence["catalogue_request"] = native
+        return code, evidence
 
     async def execute_semantic(
         self,
@@ -70,7 +99,7 @@ class DHSService(NativeProviderService):
         result_limit = int(parameters.get("result_limit") or 25)
         catalog_size = int(project_settings.get("catalog_page_size") or 5000)
 
-        catalog_payload, catalog_items, catalog_request = await self.execute(
+        catalog_payload, _catalog_items, catalog_request = await self.execute(
             "list_indicators", {"f":"json", "page":1, "perpage":catalog_size}
         )
         from ...main import parse_dhs_indicators
