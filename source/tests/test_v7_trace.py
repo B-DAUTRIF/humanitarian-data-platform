@@ -49,6 +49,33 @@ class V7TraceTests(unittest.TestCase):
         self.assertEqual([row["event"] for row in rows], ["test.start", "test.finish"])
         self.assertEqual(rows[0]["project_id"], "p1")
 
+    def test_export_snapshot_is_immutable_and_closed(self) -> None:
+        from app.v7_trace import _create_export_snapshot, _trace_path, trace_event
+        trace_event("before.export", value="A")
+        source = _trace_path()
+        snapshot = _create_export_snapshot()
+        self.assertTrue(snapshot.exists())
+        self.assertNotEqual(source, snapshot)
+        frozen = snapshot.read_bytes()
+        self.assertGreater(len(frozen), 0)
+        trace_event("after.export", value="B")
+        self.assertEqual(snapshot.read_bytes(), frozen)
+        self.assertGreater(source.stat().st_size, len(frozen))
+        with snapshot.open("rb") as handle:
+            self.assertEqual(handle.read(), frozen)
+
+    def test_export_response_has_stable_length_and_attachment_name(self) -> None:
+        from app.v7_trace import trace_event, trace_export
+        trace_event("download.test", status="ok")
+        response = trace_export()
+        path = Path(response.path)
+        self.assertTrue(path.exists())
+        self.assertEqual(int(response.headers["content-length"]), path.stat().st_size)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+        self.assertIn("attachment", response.headers["content-disposition"].lower())
+        self.assertIn("HDP_TRACE_EXPORT_", response.headers["content-disposition"])
+
 
 if __name__ == "__main__":
     unittest.main()
