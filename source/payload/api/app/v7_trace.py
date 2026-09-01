@@ -4,6 +4,7 @@ import contextvars
 import json
 import os
 import re
+import shutil
 import threading
 import time
 import uuid
@@ -31,6 +32,12 @@ def _trace_dir() -> Path:
 
 def _trace_path() -> Path:
     return _trace_dir() / f"HDP_TRACE_{datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
+
+
+def _export_dir() -> Path:
+    path = _trace_dir() / "exports"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def _iso_now() -> str:
@@ -94,7 +101,29 @@ def trace_event(event: str, **fields: Any) -> dict[str, Any]:
     with _LOCK:
         with _trace_path().open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(line + "\n")
+            handle.flush()
     return record
+
+
+def _create_export_snapshot() -> Path:
+    """Create an immutable, closed snapshot for browser download.
+
+    The live JSONL file is continuously appended by middleware and provider
+    tracing. Serving that same mutable file directly can race with writes while
+    Starlette/Firefox is reading it, causing a partial `.jsonl.part` download.
+    Export therefore copies the current trace under the same process lock and
+    serves the closed snapshot instead.
+    """
+    source = _trace_path()
+    if not source.exists():
+        trace_event("trace.export.bootstrap", note="created trace before snapshot")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
+    target = _export_dir() / f"HDP_TRACE_EXPORT_{stamp}.jsonl"
+    with _LOCK:
+        if not source.exists():
+            source.touch()
+        shutil.copyfile(source, target)
+    return target
 
 
 async def trace_http_middleware(request: Request, call_next):
@@ -153,13 +182,23 @@ def trace_status() -> dict[str, Any]:
         "directory": str(_trace_dir()),
         "current_file": path.name,
         "current_size_bytes": path.stat().st_size if path.exists() else 0,
+        "export_directory": str(_export_dir()),
         "redaction": "secrets/tokens/passwords/cookies/app identifiers are redacted",
     }
 
 
 @router.get("/export")
 def trace_export() -> FileResponse:
-    path = _trace_path()
-    if not path.exists():
-        trace_event("trace.export.requested", note="created empty trace before export")
-    return FileResponse(path, media_type="application/x-ndjson", filename=path.name)
+    snapshot = _create_export_snapshot()
+    size = snapshot.stat().st_size
+    trace_event("trace.export.ready", snapshot=snapshot.name, size_bytes=size)
+    response = FileResponse(
+        snapshot,
+        media_type="application/x-ndjson",
+        filename=snapshot.name,
+        stat_result=snapshot.stat(),
+    )
+    response.headers["Content-Length"] = str(size)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
