@@ -57,7 +57,9 @@ class ReliefWebService:
         spec = request_spec(content_type, parameters, project_parameters=project_settings, global_settings=global_settings, item_id=item_id)
         appname = str(spec["appname"] or "").strip()
         if not appname:
-            raise ProviderConfigurationError("ReliefWeb appname is required")
+            raise ProviderConfigurationError(
+                "ReliefWeb exige un APPNAME pré-approuvé depuis le 1er novembre 2025; configurez RELIEFWEB_APPNAME ou le paramètre projet appname"
+            )
         timeout = httpx.Timeout(float(self.settings.get("timeout_seconds", 20)), connect=float(self.settings.get("connect_timeout_seconds", 5)))
         headers = {"User-Agent": str(self.settings.get("user_agent", "HDP/7")), "Accept-Language": str(self.settings.get("accept_language", "en")), "Accept": "application/json"}
         method = spec["method"]
@@ -67,8 +69,6 @@ class ReliefWebService:
                 response = await client.post(spec["url"], params={"appname": appname}, json=payload, headers=headers)
             else:
                 query: dict[str, Any] = {"appname": appname}
-                # httpx's nested encoding is not ReliefWeb-compatible. Simple GET is flattened here;
-                # complex/nested requests are deliberately POSTed by request_spec().
                 if "query" in payload:
                     q = payload["query"]
                     query["query[value]"] = q.get("value")
@@ -96,7 +96,9 @@ class ReliefWebService:
                     for i, value in enumerate(fields.get(part) or []): query[f"fields[{part}][{i}]"] = value
                 response = await client.get(spec["url"], params=query, headers=headers)
             if response.status_code == 403:
-                raise ProviderConfigurationError(f"ReliefWeb rejected appname '{appname}' with HTTP 403")
+                raise ProviderConfigurationError(
+                    f"ReliefWeb a refusé l'APPNAME configuré (origine={spec['appname_origin']}) avec HTTP 403; utilisez un APPNAME pré-approuvé"
+                )
             if response.status_code == 429:
                 raise ProviderRateLimitedError("ReliefWeb rate limit reached")
             response.raise_for_status()
