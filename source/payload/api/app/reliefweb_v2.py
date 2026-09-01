@@ -16,7 +16,11 @@ PRESETS = ("minimal", "latest", "analysis")
 OPERATORS = ("AND", "OR")
 FACET_SCOPES = ("default", "query", "global")
 FACET_INTERVALS = ("year", "month", "week", "day")
-DEFAULT_APPNAME = "HDP_plateforme"
+# ReliefWeb requires a pre-approved appname since 2025-11-01. HDP must never
+# invent a default identifier because an unapproved value is rejected with 403.
+# The deterministic contract keeps the historical "default" origin, but its
+# value is deliberately empty so execution fails closed until configuration.
+DEFAULT_APPNAME = ""
 BASE_URL = "https://api.reliefweb.int/v2"
 
 class ReliefWebValidationError(ValueError):

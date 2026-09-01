@@ -39,6 +39,7 @@ from .v6_semantic_api import router as semantic_router
 from .v7_semantic_ui import router as semantic_ui_router
 from .v7_migrations import apply_v7_migrations
 from .v7_semantic_jobs import recover_abandoned_semantic_jobs, router as semantic_jobs_router
+from .v7_trace import router as trace_router, trace_event, trace_http_middleware
 
 LEGACY_CONTRACT_VERSION = "6.0.0"
 ACTIVE_APPLICATION_VERSION = "7.0.0"
@@ -60,12 +61,14 @@ app.description = (
     "traitements R/Python, synchronisation GitHub et exploitation de sources humanitaires et sanitaires par projets. "
     "Inventaire API vérifiable accessible depuis /api-inventory. Routeur sémantique V7 accessible depuis /api/semantic. "
     "APIs fournisseur spécialisées disponibles sous /api/providers pour ReliefWeb, World Bank Health, DHS, GDACS, "
-    "UN SDG, UNHCR, UNICEF SDMX et WHO GHO."
+    "UN SDG, UNHCR, UNICEF SDMX et WHO GHO. Traçage diagnostic JSONL disponible sous /api/trace."
 )
+app.middleware("http")(trace_http_middleware)
 app.include_router(v6_notebook_router)
 app.include_router(github_sync_router)
 app.include_router(api_inventory_router)
 app.include_router(semantic_router)
+app.include_router(trace_router)
 
 app.router.routes[:] = [
     route
@@ -86,8 +89,10 @@ app.include_router(who_gho_provider_router)
 
 @app.on_event("startup")
 def apply_v7_schema() -> None:
+    trace_event("runtime.startup.begin", application_version=ACTIVE_APPLICATION_VERSION)
     apply_v7_migrations()
     recover_abandoned_semantic_jobs()
+    trace_event("runtime.startup.ready", application_version=ACTIVE_APPLICATION_VERSION)
 
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -108,6 +113,7 @@ def v6_index_html() -> str:
             '<a href="/api/semantic/ui" style="color:white;text-decoration:none;font-weight:600">Routeur sémantique V7</a> · '
             '<a href="/api/providers/reliefweb/ui" style="color:white;text-decoration:none">ReliefWeb</a> · '
             '<a href="/api/providers/world-bank-health/ui" style="color:white;text-decoration:none">World Bank</a> · '
+            '<a href="/api/trace/export" style="color:white;text-decoration:none">Exporter log diagnostic</a> · '
             '<a href="#sources" style="color:white;text-decoration:none">Sources</a></div>'
         )
         html = html.replace("</body>", f"{banner}</body>")
