@@ -18,6 +18,8 @@ FACET_SCOPES = ("default", "query", "global")
 FACET_INTERVALS = ("year", "month", "week", "day")
 # ReliefWeb requires a pre-approved appname since 2025-11-01. HDP must never
 # invent a default identifier because an unapproved value is rejected with 403.
+# The deterministic contract keeps the historical "default" origin, but its
+# value is deliberately empty so execution fails closed until configuration.
 DEFAULT_APPNAME = ""
 BASE_URL = "https://api.reliefweb.int/v2"
 
@@ -27,7 +29,7 @@ class ReliefWebValidationError(ValueError):
 @dataclass(frozen=True)
 class EffectiveAppName:
     value: str
-    origin: Literal["project", "global", "missing"]
+    origin: Literal["project", "global", "default"]
 
 def resolve_appname(project_parameters: dict[str, Any] | None, global_settings: dict[str, Any] | None) -> EffectiveAppName:
     project = str((project_parameters or {}).get("appname") or "").strip()
@@ -36,7 +38,7 @@ def resolve_appname(project_parameters: dict[str, Any] | None, global_settings: 
     global_value = str((global_settings or {}).get("appname") or "").strip()
     if global_value:
         return EffectiveAppName(global_value, "global")
-    return EffectiveAppName(DEFAULT_APPNAME, "missing")
+    return EffectiveAppName(DEFAULT_APPNAME, "default")
 
 def _operator(value: Any, *, default: str = "AND") -> str:
     op = str(value or default).upper()
