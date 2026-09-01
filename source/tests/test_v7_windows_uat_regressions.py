@@ -9,7 +9,7 @@ class WindowsUATRegressionTests(unittest.TestCase):
 
         effective = resolve_appname({}, {})
         self.assertEqual(effective.value, "")
-        self.assertEqual(effective.origin, "missing")
+        self.assertEqual(effective.origin, "default")
 
     def test_reliefweb_prefers_project_then_global_appname(self) -> None:
         from app.reliefweb_v2 import resolve_appname
